@@ -1,10 +1,17 @@
 import 'dart:async';
 
 import 'package:animal_locket/core/auth/auth_controller.dart';
+import 'package:animal_locket/core/config/backend_mode.dart';
+import 'package:animal_locket/core/config/glyph_feature_flags.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/features/chat/data/chat_realtime_service.dart';
 import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
+import 'package:animal_locket/features/chat/data/glyph_local_data_source.dart';
+import 'package:animal_locket/features/chat/data/glyph_repository_impl.dart';
 import 'package:animal_locket/features/chat/domain/chat_repository.dart';
+import 'package:animal_locket/features/chat/domain/glyph.dart';
+import 'package:animal_locket/features/chat/presentation/glyph_controllers.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -37,9 +44,21 @@ class ConversationState {
 }
 
 class _PendingMessage {
-  _PendingMessage(this.tempId, this.text, this.retries);
+  _PendingMessage({
+    required this.tempId,
+    required this.clientId,
+    required this.type,
+    required this.retries,
+    this.text,
+    this.glyphIds = const [],
+    this.glyphs = const [],
+  });
   final String tempId;
-  final String text;
+  final String clientId;
+  final ChatMessageType type;
+  final String? text;
+  final List<String> glyphIds;
+  final List<GlyphDefinition> glyphs;
   final int retries;
 }
 
@@ -64,10 +83,64 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     final messages = await ref
         .read(chatRepositoryProvider)
         .messages(conversationId);
+    final me =
+        ref.read(authControllerProvider).profile?.publicId ?? 'demo-account';
+    final local = await ref.read(glyphLocalDataSourceProvider.future);
+    final queued = await local.pendingChat(me, conversationId);
+    for (final item in queued) {
+      final type = item.messageType == 'GLYPH'
+          ? ChatMessageType.glyph
+          : item.messageType == 'IMAGE'
+          ? ChatMessageType.image
+          : ChatMessageType.text;
+      messages.add(
+        ChatMessage(
+          id: 'local-${item.clientId}',
+          conversationId: conversationId,
+          senderId: me,
+          type: type,
+          text: item.payload['text'] as String?,
+          mediaId: item.payload['mediaId'] as String?,
+          glyphIds: (item.payload['glyphIds'] as List? ?? const [])
+              .map((value) => value.toString())
+              .toList(growable: false),
+          createdAt: item.createdAt,
+          clientId: item.clientId,
+          pending: true,
+        ),
+      );
+    }
     unawaited(ref.read(chatRepositoryProvider).markRead(conversationId));
     realtime.send({'type': 'read', 'conversationId': conversationId});
     messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (queued.isNotEmpty) {
+      scheduleMicrotask(() => _resumeQueued(queued));
+    }
     return ConversationState(messages: messages);
+  }
+
+  Future<void> _resumeQueued(List<ChatOutboxRecord> queued) async {
+    for (final item in queued) {
+      if (item.messageType == 'IMAGE') continue;
+      final pending = _PendingMessage(
+        tempId: 'local-${item.clientId}',
+        clientId: item.clientId,
+        type: item.messageType == 'GLYPH'
+            ? ChatMessageType.glyph
+            : ChatMessageType.text,
+        text: item.payload['text'] as String?,
+        glyphIds: (item.payload['glyphIds'] as List? ?? const [])
+            .map((value) => value.toString())
+            .toList(growable: false),
+        retries: item.attemptCount,
+      );
+      if (ref.read(chatRealtimeProvider).state ==
+          ChatConnectionState.connected) {
+        _sendSocket(pending);
+      } else {
+        await _sendRest(pending);
+      }
+    }
   }
 
   Future<void> sendText(String text) async {
@@ -81,6 +154,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     }
     final me = ref.read(authControllerProvider).profile?.publicId ?? '';
     final tempId = 'local-${_uuid.v4()}';
+    final clientId = _uuid.v4();
     final optimistic = ChatMessage(
       id: tempId,
       conversationId: conversationId,
@@ -88,55 +162,230 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       type: ChatMessageType.text,
       text: normalized,
       createdAt: DateTime.now().toUtc(),
+      clientId: clientId,
       pending: true,
     );
     state = AsyncData(
       current.copyWith(messages: [...current.messages, optimistic]),
     );
+    await _enqueueOutbox(
+      clientId: clientId,
+      messageType: 'TEXT',
+      payload: {'text': normalized},
+    );
     final realtime = ref.read(chatRealtimeProvider);
     if (realtime.state != ChatConnectionState.connected) {
-      await _sendRest(tempId, normalized);
+      await _sendRest(
+        _PendingMessage(
+          tempId: tempId,
+          clientId: clientId,
+          type: ChatMessageType.text,
+          text: normalized,
+          retries: 0,
+        ),
+      );
       return;
     }
-    _sendSocket(tempId, normalized, 0);
+    _sendSocket(
+      _PendingMessage(
+        tempId: tempId,
+        clientId: clientId,
+        type: ChatMessageType.text,
+        text: normalized,
+        retries: 0,
+      ),
+    );
   }
 
-  void _sendSocket(String tempId, String text, int retries) {
+  Future<bool> sendGlyphs(List<GlyphDefinition> glyphs) async {
+    final current = state.value;
+    if (current == null ||
+        glyphs.isEmpty ||
+        glyphs.length > 12 ||
+        current.closedReason != null) {
+      return false;
+    }
+    final mode = ref.read(backendModeProvider);
+    final flags = ref.read(glyphFeatureFlagsProvider);
+    if (mode == BackendMode.live &&
+        (!flags.publishEnabled || !flags.sendEnabled)) {
+      state = AsyncData(
+        current.copyWith(actionError: const GlyphFeatureUnavailable()),
+      );
+      return false;
+    }
+    final me =
+        ref.read(authControllerProvider).profile?.publicId ?? 'demo-account';
+    final repository = ref.read(glyphRepositoryProvider);
+    final ids = <String>[];
+    try {
+      for (final glyph in glyphs) {
+        if (glyph.kind == GlyphKind.conversation) {
+          ids.add(glyph.id);
+        } else {
+          final published = await repository.publishGlyph(
+            accountPublicId: me,
+            conversationId: conversationId,
+            personalGlyph: glyph,
+          );
+          ids.add(published.id);
+        }
+      }
+      ref.invalidate(conversationGlyphsProvider(conversationId));
+    } catch (error) {
+      state = AsyncData(current.copyWith(actionError: error));
+      return false;
+    }
+    final tempId = 'local-${_uuid.v4()}';
     final clientId = _uuid.v4();
-    _pending[clientId] = _PendingMessage(tempId, text, retries);
-    ref.read(chatRealtimeProvider).send({
+    final optimistic = ChatMessage(
+      id: tempId,
+      conversationId: conversationId,
+      senderId: me,
+      type: ChatMessageType.glyph,
+      text: glyphs.map((item) => item.meaning).join(' · '),
+      glyphIds: List.unmodifiable(ids),
+      createdAt: DateTime.now().toUtc(),
+      clientId: clientId,
+      pending: true,
+    );
+    state = AsyncData(
+      current.copyWith(messages: [...current.messages, optimistic]),
+    );
+    await _enqueueOutbox(
+      clientId: clientId,
+      messageType: 'GLYPH',
+      payload: {'glyphIds': ids},
+    );
+    final pending = _PendingMessage(
+      tempId: tempId,
+      clientId: clientId,
+      type: ChatMessageType.glyph,
+      glyphIds: ids,
+      glyphs: List.unmodifiable(glyphs),
+      retries: 0,
+    );
+    if (ref.read(chatRealtimeProvider).state == ChatConnectionState.connected) {
+      _sendSocket(pending);
+      return true;
+    } else {
+      return _sendRest(pending);
+    }
+  }
+
+  void _sendSocket(_PendingMessage pending) {
+    _pending[pending.clientId] = pending;
+    final frame = <String, dynamic>{
       'type': 'send',
       'conversationId': conversationId,
-      'text': text,
-      'clientId': clientId,
-    });
-    _timers[clientId] = Timer(const Duration(seconds: 10), () async {
-      final pending = _pending.remove(clientId);
-      _timers.remove(clientId);
-      if (pending == null) return;
-      if (pending.retries == 0 &&
+      'clientId': pending.clientId,
+    };
+    if (pending.type == ChatMessageType.glyph) {
+      frame['messageType'] = 'GLYPH';
+      frame['glyphIds'] = pending.glyphIds;
+    } else {
+      frame['text'] = pending.text;
+    }
+    ref.read(chatRealtimeProvider).send(frame);
+    _timers[pending.clientId] = Timer(const Duration(seconds: 10), () async {
+      final expired = _pending.remove(pending.clientId);
+      _timers.remove(pending.clientId);
+      if (expired == null) return;
+      if (expired.retries == 0 &&
           ref.read(chatRealtimeProvider).state ==
               ChatConnectionState.connected) {
-        _sendSocket(pending.tempId, pending.text, 1);
+        _sendSocket(
+          _PendingMessage(
+            tempId: expired.tempId,
+            clientId: expired.clientId,
+            type: expired.type,
+            text: expired.text,
+            glyphIds: expired.glyphIds,
+            glyphs: expired.glyphs,
+            retries: 1,
+          ),
+        );
       } else {
-        await _sendRest(pending.tempId, pending.text);
+        await _sendRest(expired);
       }
     });
   }
 
-  Future<void> _sendRest(String tempId, String text) async {
+  Future<bool> _sendRest(_PendingMessage pending) async {
     try {
-      final saved = await ref
-          .read(chatRepositoryProvider)
-          .sendText(conversationId, text);
-      _replace(tempId, saved);
+      final repository = ref.read(chatRepositoryProvider);
+      final saved = pending.type == ChatMessageType.glyph
+          ? await repository.sendGlyphs(
+              conversationId,
+              pending.glyphIds,
+              clientId: pending.clientId,
+            )
+          : await repository.sendText(conversationId, pending.text!);
+      _replace(pending.tempId, saved);
+      await _completeOutbox(pending.clientId);
+      return true;
     } catch (error) {
-      _replace(tempId, _find(tempId)?.copyWith(pending: false, failed: true));
+      final local = await ref.read(glyphLocalDataSourceProvider.future);
+      final retryable =
+          error is! ApiProblem ||
+          error.status == null ||
+          error.status! >= 500 ||
+          error.status == 429;
+      await local.failChat(
+        pending.clientId,
+        attemptCount: pending.retries,
+        retryable: retryable,
+      );
+      _replace(
+        pending.tempId,
+        _find(pending.tempId)?.copyWith(pending: false, failed: true),
+      );
       final current = state.value;
       if (current != null) {
-        state = AsyncData(current.copyWith(actionError: error));
+        final code = error is ApiProblem ? error.code : null;
+        state = AsyncData(
+          current.copyWith(
+            actionError: error,
+            closedReason: code == 'FORBIDDEN' || code == 'CONVERSATION_CLOSED'
+                ? code
+                : current.closedReason,
+          ),
+        );
+        if (code == 'GLYPH_NOT_ACTIVE') {
+          await ref
+              .read(conversationGlyphsProvider(conversationId).notifier)
+              .refresh();
+        }
       }
+      _restoreGlyphComposer(pending);
+      return false;
     }
+  }
+
+  Future<void> _enqueueOutbox({
+    required String clientId,
+    required String messageType,
+    required Map<String, dynamic> payload,
+  }) async {
+    final me =
+        ref.read(authControllerProvider).profile?.publicId ?? 'demo-account';
+    final local = await ref.read(glyphLocalDataSourceProvider.future);
+    await local.enqueueChat(
+      ChatOutboxRecord(
+        clientId: clientId,
+        accountPublicId: me,
+        conversationId: conversationId,
+        messageType: messageType,
+        payload: payload,
+        attemptCount: 0,
+        createdAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  Future<void> _completeOutbox(String clientId) async {
+    final local = await ref.read(glyphLocalDataSourceProvider.future);
+    await local.completeChat(clientId);
   }
 
   ChatMessage? _find(String id) =>
@@ -170,12 +419,20 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           ),
         );
       }
+      if (message.type == ChatMessageType.glyph) {
+        unawaited(
+          ref
+              .read(conversationGlyphsProvider(conversationId).notifier)
+              .refresh(),
+        );
+      }
     } else if (type == 'ack') {
       final clientId = data['clientId'] as String?;
       if (clientId == null) return;
       final pending = _pending.remove(clientId);
       _timers.remove(clientId)?.cancel();
       if (pending != null) {
+        unawaited(_completeOutbox(clientId));
         final optimistic = _find(pending.tempId);
         if (optimistic != null) {
           _replace(
@@ -204,7 +461,78 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         if (item != null) {
           _replace(item.id, item.copyWith(pending: false, failed: true));
         }
+        unawaited(_handleSocketError(pending, data));
       }
+    } else if (type == 'dictionary_changed' &&
+        data['conversationId'].toString() == conversationId) {
+      ref.invalidate(conversationGlyphsProvider(conversationId));
+    }
+  }
+
+  Future<void> _handleSocketError(
+    _PendingMessage pending,
+    Map<String, dynamic> data,
+  ) async {
+    final code = data['code']?.toString();
+    final retryable =
+        code == 'CHAT_RATE_LIMIT' ||
+        code == 'TEMPORARY_UNAVAILABLE' ||
+        code == null;
+    final local = await ref.read(glyphLocalDataSourceProvider.future);
+    await local.failChat(
+      pending.clientId,
+      attemptCount: pending.retries,
+      retryable: retryable,
+    );
+    if (code == 'GLYPH_NOT_ACTIVE') {
+      await ref
+          .read(conversationGlyphsProvider(conversationId).notifier)
+          .refresh();
+    }
+    _restoreGlyphComposer(pending);
+    final current = state.value;
+    if (current != null &&
+        (code == 'FORBIDDEN' || code == 'CONVERSATION_CLOSED')) {
+      state = AsyncData(current.copyWith(closedReason: code));
+    }
+  }
+
+  void _restoreGlyphComposer(_PendingMessage pending) {
+    if (pending.type != ChatMessageType.glyph || pending.glyphs.isEmpty) return;
+    final composer = ref.read(glyphComposerProvider(conversationId));
+    if (composer.selected.isNotEmpty) return;
+    final notifier = ref.read(glyphComposerProvider(conversationId).notifier);
+    for (final glyph in pending.glyphs) {
+      notifier.add(glyph);
+    }
+  }
+
+  Future<void> retryMessage(ChatMessage message) async {
+    final current = state.value;
+    if (current == null || !message.failed) return;
+    if (message.clientId != null) {
+      await _completeOutbox(message.clientId!);
+    }
+    state = AsyncData(
+      current.copyWith(
+        messages: current.messages
+            .where((item) => item.id != message.id)
+            .toList(),
+      ),
+    );
+    if (message.type == ChatMessageType.glyph) {
+      final dictionary = await ref.read(
+        conversationGlyphsProvider(conversationId).future,
+      );
+      final byId = {for (final glyph in dictionary) glyph.id: glyph};
+      await sendGlyphs(
+        message.glyphIds
+            .map((id) => byId[id])
+            .whereType<GlyphDefinition>()
+            .toList(),
+      );
+    } else if (message.type == ChatMessageType.text && message.text != null) {
+      await sendText(message.text!);
     }
   }
 }

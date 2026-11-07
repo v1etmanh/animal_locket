@@ -80,6 +80,16 @@ class LiveChatRepository implements ChatRepository {
   @override
   Future<ChatMessage> sendImage(String conversationId, String mediaId) =>
       _send(conversationId, {'type': 'IMAGE', 'mediaId': mediaId});
+  @override
+  Future<ChatMessage> sendGlyphs(
+    String conversationId,
+    List<String> glyphIds, {
+    required String clientId,
+  }) => _send(conversationId, {
+    'type': 'GLYPH',
+    'glyphIds': glyphIds,
+    'clientId': clientId,
+  });
   Future<ChatMessage> _send(String id, Map<String, dynamic> data) async =>
       ChatMessage.fromJson(
         (await _api.post<Map<String, dynamic>>(
@@ -170,6 +180,25 @@ class DemoChatRepository implements ChatRepository {
         mediaId: mediaId,
         createdAt: DateTime.now().toUtc(),
       );
+  @override
+  Future<ChatMessage> sendGlyphs(
+    String conversationId,
+    List<String> glyphIds, {
+    required String clientId,
+  }) async {
+    final message = ChatMessage(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      conversationId: conversationId,
+      senderId: 'demodemodemodemodemo',
+      type: ChatMessageType.glyph,
+      text: 'Tin nhắn ký hiệu',
+      glyphIds: List.unmodifiable(glyphIds),
+      createdAt: DateTime.now().toUtc(),
+    );
+    messagesData.putIfAbsent(conversationId, () => []).add(message);
+    return message;
+  }
+
   @override
   Future<void> markRead(String conversationId) async {}
 }

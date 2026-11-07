@@ -40,6 +40,10 @@ class ChatRealtimeService {
       await channel.ready;
       state = ChatConnectionState.connected;
       _attempt = 0;
+      _events.add(const {
+        'type': 'connection',
+        'data': {'state': 'connected'},
+      });
       _subscription = channel.stream.listen(
         _onFrame,
         onError: (_) => _onClosed(),

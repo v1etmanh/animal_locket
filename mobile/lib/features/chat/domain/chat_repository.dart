@@ -28,7 +28,7 @@ class Conversation {
   };
 }
 
-enum ChatMessageType { text, image }
+enum ChatMessageType { text, image, glyph }
 
 class ChatMessage {
   const ChatMessage({
@@ -38,6 +38,9 @@ class ChatMessage {
     required this.type,
     this.text,
     this.mediaId,
+    this.glyphIds = const [],
+    this.dictionaryRevision,
+    this.clientId,
     required this.createdAt,
     this.pending = false,
     this.failed = false,
@@ -46,11 +49,18 @@ class ChatMessage {
     id: json['id'].toString(),
     conversationId: json['conversationId'].toString(),
     senderId: json['senderId'] as String? ?? '',
-    type: json['type'] == 'IMAGE'
-        ? ChatMessageType.image
-        : ChatMessageType.text,
+    type: switch (json['type']) {
+      'IMAGE' => ChatMessageType.image,
+      'GLYPH' => ChatMessageType.glyph,
+      _ => ChatMessageType.text,
+    },
     text: json['text'] as String?,
     mediaId: json['mediaId'] as String?,
+    glyphIds: (json['glyphIds'] as List? ?? const [])
+        .map((item) => item.toString())
+        .toList(growable: false),
+    dictionaryRevision: (json['dictionaryRevision'] as num?)?.toInt(),
+    clientId: json['clientId'] as String?,
     createdAt:
         DateTime.tryParse(json['createdAt'] as String? ?? '')?.toUtc() ??
         DateTime.now().toUtc(),
@@ -61,6 +71,9 @@ class ChatMessage {
   final ChatMessageType type;
   final String? text;
   final String? mediaId;
+  final List<String> glyphIds;
+  final int? dictionaryRevision;
+  final String? clientId;
   final DateTime createdAt;
   final bool pending;
   final bool failed;
@@ -68,9 +81,16 @@ class ChatMessage {
     'id': id,
     'conversationId': conversationId,
     'senderId': senderId,
-    'type': type == ChatMessageType.image ? 'IMAGE' : 'TEXT',
+    'type': switch (type) {
+      ChatMessageType.text => 'TEXT',
+      ChatMessageType.image => 'IMAGE',
+      ChatMessageType.glyph => 'GLYPH',
+    },
     'text': ?text,
     'mediaId': ?mediaId,
+    if (glyphIds.isNotEmpty) 'glyphIds': glyphIds,
+    'dictionaryRevision': ?dictionaryRevision,
+    'clientId': ?clientId,
     'createdAt': createdAt.toUtc().toIso8601String(),
   };
   ChatMessage copyWith({String? id, bool? pending, bool? failed}) =>
@@ -81,6 +101,9 @@ class ChatMessage {
         type: type,
         text: text,
         mediaId: mediaId,
+        glyphIds: glyphIds,
+        dictionaryRevision: dictionaryRevision,
+        clientId: clientId,
         createdAt: createdAt,
         pending: pending ?? this.pending,
         failed: failed ?? this.failed,
@@ -97,5 +120,10 @@ abstract interface class ChatRepository {
   });
   Future<ChatMessage> sendText(String conversationId, String text);
   Future<ChatMessage> sendImage(String conversationId, String mediaId);
+  Future<ChatMessage> sendGlyphs(
+    String conversationId,
+    List<String> glyphIds, {
+    required String clientId,
+  });
   Future<void> markRead(String conversationId);
 }

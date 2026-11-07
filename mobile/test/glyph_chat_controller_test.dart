@@ -1,0 +1,246 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:animal_locket/core/auth/auth_controller.dart';
+import 'package:animal_locket/core/auth/session_manager.dart';
+import 'package:animal_locket/core/cache/cache_database.dart';
+import 'package:animal_locket/core/config/app_config.dart';
+import 'package:animal_locket/core/config/glyph_feature_flags.dart';
+import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/network/token_store.dart';
+import 'package:animal_locket/features/chat/data/chat_realtime_service.dart';
+import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
+import 'package:animal_locket/features/chat/data/glyph_local_data_source.dart';
+import 'package:animal_locket/features/chat/data/glyph_repository_impl.dart';
+import 'package:animal_locket/features/chat/data/system_glyphs.dart';
+import 'package:animal_locket/features/chat/domain/chat_repository.dart';
+import 'package:animal_locket/features/chat/domain/glyph.dart';
+import 'package:animal_locket/features/chat/presentation/chat_controllers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+const _config = AppConfig(
+  apiBaseUrl: 'http://localhost',
+  webSocketUrl: 'ws://localhost',
+  keycloakIssuer: 'http://localhost/realms/test',
+  keycloakClientId: 'test',
+  oauthRedirectUrl: 'test:/oauth',
+  enablePush: false,
+  enableBilling: false,
+  backendTests: false,
+);
+
+void main() {
+  sqfliteFfiInit();
+
+  late Directory directory;
+  late CacheDatabase cache;
+  late GlyphLocalDataSource local;
+  late _FakeRealtime realtime;
+  late _FakeChatRepository chat;
+  late ProviderContainer container;
+
+  setUp(() async {
+    directory = await Directory.systemTemp.createTemp(
+      'animal-locket-chat-controller',
+    );
+    cache = await CacheDatabase.open(
+      factory: databaseFactoryFfi,
+      path: '${directory.path}${Platform.pathSeparator}cache.db',
+    );
+    local = GlyphLocalDataSource(cache);
+    realtime = _FakeRealtime();
+    chat = _FakeChatRepository();
+    container = ProviderContainer(
+      overrides: [
+        authControllerProvider.overrideWith(_ReadyAuthController.new),
+        chatRepositoryProvider.overrideWithValue(chat),
+        chatRealtimeProvider.overrideWithValue(realtime),
+        glyphLocalDataSourceProvider.overrideWith((_) async => local),
+        glyphFeatureFlagsProvider.overrideWithValue(
+          const GlyphFeatureFlags(
+            readEnabled: true,
+            personalLibraryEnabled: true,
+            publishEnabled: true,
+            sendEnabled: true,
+          ),
+        ),
+      ],
+    );
+  });
+
+  tearDown(() async {
+    container.dispose();
+    realtime.dispose();
+    await cache.close();
+    if (await directory.exists()) await directory.delete(recursive: true);
+  });
+
+  test('adds optimistic glyph then resolves it from websocket ack', () async {
+    realtime.state = ChatConnectionState.connected;
+    final provider = conversationControllerProvider('conversation-1');
+    await container.read(provider.future);
+    final controller = container.read(provider.notifier);
+    final glyph = _conversationGlyph('glyph-1');
+
+    expect(await controller.sendGlyphs([glyph]), isTrue);
+    final optimistic = container.read(provider).requireValue.messages.single;
+    expect(optimistic.pending, isTrue);
+    expect(optimistic.glyphIds, ['glyph-1']);
+    expect(realtime.sent.last['type'], 'send');
+    expect(
+      await local.pendingChat('account-a', 'conversation-1'),
+      hasLength(1),
+    );
+
+    realtime.emit({
+      'type': 'ack',
+      'data': {'clientId': optimistic.clientId, 'messageId': 'message-1'},
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    final acknowledged = container.read(provider).requireValue.messages.single;
+    expect(acknowledged.id, 'message-1');
+    expect(acknowledged.pending, isFalse);
+    expect(await local.pendingChat('account-a', 'conversation-1'), isEmpty);
+  });
+
+  test('uses REST while disconnected and locks composer when closed', () async {
+    realtime.state = ChatConnectionState.disconnected;
+    final provider = conversationControllerProvider('conversation-1');
+    await container.read(provider.future);
+    final controller = container.read(provider.notifier);
+
+    expect(
+      await controller.sendGlyphs([_conversationGlyph('glyph-rest')]),
+      isTrue,
+    );
+    expect(chat.glyphSendCount, 1);
+    expect(
+      container.read(provider).requireValue.messages.single.pending,
+      isFalse,
+    );
+    expect(await local.pendingChat('account-a', 'conversation-1'), isEmpty);
+
+    realtime.emit({
+      'type': 'closed',
+      'data': {'conversationId': 'conversation-1', 'reason': 'CLOSED_BY_USER'},
+    });
+    expect(
+      container.read(provider).requireValue.closedReason,
+      'CLOSED_BY_USER',
+    );
+    expect(
+      await controller.sendGlyphs([_conversationGlyph('glyph-blocked')]),
+      isFalse,
+    );
+    expect(chat.glyphSendCount, 1);
+  });
+}
+
+GlyphDefinition _conversationGlyph(String id) {
+  final source = buildSystemGlyphs().first;
+  return source.copyWith(
+    id: id,
+    kind: GlyphKind.conversation,
+    accountPublicId: 'account-a',
+    conversationId: 'conversation-1',
+    creatorPublicId: 'account-a',
+    serverRevision: 1,
+  );
+}
+
+class _ReadyAuthController extends AuthController {
+  @override
+  AuthState build() => AuthState.ready(
+    MeProfile(
+      publicId: 'account-a',
+      ageGroup: AgeGroup.adult,
+      discoverable: true,
+      plan: AccountPlan.free,
+      createdAt: DateTime.utc(2026),
+    ),
+  );
+}
+
+class _FakeChatRepository implements ChatRepository {
+  var glyphSendCount = 0;
+
+  @override
+  Future<List<ChatMessage>> messages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async => <ChatMessage>[];
+
+  @override
+  Future<ChatMessage> sendGlyphs(
+    String conversationId,
+    List<String> glyphIds, {
+    required String clientId,
+  }) async {
+    glyphSendCount++;
+    return ChatMessage(
+      id: 'rest-$glyphSendCount',
+      conversationId: conversationId,
+      senderId: 'account-a',
+      type: ChatMessageType.glyph,
+      glyphIds: glyphIds,
+      clientId: clientId,
+      createdAt: DateTime.utc(2026),
+    );
+  }
+
+  @override
+  Future<void> markRead(String conversationId) async {}
+
+  @override
+  Future<Conversation> createConversation(String withPublicId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<Conversation>> conversations() => throw UnimplementedError();
+
+  @override
+  Future<ChatMessage> sendImage(String conversationId, String mediaId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<ChatMessage> sendText(String conversationId, String text) =>
+      throw UnimplementedError();
+}
+
+class _FakeRealtime extends ChatRealtimeService {
+  _FakeRealtime()
+    : super(_config, SessionManager(_config, _MemoryTokenStore()));
+
+  final _controller = StreamController<Map<String, dynamic>>.broadcast(
+    sync: true,
+  );
+  final sent = <Map<String, dynamic>>[];
+
+  @override
+  Stream<Map<String, dynamic>> get events => _controller.stream;
+
+  void emit(Map<String, dynamic> frame) => _controller.add(frame);
+
+  @override
+  void send(Map<String, dynamic> frame) => sent.add(frame);
+
+  @override
+  void dispose() {
+    _controller.close();
+  }
+}
+
+class _MemoryTokenStore implements TokenStore {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<TokenBundle?> read() async => null;
+
+  @override
+  Future<void> save(TokenBundle bundle) async {}
+}

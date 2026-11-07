@@ -135,6 +135,252 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Có lỗi xảy ra. Vui lòng thử lại.'**
   String get genericError;
+
+  /// No description provided for @conversationTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Trò chuyện'**
+  String get conversationTitle;
+
+  /// No description provided for @messagesLoadError.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không thể tải tin nhắn.'**
+  String get messagesLoadError;
+
+  /// No description provided for @messageSendFailed.
+  ///
+  /// In vi, this message translates to:
+  /// **'Tin chưa gửi được. Nội dung vẫn được giữ trên màn hình.'**
+  String get messageSendFailed;
+
+  /// No description provided for @messageHint.
+  ///
+  /// In vi, this message translates to:
+  /// **'Nhắn tin…'**
+  String get messageHint;
+
+  /// No description provided for @sendMessage.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi tin nhắn'**
+  String get sendMessage;
+
+  /// No description provided for @sendPhoto.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi ảnh'**
+  String get sendPhoto;
+
+  /// No description provided for @glyphModeOpen.
+  ///
+  /// In vi, this message translates to:
+  /// **'Mở chế độ nhắn bằng ký hiệu'**
+  String get glyphModeOpen;
+
+  /// No description provided for @glyphModeClose.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đóng chế độ nhắn bằng ký hiệu'**
+  String get glyphModeClose;
+
+  /// No description provided for @glyphDrawLabel.
+  ///
+  /// In vi, this message translates to:
+  /// **'Khung vẽ ký hiệu một nét'**
+  String get glyphDrawLabel;
+
+  /// No description provided for @glyphDrawHint.
+  ///
+  /// In vi, this message translates to:
+  /// **'Vẽ một nét vào đây'**
+  String get glyphDrawHint;
+
+  /// No description provided for @glyphClearStroke.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xóa nét vẽ'**
+  String get glyphClearStroke;
+
+  /// No description provided for @glyphRecognizing.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đang nhận diện…'**
+  String get glyphRecognizing;
+
+  /// No description provided for @glyphNoMatch.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chưa nhận ra ký hiệu. Bạn có thể vẽ lại hoặc tạo ký hiệu mới.'**
+  String get glyphNoMatch;
+
+  /// No description provided for @glyphAmbiguous.
+  ///
+  /// In vi, this message translates to:
+  /// **'Nét vẽ giống nhiều ký hiệu. Hãy chọn kết quả đúng.'**
+  String get glyphAmbiguous;
+
+  /// No description provided for @glyphMatched.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đã nhận diện {meaning}'**
+  String glyphMatched(String meaning);
+
+  /// No description provided for @glyphAddToComposer.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thêm vào câu'**
+  String get glyphAddToComposer;
+
+  /// No description provided for @glyphQuickPick.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chọn nhanh'**
+  String get glyphQuickPick;
+
+  /// No description provided for @glyphComposerEmpty.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chưa có ký hiệu trong câu'**
+  String get glyphComposerEmpty;
+
+  /// No description provided for @glyphRemoveToken.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xóa ký hiệu {meaning}'**
+  String glyphRemoveToken(String meaning);
+
+  /// No description provided for @glyphClearComposer.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xóa toàn bộ câu ký hiệu'**
+  String get glyphClearComposer;
+
+  /// No description provided for @glyphSend.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi ký hiệu'**
+  String get glyphSend;
+
+  /// No description provided for @glyphDictionary.
+  ///
+  /// In vi, this message translates to:
+  /// **'Từ điển ký hiệu'**
+  String get glyphDictionary;
+
+  /// No description provided for @glyphCreate.
+  ///
+  /// In vi, this message translates to:
+  /// **'Tạo ký hiệu'**
+  String get glyphCreate;
+
+  /// No description provided for @glyphSystemTab.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hệ thống'**
+  String get glyphSystemTab;
+
+  /// No description provided for @glyphPersonalTab.
+  ///
+  /// In vi, this message translates to:
+  /// **'Cá nhân'**
+  String get glyphPersonalTab;
+
+  /// No description provided for @glyphConversationTab.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hội thoại'**
+  String get glyphConversationTab;
+
+  /// No description provided for @glyphDictionaryEmpty.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chưa có ký hiệu trong mục này.'**
+  String get glyphDictionaryEmpty;
+
+  /// No description provided for @glyphDictionaryError.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không thể tải từ điển ký hiệu.'**
+  String get glyphDictionaryError;
+
+  /// No description provided for @glyphMeaningLabel.
+  ///
+  /// In vi, this message translates to:
+  /// **'Ý nghĩa ký hiệu'**
+  String get glyphMeaningLabel;
+
+  /// No description provided for @glyphMeaningHint.
+  ///
+  /// In vi, this message translates to:
+  /// **'Ví dụ Đi cà phê không'**
+  String get glyphMeaningHint;
+
+  /// No description provided for @glyphColorLabel.
+  ///
+  /// In vi, this message translates to:
+  /// **'Màu ký hiệu'**
+  String get glyphColorLabel;
+
+  /// No description provided for @glyphSave.
+  ///
+  /// In vi, this message translates to:
+  /// **'Lưu ký hiệu'**
+  String get glyphSave;
+
+  /// No description provided for @glyphDelete.
+  ///
+  /// In vi, this message translates to:
+  /// **'Xóa ký hiệu'**
+  String get glyphDelete;
+
+  /// No description provided for @glyphCollisionWarning.
+  ///
+  /// In vi, this message translates to:
+  /// **'Nét vẽ quá giống một ký hiệu đã có.'**
+  String get glyphCollisionWarning;
+
+  /// No description provided for @glyphTooShort.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hãy vẽ một nét rõ hơn.'**
+  String get glyphTooShort;
+
+  /// No description provided for @glyphFeatureWaitingBackend.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi ký hiệu đang chờ backend tương thích.'**
+  String get glyphFeatureWaitingBackend;
+
+  /// No description provided for @glyphShowMeaning.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hiện nghĩa ký hiệu'**
+  String get glyphShowMeaning;
+
+  /// No description provided for @glyphHideMeaning.
+  ///
+  /// In vi, this message translates to:
+  /// **'Ẩn nghĩa ký hiệu'**
+  String get glyphHideMeaning;
+
+  /// No description provided for @glyphUnknownFallback.
+  ///
+  /// In vi, this message translates to:
+  /// **'Không tải được hình ký hiệu. Đang hiển thị nội dung thay thế.'**
+  String get glyphUnknownFallback;
+
+  /// No description provided for @retryMessage.
+  ///
+  /// In vi, this message translates to:
+  /// **'Gửi lại tin nhắn'**
+  String get retryMessage;
+
+  /// No description provided for @conversationClosed.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hội thoại đã đóng'**
+  String get conversationClosed;
 }
 
 class _AppLocalizationsDelegate
