@@ -49,13 +49,14 @@ public class AccountService {
     private final EntitlementService entitlements;
     private final OutboxService outbox;
     private final IdentityProviderClient identityProvider;
+    private final DevBuddy devBuddy;
 
     public AccountService(UserRepository users, AnimalRepository animals, UserAnimalRepository userAnimals,
                           SpinLogRepository spinLogs, FriendshipRepository friendships,
                           FriendRequestRepository requests, BlockRepository blocks,
                           DeviceTokenRepository devices, EntitlementRepository entitlementRepo,
                           AnimalCatalog catalog, EntitlementService entitlements, OutboxService outbox,
-                          IdentityProviderClient identityProvider) {
+                          IdentityProviderClient identityProvider, DevBuddy devBuddy) {
         this.users = users;
         this.animals = animals;
         this.userAnimals = userAnimals;
@@ -69,6 +70,7 @@ public class AccountService {
         this.entitlements = entitlements;
         this.outbox = outbox;
         this.identityProvider = identityProvider;
+        this.devBuddy = devBuddy;
     }
 
     /** Đăng ký lần đầu sau khi đăng nhập Keycloak. Idempotent theo sub. */
@@ -102,6 +104,7 @@ public class AccountService {
 
         outbox.publish(Topics.USER, EventTypes.USER_REGISTERED, u.getPublicId(),
                 new Events.UserRegistered(u.getPublicId(), u.getAgeGroup().name(), u.getLeadAnimal()));
+        devBuddy.befriend(u.getPublicId()); // chỉ khi dev bật animal.dev-buddy.public-id
         return toMe(u);
     }
 
