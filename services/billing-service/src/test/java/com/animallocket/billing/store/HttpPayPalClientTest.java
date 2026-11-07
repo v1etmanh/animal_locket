@@ -7,9 +7,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,6 +30,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 /** Chạy với HTTP giả: định dạng JSON thật của PayPal có thể khác chi tiết, xem PAYPAL.md (chưa chạy với sandbox thật). */
 class HttpPayPalClientTest {
     static final String BASE = "https://api-m.sandbox.paypal.com";
+    /** Giá trị giả chỉ dùng trong test; header Basic được tính lại để không có chuỗi base64 cố định trong mã. */
+    static final String CLIENT_ID = "cid";
+    static final String CLIENT_SECRET = "sec";
     static final String TOKEN_JSON = "{\"access_token\":\"A21.test\",\"token_type\":\"Bearer\",\"expires_in\":32400}";
 
     MockRestServiceServer server;
@@ -36,8 +41,8 @@ class HttpPayPalClientTest {
     @BeforeEach
     void setUp() {
         PayPalProperties props = new PayPalProperties();
-        props.setClientId("cid");
-        props.setClientSecret("sec");
+        props.setClientId(CLIENT_ID);
+        props.setClientSecret(CLIENT_SECRET);
         RestClient.Builder b = RestClient.builder();
         server = MockRestServiceServer.bindTo(b).build();
         client = new HttpPayPalClient(props, b.build(),
@@ -47,7 +52,8 @@ class HttpPayPalClientTest {
     private void expectToken() {
         server.expect(once(), requestTo(BASE + "/v1/oauth2/token"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("Authorization", "Basic Y2lkOnNlYw=="))
+                .andExpect(header("Authorization", "Basic "
+                        + Base64.getEncoder().encodeToString((CLIENT_ID + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8))))
                 .andExpect(content().string("grant_type=client_credentials"))
                 .andRespond(withSuccess(TOKEN_JSON, MediaType.APPLICATION_JSON));
     }
