@@ -1,0 +1,10 @@
+{
+  "@@locale": "vi",
+  "appName": "Animal Locket",
+  "photosTab": "Ảnh",
+  "discoverTab": "Khám phá",
+  "chatTab": "Chat",
+  "profileTab": "Hồ sơ",
+  "retry": "Thử lại",
+  "genericError": "Có lỗi xảy ra. Vui lòng thử lại."
+}

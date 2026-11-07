@@ -1,0 +1,507 @@
+# =====================================================================================================
+#  ANIMAL LOCKET — Docker Compose
+#
+#  Profile:   core  hạ tầng (DB, Kafka, Redis, Keycloak, Traefik) + job khởi tạo
+#             app   config-server, eureka, gateway, 7 service nghiệp vụ
+#             obs   Prometheus, Loki, Tempo, Grafana, Alloy, kafka-exporter
+#
+#  Dùng:  cp .env.example .env   (rồi ĐỔI MẬT KHẨU)   →   docker compose up -d --build
+#         (.env.example đặt sẵn COMPOSE_PROFILES=core,app). Xem deploy/README.md.
+#
+#  Chỉ Traefik publish cổng ra máy chủ (80/443, và dashboard ở 127.0.0.1:8088). Mọi thứ còn lại nằm trong mạng animal-net.
+# =====================================================================================================
+name: animal-locket
+
+# ----------------------------------------------------------------------------------------------------
+#  Khối dùng chung cho các service Java
+# ----------------------------------------------------------------------------------------------------
+x-java-env: &java-env
+  CONFIG_SERVER_URL: http://config-server:8888
+  CONFIG_USER: ${CONFIG_USER:-config}
+  CONFIG_PASSWORD: ${CONFIG_PASSWORD:?Thiếu CONFIG_PASSWORD, hãy sao chép .env.example thành .env}
+  EUREKA_URL: http://eureka-server:8761/eureka
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Thiếu INTERNAL_TOKEN}
+  KAFKA_BOOTSTRAP: kafka:9092
+  # Gateway/service chỉ cần public key của Keycloak để kiểm tra JWT; gọi nội bộ nên không phụ thuộc hostname công khai.
+  KEYCLOAK_JWK_URI: http://keycloak:8080/realms/animal-locket/protocol/openid-connect/certs
+  OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
+  TRACE_SAMPLING: ${TRACE_SAMPLING:-1.0}
+  JPA_DDL_AUTO: ${JPA_DDL_AUTO:-none}
+  # Bật histogram để Grafana/Prometheus tính được p95 độ trễ (nếu không chỉ có count/sum/max).
+  MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILESHISTOGRAM_HTTP_SERVER_REQUESTS: "true"
+
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [animal-net]
+  profiles: [app]
+
+x-java-deps: &java-deps
+  config-server:
+    condition: service_healthy
+
+x-redis-env: &redis-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?Thiếu REDIS_PASSWORD}
+
+services:
+  # ==================================================================================================
+  #  CORE — cơ sở dữ liệu và hạ tầng
+  # ==================================================================================================
+  redis:
+    image: redis:7-alpine
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Thiếu REDIS_PASSWORD}
+    # noeviction: Redis giữ hạn mức, vị trí, bản sao quyền lợi; thà báo lỗi còn hơn lặng lẽ xoá dữ liệu.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory-policy noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.8.0
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    environment:
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # topic được tạo tường minh ở kafka-init, tránh tạo nhầm do gõ sai tên
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: "168"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  kafka-init:
+    image: apache/kafka:3.8.0
+    profiles: [core]
+    restart: "no"
+    networks: [animal-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -eu
+        create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$1" --partitions 3 --replication-factor 1 "$${@:2}"; }
+        for t in user.events friend.events media.events media.results post.events chat.events billing.events; do create "$$t"; done
+        # Dead-letter: giữ 30 ngày để kịp điều tra.
+        create media.events.dlq --config retention.ms=2592000000
+        echo "kafka-init: danh sách topic"
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0}
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      # Supabase (Session pooler). Role keycloak_app chỉ có quyền trên schema keycloak (xem deploy/supabase/init.sql).
+      KC_DB_URL: ${KEYCLOAK_DB_URL:?Thiếu KEYCLOAK_DB_URL}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?Thiếu KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Thiếu KEYCLOAK_DB_PASSWORD}
+      KC_DB_SCHEMA: keycloak
+      KC_DB_POOL_MAX_SIZE: "5"           # gói free của Supabase giới hạn số kết nối
+      # URL công khai mà điện thoại dùng (là "iss" trong token). Phải khớp cổng nếu HTTP_PORT khác 80.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://auth.localhost}
+      KC_HTTP_ENABLED: "true"            # TLS kết thúc ở Traefik
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Thiếu KEYCLOAK_ADMIN_PASSWORD}
+      # Được thay vào "${KEYCLOAK_ADMIN_CLIENT_SECRET}" trong file realm khi import.
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:?Thiếu KEYCLOAK_ADMIN_CLIENT_SECRET}
+    volumes:
+      - ./deploy/keycloak/animal-locket-realm.json:/opt/keycloak/data/import/animal-locket-realm.json:ro
+    healthcheck:
+      # Image Keycloak không có curl; dùng /dev/tcp của bash (cách chính thức trong tài liệu Keycloak). Health nằm ở cổng quản lý 9000.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q UP"]
+      interval: 15s
+      timeout: 8s
+      retries: 12
+      start_period: 90s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=animal-net"
+      - "traefik.http.routers.auth.rule=Host(`auth.${PUBLIC_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.auth.entrypoints=web,websecure"
+      - "traefik.http.routers.auth.middlewares=security-headers-ui@file,ratelimit@file"
+      - "traefik.http.routers.auth.service=auth"
+      # Console quản trị và realm master KHÔNG được public: chỉ mạng nội bộ.
+      - "traefik.http.routers.auth-admin.rule=Host(`auth.${PUBLIC_DOMAIN:-localhost}`) && (PathPrefix(`/admin`) || PathPrefix(`/realms/master`) || PathPrefix(`/metrics`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.auth-admin.entrypoints=web,websecure"
+      - "traefik.http.routers.auth-admin.priority=1000"
+      - "traefik.http.routers.auth-admin.middlewares=admin-only@file,security-headers-ui@file"
+      - "traefik.http.routers.auth-admin.service=auth"
+      - "traefik.http.services.auth.loadbalancer.server.port=8080"
+
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3}
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "127.0.0.1:8088:8080"            # dashboard + /metrics: CHỈ loopback của máy chủ
+    volumes:
+      - ./deploy/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./deploy/traefik/dynamic:/etc/traefik/dynamic:ro
+      # Traefik cần đọc Docker socket để tìm router theo label. Production nên đặt sau docker-socket-proxy (chỉ quyền đọc).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ==================================================================================================
+  #  APP — hạ tầng Spring Cloud và service nghiệp vụ
+  # ==================================================================================================
+  eureka-server:
+    <<: *java-service
+    image: animal-locket/eureka-server:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: infra/eureka-server, APP_PORT: "8761" }
+    environment:
+      EUREKA_HOST: eureka-server
+
+  config-server:
+    <<: *java-service
+    image: animal-locket/config-server:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: infra/config-server, APP_PORT: "8888" }
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    environment:
+      CONFIG_USER: ${CONFIG_USER:-config}
+      CONFIG_PASSWORD: ${CONFIG_PASSWORD}
+      CONFIG_REPO_PATH: file:/config-repo
+      EUREKA_URL: http://eureka-server:8761/eureka
+    volumes:
+      - ./infra/config-repo:/config-repo:ro
+
+  api-gateway:
+    <<: *java-service
+    image: animal-locket/api-gateway:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: infra/api-gateway, APP_PORT: "8080" }
+    depends_on:
+      <<: *java-deps
+      redis:
+        condition: service_healthy
+    environment:
+      <<: [*java-env, *redis-env]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=animal-net"
+      # Chỉ chuyển các đường dẫn công khai của API. KHÔNG chuyển /actuator/**: gateway cho phép /actuator/prometheus
+      # không cần đăng nhập để Prometheus scrape trong mạng nội bộ, nên không được để lộ ra Internet.
+      - "traefik.http.routers.api.rule=Host(`api.${PUBLIC_DOMAIN:-localhost}`) && (PathPrefix(`/api/`) || PathPrefix(`/ws/`) || PathPrefix(`/webhooks/`))"
+      - "traefik.http.routers.api.entrypoints=web,websecure"
+      - "traefik.http.routers.api.middlewares=security-headers@file,ratelimit@file"
+      - "traefik.http.routers.api.service=api"
+      # WebSocket (/ws/chat) đi qua cùng router; Traefik tự chuyển tiếp header Upgrade.
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+
+  user-service:
+    <<: *java-service
+    image: animal-locket/user-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/user-service, APP_PORT: "8101" }
+    depends_on:
+      <<: *java-deps
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://${MYSQL_HOST:?Thiếu MYSQL_HOST}:${MYSQL_PORT:?Thiếu MYSQL_PORT}/user_db?sslMode=REQUIRED&characterEncoding=utf8
+      DB_USER: ${MYSQL_USER:?Thiếu MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Thiếu MYSQL_PASSWORD}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # Xoá user trong Keycloak khi người dùng xoá tài khoản (service account "user-service-admin").
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_CLIENT_ID: user-service-admin
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+
+  media-service:
+    <<: *java-service
+    image: animal-locket/media-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/media-service, APP_PORT: "8103" }
+    depends_on:
+      <<: *java-deps
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://${MYSQL_HOST:?Thiếu MYSQL_HOST}:${MYSQL_PORT:?Thiếu MYSQL_PORT}/media_db?sslMode=REQUIRED&characterEncoding=utf8
+      DB_USER: ${MYSQL_USER:?Thiếu MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Thiếu MYSQL_PASSWORD}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # Cloudflare R2 (một bucket riêng tư). Token chỉ có quyền Object Read & Write trên bucket này.
+      R2_ENDPOINT: ${R2_ENDPOINT:?Thiếu R2_ENDPOINT}
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY:?Thiếu R2_ACCESS_KEY}
+      R2_SECRET_KEY: ${R2_SECRET_KEY:?Thiếu R2_SECRET_KEY}
+      R2_BUCKET: ${R2_BUCKET:?Thiếu R2_BUCKET}
+
+  post-service:
+    <<: *java-service
+    image: animal-locket/post-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/post-service, APP_PORT: "8102" }
+    depends_on:
+      <<: *java-deps
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*java-env, *redis-env]
+      DB_URL: jdbc:mysql://${MYSQL_HOST:?Thiếu MYSQL_HOST}:${MYSQL_PORT:?Thiếu MYSQL_PORT}/post_db?sslMode=REQUIRED&characterEncoding=utf8
+      DB_USER: ${MYSQL_USER:?Thiếu MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Thiếu MYSQL_PASSWORD}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+
+  notification-service:
+    <<: *java-service
+    image: animal-locket/notification-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/notification-service, APP_PORT: "8107" }
+    depends_on:
+      <<: *java-deps
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *java-env
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+    volumes:
+      - ./deploy/secrets:/secrets:ro
+
+  discovery-service:
+    <<: *java-service
+    image: animal-locket/discovery-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/discovery-service, APP_PORT: "8104" }
+    depends_on:
+      <<: *java-deps
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*java-env, *redis-env]
+      DISCOVERY_SECRET: ${DISCOVERY_SECRET:?Thiếu DISCOVERY_SECRET}
+
+  chat-service:
+    <<: *java-service
+    image: animal-locket/chat-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/chat-service, APP_PORT: "8105" }
+    depends_on:
+      <<: *java-deps
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: [*java-env, *redis-env]
+      # MongoDB Atlas. User chỉ có quyền readWrite trên chat_db. Dạng mongodb+srv://user:pass@cluster.xxxx.mongodb.net/chat_db
+      MONGO_URI: ${MONGO_URI:?Thiếu MONGO_URI}
+
+  billing-service:
+    <<: *java-service
+    image: animal-locket/billing-service:dev
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.java
+      args: { MODULE_PATH: services/billing-service, APP_PORT: "8106" }
+    depends_on:
+      <<: *java-deps
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *java-env
+      # Supabase (Session pooler). Role billing_app chỉ có quyền trên schema billing.
+      DB_URL: ${BILLING_DB_URL:?Thiếu BILLING_DB_URL}
+      DB_USER: ${BILLING_DB_USER:?Thiếu BILLING_DB_USER}
+      DB_PASSWORD: ${BILLING_DB_PASSWORD:?Thiếu BILLING_DB_PASSWORD}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      BILLING_DEV_STORE: ${BILLING_DEV_STORE:-false}
+    volumes:
+      # Khoá App Store / Google Play (file .p8, service account JSON) đặt ở đây, KHÔNG commit.
+      - ./deploy/secrets:/secrets:ro
+
+  # ==================================================================================================
+  #  OBS — Prometheus, Loki, Tempo, Grafana
+  # ==================================================================================================
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["--kafka.server=kafka:9092"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  loki:
+    image: grafana/loki:3.2.1
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./deploy/observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./deploy/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    # Image Tempo không có shell/wget nên không khai báo healthcheck.
+
+  alloy:
+    image: grafana/alloy:v1.4.3
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    depends_on:
+      - loki
+    volumes:
+      - ./deploy/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    profiles: [obs]
+    restart: unless-stopped
+    networks: [animal-net]
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Thiếu GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: http://grafana.${PUBLIC_DOMAIN:-localhost}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=animal-net"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${PUBLIC_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.grafana.entrypoints=web,websecure"
+      - "traefik.http.routers.grafana.middlewares=security-headers-ui@file"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+networks:
+  animal-net:
+    name: animal-net
+
+volumes:
+  redis-data:
+  kafka-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  alloy-data:
+  grafana-data:

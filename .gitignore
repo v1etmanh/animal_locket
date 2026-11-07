@@ -1,0 +1,39 @@
+# Build
+target/
+*.class
+*.jar
+!**/src/test/resources/**/*.jar
+
+# Python (face-worker)
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Bí mật và cấu hình cục bộ: KHÔNG commit
+.env
+.env.*
+!.env.example
+deploy/secrets/*
+!deploy/secrets/.gitkeep
+*.p8
+*.pem
+*.key
+*firebase*adminsdk*.json
+fcm*.json
+
+# IDE / hệ điều hành
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Dữ liệu chạy cục bộ
+*.log
+/tmp/

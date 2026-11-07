@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiến trúc Animal Locket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one long reading column; the system diagram first, then three flows, then reference tables. */
+:root {
+  --bg: #f2f5f6; --surface: #ffffff; --ink: #1b2a2f; --muted: #556870; --line: #c6d0d3;
+  --svc: #d9ebf2; --svc-line: #2a7893;
+  --store: #e2eee0; --store-line: #4a8650;
+  --bus: #fbe8bf; --bus-line: #b57a12;
+  --ai: #fbdcd2; --ai-line: #c0502f;
+  --soft: #e8eef0;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #10171a; --surface: #182125; --ink: #e5eef0; --muted: #94a6ac; --line: #32434a;
+    --svc: #163240; --svc-line: #5db5d4;
+    --store: #1a2e1d; --store-line: #84c184;
+    --bus: #3a2d0e; --bus-line: #e2a73c;
+    --ai: #3d1f16; --ai-line: #f08c6f;
+    --soft: #1f2a2e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #10171a; --surface: #182125; --ink: #e5eef0; --muted: #94a6ac; --line: #32434a;
+  --svc: #163240; --svc-line: #5db5d4;
+  --store: #1a2e1d; --store-line: #84c184;
+  --bus: #3a2d0e; --bus-line: #e2a73c;
+  --ai: #3d1f16; --ai-line: #f08c6f;
+  --soft: #1f2a2e;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); line-height: 1.55; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 40px; }
+h1, h2 { text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 30px; font-weight: 600; }
+h2 { font-size: 20px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.lead { color: var(--muted); margin-top: 8px; }
+section { display: flex; flex-direction: column; gap: 14px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+svg { display: block; width: 100%; min-width: 760px; height: auto; }
+svg text { font-family: var(--font-body); fill: var(--ink); }
+.t { font-size: 13px; font-weight: 600; text-anchor: middle; }
+.ts { font-size: 11px; text-anchor: middle; fill: var(--muted); }
+.tl { font-size: 11px; fill: var(--muted); }
+.mono { font-family: var(--font-mono); }
+.box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.svc { fill: var(--svc); stroke: var(--svc-line); stroke-width: 1.4; }
+.store { fill: var(--store); stroke: var(--store-line); stroke-width: 1.2; }
+.bus { fill: var(--bus); stroke: var(--bus-line); stroke-width: 1.4; }
+.ai { fill: var(--ai); stroke: var(--ai-line); stroke-width: 1.4; }
+.soft { fill: var(--soft); stroke: var(--line); stroke-width: 1.2; }
+.edge { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.edge.dash { stroke-dasharray: 5 4; }
+.arrowhead { fill: var(--muted); }
+ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+ol.steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+ol.steps li::before { content: counter(s); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+ol.steps b { font-weight: 600; }
+ol.steps span { font-size: 14px; color: var(--muted); }
+ol.steps li.fail { border-color: var(--ai-line); }
+code, .ev { font-family: var(--font-mono); font-size: 12.5px; background: var(--soft); border-radius: 4px; padding: 1px 5px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; background: var(--soft); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rules div { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--svc-line); border-radius: 6px; padding: 12px 14px; font-size: 14px; }
+.rules div.closed { border-left-color: var(--ai-line); }
+.rules div.soft { border-left-color: var(--store-line); }
+.rules strong { display: block; margin-bottom: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.4px solid; }
+.legend .l-svc::before { background: var(--svc); border-color: var(--svc-line); }
+.legend .l-store::before { background: var(--store); border-color: var(--store-line); }
+.legend .l-bus::before { background: var(--bus); border-color: var(--bus-line); }
+.legend .l-ai::before { background: var(--ai); border-color: var(--ai-line); }
+.legend .l-box::before { background: var(--surface); border-color: var(--line); }
+footer { color: var(--muted); font-size: 13px; }
+@media (max-width: 480px) { h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Kiến trúc Animal Locket</h1>
+  <p class="lead">Ứng dụng chia sẻ ảnh kiểu Locket: ẩn danh, mặt người trong ảnh được thay bằng mặt con vật, kết bạn bằng cách quẹt, tìm người lân cận. Bản này khớp với <code>docs/ARCHITECTURE_PLAN.md</code>.</p>
+</header>
+
+<section>
+  <h2>1. Toàn cảnh hệ thống</h2>
+  <div class="legend">
+    <span class="l-box">Cổng vào và nền tảng</span>
+    <span class="l-svc">Service nghiệp vụ (Java, Spring Boot)</span>
+    <span class="l-store">Nơi lưu dữ liệu</span>
+    <span class="l-bus">Kafka</span>
+    <span class="l-ai">Xử lý ảnh (Python, GPU)</span>
+  </div>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1100 664" role="img" aria-label="Sơ đồ kiến trúc: app đi qua Traefik và Gateway tới bảy service, các service trao đổi event qua Kafka, face-worker xử lý ảnh với MinIO, toàn bộ gửi telemetry về Grafana.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- Entry -->
+        <rect class="box" x="450" y="16" width="200" height="40" rx="8"/>
+        <text class="t" x="550" y="40">App di động</text>
+        <line class="edge" x1="550" y1="56" x2="550" y2="76" marker-end="url(#ah)"/>
+        <rect class="box" x="450" y="76" width="200" height="40" rx="8"/>
+        <text class="t" x="550" y="94">Traefik</text><text class="ts" x="550" y="109">TLS · cổng 80/443</text>
+        <line class="edge" x1="550" y1="116" x2="550" y2="136" marker-end="url(#ah)"/>
+        <rect class="box" x="350" y="136" width="400" height="50" rx="8"/>
+        <text class="t" x="550" y="158">API Gateway</text><text class="ts" x="550" y="175">kiểm JWT · Resilience4j · rate limit · WebSocket</text>
+
+        <!-- Platform -->
+        <rect class="box" x="24" y="136" width="240" height="50" rx="8"/>
+        <text class="t" x="144" y="158">Keycloak</text><text class="ts" x="144" y="175">đăng nhập, cấp JWT · PostgreSQL riêng</text>
+        <line class="edge" x1="264" y1="161" x2="350" y2="161" marker-end="url(#ah)"/>
+        <text class="tl" x="307" y="154" text-anchor="middle">JWT</text>
+        <rect class="box" x="830" y="136" width="120" height="50" rx="8"/>
+        <text class="t" x="890" y="158">Eureka</text><text class="ts" x="890" y="175">lb://tên-service</text>
+        <line class="edge" x1="830" y1="161" x2="750" y2="161" marker-end="url(#ah)"/>
+        <rect class="box" x="960" y="136" width="116" height="50" rx="8"/>
+        <text class="t" x="1018" y="158">Config Server</text><text class="ts" x="1018" y="175">cấu hình từ Git</text>
+
+        <!-- Route bus -->
+        <line class="edge" x1="550" y1="186" x2="550" y2="214"/>
+        <line class="edge" x1="94" y1="214" x2="1006" y2="214"/>
+        <line class="edge" x1="94" y1="214" x2="94" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="246" y1="214" x2="246" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="398" y1="214" x2="398" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="550" y1="214" x2="550" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="702" y1="214" x2="702" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="854" y1="214" x2="854" y2="256" marker-end="url(#ah)"/>
+        <line class="edge" x1="1006" y1="214" x2="1006" y2="256" marker-end="url(#ah)"/>
+        <text class="tl" x="560" y="208">REST và WebSocket</text>
+
+        <!-- Services -->
+        <rect class="svc" x="24" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="94" y="280">user-service</text><text class="ts" x="94" y="298">hồ sơ, bạn bè, chặn</text>
+        <rect class="svc" x="176" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="246" y="280">post-service</text><text class="ts" x="246" y="298">bài đăng, feed</text>
+        <rect class="svc" x="328" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="398" y="280">media-service</text><text class="ts" x="398" y="298">upload, trạng thái ảnh</text>
+        <rect class="svc" x="480" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="550" y="280">discovery-service</text><text class="ts" x="550" y="298">lân cận, quẹt thẻ</text>
+        <rect class="svc" x="632" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="702" y="280">chat-service</text><text class="ts" x="702" y="298">tin nhắn, WebSocket</text>
+        <rect class="svc" x="784" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="854" y="280">billing-service</text><text class="ts" x="854" y="298">Pro, mua lẻ</text>
+        <rect class="svc" x="936" y="256" width="140" height="58" rx="8"/>
+        <text class="t" x="1006" y="280" style="font-size:12px">notification-service</text><text class="ts" x="1006" y="298">push FCM/APNs</text>
+
+        <!-- Stores -->
+        <line class="edge" x1="84" y1="314" x2="84" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="32" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="84" y="366">MySQL</text><text class="ts" x="84" y="383">user_db</text>
+        <line class="edge" x1="236" y1="314" x2="236" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="184" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="236" y="366">MySQL</text><text class="ts" x="236" y="383">post_db + Redis</text>
+        <line class="edge" x1="388" y1="314" x2="388" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="336" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="388" y="366">MySQL</text><text class="ts" x="388" y="383">media_db</text>
+        <line class="edge" x1="540" y1="314" x2="540" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="488" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="540" y="366">Redis</text><text class="ts" x="540" y="383">GEO + online</text>
+        <line class="edge" x1="692" y1="314" x2="692" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="640" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="692" y="366">MongoDB</text><text class="ts" x="692" y="383">+ Redis pub/sub</text>
+        <line class="edge" x1="844" y1="314" x2="844" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="store" x="792" y="344" width="104" height="52" rx="6"/>
+        <text class="t" x="844" y="366">PostgreSQL</text><text class="ts" x="844" y="383">billing</text>
+        <text class="ts" x="996" y="375">không có DB</text>
+
+        <!-- Kafka links -->
+        <line class="edge" x1="150" y1="314" x2="150" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="302" y1="314" x2="302" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="454" y1="314" x2="454" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="606" y1="314" x2="606" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="758" y1="314" x2="758" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="910" y1="314" x2="910" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line class="edge" x1="1062" y1="314" x2="1062" y2="436" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="bus" x="24" y="436" width="1052" height="40" rx="8"/>
+        <text class="t" x="550" y="461">Kafka (KRaft) · Outbox cùng transaction · consumer idempotent</text>
+
+        <!-- Photo worker -->
+        <rect class="store" x="328" y="516" width="140" height="50" rx="8"/>
+        <text class="t" x="398" y="538">MinIO</text><text class="ts" x="398" y="555">raw (xóa ≤ 1h) · public</text>
+        <line class="edge" x1="468" y1="541" x2="520" y2="541" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <text class="tl" x="494" y="584" text-anchor="middle">raw → public</text>
+        <line class="edge" x1="620" y1="476" x2="620" y2="516" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <rect class="ai" x="520" y="516" width="200" height="50" rx="8"/>
+        <text class="t" x="620" y="538">face-worker</text><text class="ts" x="620" y="555">Python · GPU · AI, dự phòng sticker</text>
+        <text class="tl" x="636" y="500">PHOTO_UPLOADED / PHOTO_READY</text>
+
+        <!-- Observability -->
+        <rect class="soft" x="24" y="608" width="1052" height="40" rx="8"/>
+        <text class="t" x="550" y="632">Prometheus · Loki · Tempo → Grafana</text>
+        <text class="tl" x="1064" y="632" text-anchor="end">mọi service gửi metric, log, trace</text>
+      </svg>
+    </div>
+    <figcaption>Client đi vào qua Traefik và Gateway. Gateway chuyển request tới service theo tên trong Eureka. Mỗi service có kho dữ liệu riêng và không đọc DB của service khác, mọi thay đổi chéo service đi bằng event qua Kafka. Tất cả service lấy cấu hình từ Config Server, đăng ký Eureka và đẩy telemetry sang bộ Grafana.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>2. Một ảnh đi từ máy người dùng tới feed</h2>
+  <ol class="steps">
+    <li><b>Xin quyền upload</b><span>App gọi media-service để lấy presigned URL ngắn hạn, rồi upload thẳng vào bucket <code>raw</code> (riêng tư, mã hóa).</span></li>
+    <li><b>Phát sự kiện</b><span>media-service phát <span class="ev">PHOTO_UPLOADED</span> kèm con vật chủ đạo của người đăng. Bài ở trạng thái <code>PENDING_MEDIA</code>.</span></li>
+    <li><b>Dọn dữ liệu nhạy cảm</b><span>face-worker xóa EXIF (có GPS) rồi phát hiện mọi khuôn mặt, ngưỡng thấp để thà che thừa còn hơn sót.</span></li>
+    <li><b>Thay mặt bằng AI</b><span>Tạo mặt nạ quanh mặt và tóc, dùng inpainting sinh mặt con vật. Không gửi ảnh gốc ra dịch vụ bên ngoài.</span></li>
+    <li class="fail"><b>Không đạt thì dùng sticker</b><span>AI lỗi, quá chậm hoặc vùng mặt gần như không đổi: chèn sticker con vật che kín. Retry tối đa 3 lần rồi vào dead-letter queue.</span></li>
+    <li><b>Ghi ảnh công khai</b><span>Ảnh đã xử lý vào bucket <code>public</code>, ảnh gốc bị xóa. Phát <span class="ev">PHOTO_READY</span> hoặc <span class="ev">PHOTO_REJECTED</span>.</span></li>
+    <li><b>Đăng bài</b><span>post-service chuyển bài sang <code>PUBLISHED</code>. Bạn bè chỉ thấy bài sau bước này. notification-service gửi push.</span></li>
+  </ol>
+  <p>Quy tắc: chưa xử lý xong thì không đăng (fail closed). Người đăng thấy "đang xử lý", bạn bè thì chưa thấy gì.</p>
+</section>
+
+<section>
+  <h2>3. Quẹt kết bạn kiểu Tinder</h2>
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1000 250" role="img" aria-label="Luồng quẹt: bộ thẻ, quẹt trái lưu Redis 30 ngày, quẹt phải tạo lời mời ở user-service, nếu bên kia đã quẹt phải thì thành bạn và phát FRIEND_ACCEPTED.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="svc" x="16" y="95" width="150" height="56" rx="8"/>
+        <text class="t" x="91" y="118">Bộ thẻ gợi ý</text><text class="ts" x="91" y="136">discovery-service</text>
+        <line class="edge" x1="166" y1="123" x2="206" y2="123" marker-end="url(#ah2)"/>
+        <rect class="box" x="206" y="95" width="110" height="56" rx="8"/>
+        <text class="t" x="261" y="118">Quẹt</text><text class="ts" x="261" y="136">trái hoặc phải</text>
+
+        <path class="edge" d="M316 111 L350 111 L350 56 L380 56" marker-end="url(#ah2)"/>
+        <text class="tl" x="330" y="82" text-anchor="end">trái</text>
+        <rect class="store" x="380" y="30" width="190" height="52" rx="8"/>
+        <text class="t" x="475" y="53">Redis, TTL 30 ngày</text><text class="ts" x="475" y="70">không hiện lại thẻ này</text>
+
+        <path class="edge" d="M316 135 L350 135 L350 190 L380 190" marker-end="url(#ah2)"/>
+        <text class="tl" x="330" y="168" text-anchor="end">phải</text>
+        <rect class="svc" x="380" y="164" width="190" height="52" rx="8"/>
+        <text class="t" x="475" y="187">user-service</text><text class="ts" x="475" y="204">tạo lời mời kết bạn</text>
+
+        <line class="edge" x1="570" y1="190" x2="620" y2="190" marker-end="url(#ah2)"/>
+        <polygon class="box" points="725,150 830,190 725,230 620,190"/>
+        <text class="t" x="725" y="187">Bên kia đã</text><text class="t" x="725" y="203">quẹt phải?</text>
+
+        <path class="edge" d="M830 190 L860 190 L860 126 L880 126" marker-end="url(#ah2)"/>
+        <text class="tl" x="866" y="170">có</text>
+        <rect class="bus" x="880" y="96" width="108" height="60" rx="8"/>
+        <text class="t" x="934" y="120" style="font-size:11px">FRIEND_ACCEPTED</text><text class="ts" x="934" y="138">post · chat · push</text>
+
+        <path class="edge" d="M830 190 L860 190 L860 226 L880 226" marker-end="url(#ah2)"/>
+        <text class="tl" x="866" y="212">chưa</text>
+        <rect class="soft" x="880" y="200" width="108" height="48" rx="8"/>
+        <text class="t" x="934" y="222" style="font-size:12px">Chờ phản hồi</text><text class="ts" x="934" y="238">hiện ở "ai đã thích"</text>
+      </svg>
+    </div>
+    <figcaption>Thẻ chỉ có biệt danh, con vật và khoảng cách theo mức, không có ảnh thật. Số lượt quẹt phải mỗi ngày đếm bằng Redis theo gói (miễn phí hoặc Pro).</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>4. Ba quy tắc đi xuyên suốt</h2>
+  <div class="rules">
+    <div class="closed"><strong>Fail closed</strong>Thanh toán, xác thực, ẩn mặt và vị trí: lỗi thì từ chối hoặc không đăng, không bao giờ cho qua.</div>
+    <div class="soft"><strong>Fail soft</strong>Feed, gợi ý, thông báo: lỗi thì giảm tính năng (dùng cache, trả danh sách rỗng), app vẫn dùng được.</div>
+    <div><strong>Ẩn danh từ gốc</strong>Chỉ lộ <code>publicId</code>, biệt danh, con vật. Email, SĐT và <code>sub</code> Keycloak không bao giờ ra khỏi user-service. Vị trí làm tròn ở server, chỉ trả khoảng cách theo mức.</div>
+  </div>
+</section>
+
+<section>
+  <h2>5. Service, dữ liệu và sự kiện</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Service</th><th>Việc chính</th><th>Lưu trữ</th><th>Sự kiện</th></tr></thead>
+    <tbody>
+      <tr><td>user-service</td><td>Hồ sơ ẩn danh, kết bạn, chặn, báo cáo, bộ sưu tập con vật, quay thưởng, device token</td><td>MySQL <code>user_db</code></td><td>Phát <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">USER_BLOCKED</span> <span class="ev">USER_DELETED</span> <span class="ev">LEAD_ANIMAL_CHANGED</span></td></tr>
+      <tr><td>post-service</td><td>Bài đăng, like, comment, feed bạn bè, hạn mức ảnh mỗi ngày</td><td>MySQL <code>post_db</code>, Redis</td><td>Nghe <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span>; phát event like, comment</td></tr>
+      <tr><td>media-service</td><td>Presigned URL, theo dõi trạng thái job ảnh</td><td>MySQL <code>media_db</code>, MinIO</td><td>Phát <span class="ev">PHOTO_UPLOADED</span></td></tr>
+      <tr><td>face-worker</td><td>Xóa EXIF, phát hiện mặt, thay mặt con vật bằng AI, dự phòng sticker</td><td>MinIO (không có DB)</td><td>Nghe <span class="ev">PHOTO_UPLOADED</span>; phát <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span></td></tr>
+      <tr><td>discovery-service</td><td>Vị trí gần đúng, trạng thái online, bộ thẻ quẹt, Boost</td><td>Redis (GEO, key có TTL)</td><td>Nghe <span class="ev">USER_BLOCKED</span> <span class="ev">CONSUMABLE_GRANTED</span></td></tr>
+      <tr><td>chat-service</td><td>Hội thoại và tin nhắn qua WebSocket, chỉ giữa bạn bè</td><td>MongoDB, Redis pub/sub</td><td>Nghe <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">USER_BLOCKED</span></td></tr>
+      <tr><td>billing-service</td><td>Gói Pro, giao dịch, mua lẻ, sổ cái số dư, webhook Apple/Google</td><td>PostgreSQL</td><td>Phát <span class="ev">SUBSCRIPTION_ACTIVATED</span> <span class="ev">SUBSCRIPTION_EXPIRED</span> <span class="ev">CONSUMABLE_GRANTED</span></td></tr>
+      <tr><td>notification-service</td><td>Gửi push FCM/APNs</td><td>Không có</td><td>Nghe các event cần thông báo</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  Dev chạy bằng Docker Compose, khoảng 23 container, chia profile <code>core</code>, <code>app</code>, <code>ai</code> (cần GPU), <code>obs</code>. Chi tiết nằm trong <code>docs/ARCHITECTURE_PLAN.md</code>.
+</footer>
+
+</main>
+</body>
+</html>
