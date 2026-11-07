@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (kiểm tra lại khi có Docker: mvn -pl services/chat-service test).
  */
 @Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT) // bean webSocketContainer cần servlet container thật
 @AutoConfigureMockMvc
 class ChatMongoIntegrationTest {
     static final String ALICE = "aaaaaaaaaaaaaaaaaaaa";

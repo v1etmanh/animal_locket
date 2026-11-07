@@ -3,6 +3,7 @@ package com.animallocket.chat.repo;
 import com.animallocket.chat.domain.ConversationGlyph;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
@@ -11,6 +12,9 @@ import java.util.Optional;
 public interface GlyphRepository extends MongoRepository<ConversationGlyph, String> {
     Optional<ConversationGlyph> findFirstByConversationIdOrderByRevisionDesc(String conversationId);
 
+    // Viết tay: truy vấn suy ra từ tên tạo hai điều kiện riêng trên cùng "revision" → Spring Data Mongo
+    // ném InvalidMongoDbApiUsageException (500 khi sync). Phải gộp $gt/$lte vào một biểu thức.
+    @Query(value = "{ 'conversationId': ?0, 'revision': { $gt: ?1, $lte: ?2 } }", sort = "{ 'revision': 1 }")
     List<ConversationGlyph> findByConversationIdAndRevisionGreaterThanAndRevisionLessThanEqualOrderByRevisionAsc(
             String conversationId, long afterRevision, long upToRevision, Pageable page);
 

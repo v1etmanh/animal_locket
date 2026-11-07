@@ -34,6 +34,7 @@ import static com.animallocket.chat.GlyphFixture.cmd;
 import static com.animallocket.chat.GlyphFixture.zigzag;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -87,6 +88,20 @@ class GlyphMongoIntegrationTest {
         // glyph đã archive không chặn hình trùng (partial index chỉ trên ACTIVE)
         glyphs.archive(ALICE, cid, g.id());
         assertEquals(3, glyphs.create(BOB, cid, cmd("a again", zigzag(1))).glyph().revision());
+    }
+
+    @Test
+    void syncPagesByRevisionRangeOnRealMongo() {
+        glyphs.create(ALICE, cid, cmd("một", zigzag(1)));
+        glyphs.create(BOB, cid, cmd("hai", zigzag(2)));
+        glyphs.create(ALICE, cid, cmd("ba", zigzag(3)));
+
+        var all = glyphs.sync(BOB, cid, 0, 100);
+        assertEquals(List.of(1L, 2L, 3L), all.items().stream().map(GlyphService.GlyphView::revision).toList());
+
+        var page = glyphs.sync(BOB, cid, 1, 1);
+        assertEquals(List.of(2L), page.items().stream().map(GlyphService.GlyphView::revision).toList());
+        assertTrue(page.hasMore());
     }
 
     @Test
