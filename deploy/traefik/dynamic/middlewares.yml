@@ -16,6 +16,21 @@ http:
           X-Powered-By: ""
           Server: ""
 
+    # Trang thanh toán web /pay/** (billing-service, Thymeleaf): cần CSS nội dòng và form chuyển sang PayPal.
+    # form-action phải liệt kê paypal.com vì trình duyệt cũng áp dụng nó cho các lần chuyển hướng sau khi gửi form.
+    security-headers-pay:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "no-referrer"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        customResponseHeaders:
+          Content-Security-Policy: "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com https://pay.payos.vn; base-uri 'none'; frame-ancestors 'none'"
+          X-Powered-By: ""
+          Server: ""
+
     # Cho giao diện web (Keycloak, Grafana, MinIO console): không đặt CSP vì sẽ làm hỏng giao diện của họ.
     security-headers-ui:
       headers:

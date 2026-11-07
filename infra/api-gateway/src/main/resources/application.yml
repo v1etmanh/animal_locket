@@ -65,7 +65,7 @@ spring:
         - id: billing-service
           uri: lb://billing-service
           predicates:
-            - Path=/api/v1/billing/**,/webhooks/**
+            - Path=/api/v1/billing/**,/webhooks/**,/pay/**
   data:
     redis:
       host: ${REDIS_HOST:localhost}

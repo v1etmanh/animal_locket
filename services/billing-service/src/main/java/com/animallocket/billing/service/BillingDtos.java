@@ -21,7 +21,20 @@ public final class BillingDtos {
     public record MeResponse(String plan, Instant planExpiresAt, Map<String, Integer> wallet) {
     }
 
-    public record ProductView(String sku, Product.Type type, String item, int quantity) {
+    /**
+     * Giá bán qua web (thanh toán trên trình duyệt): {@code priceUsdCents} cho PayPal, {@code priceVnd} cho VietQR, null = không bán qua
+     * phương thức đó. {@code periodDays} chỉ có với thuê bao. Chỉ để hiển thị; số tiền thật do server chốt lúc tạo phiên thanh toán.
+     */
+    public record ProductView(String sku, Product.Type type, String item, int quantity, Integer priceUsdCents,
+                              Integer priceVnd, Integer periodDays) {
+    }
+
+    /** App xin một liên kết thanh toán web cho sản phẩm {@code sku}. */
+    public record CheckoutRequest(@NotBlank @Size(max = 100) String sku) {
+    }
+
+    /** {@code url} mở bằng trình duyệt; mã trên URL dùng một lần và hết hạn lúc {@code expiresAt}. */
+    public record CheckoutResponse(String url, Instant expiresAt) {
     }
 
     public record ConsumeRequest(@NotBlank String publicId, @NotBlank String item) {

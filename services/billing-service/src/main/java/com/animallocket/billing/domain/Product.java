@@ -30,6 +30,22 @@ public class Product {
     private int quantity;
     @Column(nullable = false)
     private boolean active;
+    /** Giá bán qua web (cent USD). null = không bán qua web. Thanh toán trong app dùng giá của store, không dùng cột này. */
+    @Column(name = "price_usd_cents")
+    private Integer priceUsdCents;
+    /** Thời hạn (ngày) của thuê bao trả trước qua web; chỉ dùng với SUBSCRIPTION. */
+    @Column(name = "period_days")
+    private Integer periodDays;
+
+    /** Giá bán qua payOS (VND, số nguyên). null = không bán qua payOS. */
+    @Column(name = "price_vnd")
+    private Integer priceVnd;
+
+    public Product(String sku, Type type, String item, int quantity, boolean active, Integer priceUsdCents,
+                   Integer periodDays, Integer priceVnd) {
+        this(sku, type, item, quantity, active, priceUsdCents, periodDays);
+        this.priceVnd = priceVnd;
+    }
 
     public Product(String sku, Type type, String item, int quantity, boolean active) {
         this.sku = sku;
@@ -37,5 +53,11 @@ public class Product {
         this.item = item;
         this.quantity = quantity;
         this.active = active;
+    }
+
+    public Product(String sku, Type type, String item, int quantity, boolean active, Integer priceUsdCents, Integer periodDays) {
+        this(sku, type, item, quantity, active);
+        this.priceUsdCents = priceUsdCents;
+        this.periodDays = periodDays;
     }
 }

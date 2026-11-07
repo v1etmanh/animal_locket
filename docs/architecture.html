@@ -100,7 +100,7 @@ footer { color: var(--muted); font-size: 13px; }
 
 <header>
   <h1>Kiến trúc Animal Locket</h1>
-  <p class="lead">Ứng dụng chia sẻ ảnh kiểu Locket: ẩn danh, mặt người trong ảnh được thay bằng mặt con vật, kết bạn bằng cách quẹt, tìm người lân cận. Bản này khớp với <code>docs/ARCHITECTURE_PLAN.md</code>.</p>
+  <p class="lead">Ứng dụng chia sẻ ảnh kiểu Locket: ẩn danh (chỉ hiện biệt danh và con vật đại diện), kết bạn bằng cách quẹt, tìm người lân cận. Bản này khớp với mã nguồn hiện tại; <code>docs/ARCHITECTURE_PLAN.md</code> là kế hoạch ban đầu và còn nhắc tới face-worker (đã bỏ).</p>
 </header>
 
 <section>
@@ -110,11 +110,11 @@ footer { color: var(--muted); font-size: 13px; }
     <span class="l-svc">Service nghiệp vụ (Java, Spring Boot)</span>
     <span class="l-store">Nơi lưu dữ liệu</span>
     <span class="l-bus">Kafka</span>
-    <span class="l-ai">Xử lý ảnh (Python, GPU)</span>
+    <span class="l-ai">Dịch vụ bên ngoài</span>
   </div>
   <figure>
     <div class="scroll">
-      <svg viewBox="0 0 1100 664" role="img" aria-label="Sơ đồ kiến trúc: app đi qua Traefik và Gateway tới bảy service, các service trao đổi event qua Kafka, face-worker xử lý ảnh với MinIO, toàn bộ gửi telemetry về Grafana.">
+      <svg viewBox="0 0 1100 664" role="img" aria-label="Sơ đồ kiến trúc: app đi qua Traefik và Gateway tới bảy service, các service trao đổi event qua Kafka, dùng các dịch vụ bên ngoài (Cloudflare R2, Apple/Google, PayPal/payOS, FCM/APNs), toàn bộ gửi telemetry về Grafana.">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker>
         </defs>
@@ -124,14 +124,14 @@ footer { color: var(--muted); font-size: 13px; }
         <text class="t" x="550" y="40">App di động</text>
         <line class="edge" x1="550" y1="56" x2="550" y2="76" marker-end="url(#ah)"/>
         <rect class="box" x="450" y="76" width="200" height="40" rx="8"/>
-        <text class="t" x="550" y="94">Traefik</text><text class="ts" x="550" y="109">TLS · cổng 80/443</text>
+        <text class="t" x="550" y="94">Traefik</text><text class="ts" x="550" y="109">TLS · /api /ws /webhooks /pay</text>
         <line class="edge" x1="550" y1="116" x2="550" y2="136" marker-end="url(#ah)"/>
         <rect class="box" x="350" y="136" width="400" height="50" rx="8"/>
         <text class="t" x="550" y="158">API Gateway</text><text class="ts" x="550" y="175">kiểm JWT · Resilience4j · rate limit · WebSocket</text>
 
         <!-- Platform -->
         <rect class="box" x="24" y="136" width="240" height="50" rx="8"/>
-        <text class="t" x="144" y="158">Keycloak</text><text class="ts" x="144" y="175">đăng nhập, cấp JWT · PostgreSQL riêng</text>
+        <text class="t" x="144" y="158">Keycloak</text><text class="ts" x="144" y="175">đăng nhập, cấp JWT · Postgres (Supabase)</text>
         <line class="edge" x1="264" y1="161" x2="350" y2="161" marker-end="url(#ah)"/>
         <text class="tl" x="307" y="154" text-anchor="middle">JWT</text>
         <rect class="box" x="830" y="136" width="120" height="50" rx="8"/>
@@ -164,7 +164,7 @@ footer { color: var(--muted); font-size: 13px; }
         <rect class="svc" x="632" y="256" width="140" height="58" rx="8"/>
         <text class="t" x="702" y="280">chat-service</text><text class="ts" x="702" y="298">tin nhắn, WebSocket</text>
         <rect class="svc" x="784" y="256" width="140" height="58" rx="8"/>
-        <text class="t" x="854" y="280">billing-service</text><text class="ts" x="854" y="298">Pro, mua lẻ</text>
+        <text class="t" x="854" y="280">billing-service</text><text class="ts" x="854" y="298">Pro, mua lẻ, web /pay</text>
         <rect class="svc" x="936" y="256" width="140" height="58" rx="8"/>
         <text class="t" x="1006" y="280" style="font-size:12px">notification-service</text><text class="ts" x="1006" y="298">push FCM/APNs</text>
 
@@ -183,10 +183,10 @@ footer { color: var(--muted); font-size: 13px; }
         <text class="t" x="540" y="366">Redis</text><text class="ts" x="540" y="383">GEO + online</text>
         <line class="edge" x1="692" y1="314" x2="692" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
         <rect class="store" x="640" y="344" width="104" height="52" rx="6"/>
-        <text class="t" x="692" y="366">MongoDB</text><text class="ts" x="692" y="383">+ Redis pub/sub</text>
+        <text class="t" x="692" y="366">MongoDB</text><text class="ts" x="692" y="383">Atlas + Redis</text>
         <line class="edge" x1="844" y1="314" x2="844" y2="344" marker-start="url(#ah)" marker-end="url(#ah)"/>
         <rect class="store" x="792" y="344" width="104" height="52" rx="6"/>
-        <text class="t" x="844" y="366">PostgreSQL</text><text class="ts" x="844" y="383">billing</text>
+        <text class="t" x="844" y="366">PostgreSQL</text><text class="ts" x="844" y="383">Supabase</text>
         <text class="ts" x="996" y="375">không có DB</text>
 
         <!-- Kafka links -->
@@ -200,15 +200,16 @@ footer { color: var(--muted); font-size: 13px; }
         <rect class="bus" x="24" y="436" width="1052" height="40" rx="8"/>
         <text class="t" x="550" y="461">Kafka (KRaft) · Outbox cùng transaction · consumer idempotent</text>
 
-        <!-- Photo worker -->
-        <rect class="store" x="328" y="516" width="140" height="50" rx="8"/>
-        <text class="t" x="398" y="538">MinIO</text><text class="ts" x="398" y="555">raw (xóa ≤ 1h) · public</text>
-        <line class="edge" x1="468" y1="541" x2="520" y2="541" marker-start="url(#ah)" marker-end="url(#ah)"/>
-        <text class="tl" x="494" y="584" text-anchor="middle">raw → public</text>
-        <line class="edge" x1="620" y1="476" x2="620" y2="516" marker-start="url(#ah)" marker-end="url(#ah)"/>
-        <rect class="ai" x="520" y="516" width="200" height="50" rx="8"/>
-        <text class="t" x="620" y="538">face-worker</text><text class="ts" x="620" y="555">Python · GPU · AI, dự phòng sticker</text>
-        <text class="tl" x="636" y="500">PHOTO_UPLOADED / PHOTO_READY</text>
+        <!-- Dịch vụ bên ngoài (không nằm trong docker compose) -->
+        <text class="tl" x="24" y="506">Dịch vụ bên ngoài</text>
+        <rect class="ai" x="24" y="516" width="251" height="56" rx="8"/>
+        <text class="t" x="149" y="538">Cloudflare R2</text><text class="ts" x="149" y="556">media-service · ảnh, bucket riêng tư</text>
+        <rect class="ai" x="291" y="516" width="251" height="56" rx="8"/>
+        <text class="t" x="416" y="538">Apple · Google Play</text><text class="ts" x="416" y="556">billing-service · biên lai, webhook</text>
+        <rect class="ai" x="558" y="516" width="251" height="56" rx="8"/>
+        <text class="t" x="683" y="538">PayPal · payOS (VietQR)</text><text class="ts" x="683" y="556">billing-service · trang web, webhook</text>
+        <rect class="ai" x="825" y="516" width="251" height="56" rx="8"/>
+        <text class="t" x="950" y="538">FCM · APNs</text><text class="ts" x="950" y="556">notification-service · push</text>
 
         <!-- Observability -->
         <rect class="soft" x="24" y="608" width="1052" height="40" rx="8"/>
@@ -216,22 +217,22 @@ footer { color: var(--muted); font-size: 13px; }
         <text class="tl" x="1064" y="632" text-anchor="end">mọi service gửi metric, log, trace</text>
       </svg>
     </div>
-    <figcaption>Client đi vào qua Traefik và Gateway. Gateway chuyển request tới service theo tên trong Eureka. Mỗi service có kho dữ liệu riêng và không đọc DB của service khác, mọi thay đổi chéo service đi bằng event qua Kafka. Tất cả service lấy cấu hình từ Config Server, đăng ký Eureka và đẩy telemetry sang bộ Grafana.</figcaption>
+    <figcaption>Client đi vào qua Traefik và Gateway. Gateway chuyển request tới service theo tên trong Eureka. Mỗi service có kho dữ liệu riêng và không đọc DB của service khác, mọi thay đổi chéo service đi bằng event qua Kafka. Tất cả service lấy cấu hình từ Config Server, đăng ký Eureka và đẩy telemetry sang bộ Grafana. Redis, Kafka, Keycloak, Traefik và bộ Grafana chạy trong Docker Compose; MySQL, MongoDB Atlas, PostgreSQL (Supabase) và R2 là dịch vụ ngoài, cấu hình bằng biến môi trường.</figcaption>
   </figure>
 </section>
 
 <section>
   <h2>2. Một ảnh đi từ máy người dùng tới feed</h2>
   <ol class="steps">
-    <li><b>Xin quyền upload</b><span>App gọi media-service để lấy presigned URL ngắn hạn, rồi upload thẳng vào bucket <code>raw</code> (riêng tư, mã hóa).</span></li>
-    <li><b>Phát sự kiện</b><span>media-service phát <span class="ev">PHOTO_UPLOADED</span> kèm con vật chủ đạo của người đăng. Bài ở trạng thái <code>PENDING_MEDIA</code>.</span></li>
-    <li><b>Dọn dữ liệu nhạy cảm</b><span>face-worker xóa EXIF (có GPS) rồi phát hiện mọi khuôn mặt, ngưỡng thấp để thà che thừa còn hơn sót.</span></li>
-    <li><b>Thay mặt bằng AI</b><span>Tạo mặt nạ quanh mặt và tóc, dùng inpainting sinh mặt con vật. Không gửi ảnh gốc ra dịch vụ bên ngoài.</span></li>
-    <li class="fail"><b>Không đạt thì dùng sticker</b><span>AI lỗi, quá chậm hoặc vùng mặt gần như không đổi: chèn sticker con vật che kín. Retry tối đa 3 lần rồi vào dead-letter queue.</span></li>
-    <li><b>Ghi ảnh công khai</b><span>Ảnh đã xử lý vào bucket <code>public</code>, ảnh gốc bị xóa. Phát <span class="ev">PHOTO_READY</span> hoặc <span class="ev">PHOTO_REJECTED</span>.</span></li>
-    <li><b>Đăng bài</b><span>post-service chuyển bài sang <code>PUBLISHED</code>. Bạn bè chỉ thấy bài sau bước này. notification-service gửi push.</span></li>
+    <li><b>Chuẩn bị ảnh trên máy</b><span>App nén lại ảnh (<code>keepExif: false</code>) để bỏ EXIF, nhất là tọa độ GPS. Server không còn xóa hay kiểm tra EXIF, đây là chỗ duy nhất làm việc đó.</span></li>
+    <li><b>Xin quyền upload</b><span>App gọi media-service. Service kiểm loại ảnh (JPEG, PNG, WEBP, HEIC), cỡ tối đa và hạn mức 60 ảnh/giờ, rồi trả URL <code>PUT</code> đã ký, sống 5 phút.</span></li>
+    <li><b>Upload thẳng lên R2</b><span>App <code>PUT</code> file lên bucket riêng tư Cloudflare R2, kèm header <code>Content-Type</code>. R2 không hỗ trợ presigned POST. Job ở trạng thái <code>PENDING_UPLOAD</code>.</span></li>
+    <li class="fail"><b>Báo xong và kiểm lại</b><span>App gọi <code>complete</code>. media-service hỏi R2 xem object có thật, kiểm lại cỡ và Content-Type. Sai thì xóa object và phát <span class="ev">PHOTO_REJECTED</span>.</span></li>
+    <li><b>Phát sự kiện</b><span>Đạt thì job thành <code>READY</code> và media-service phát <span class="ev">PHOTO_READY</span> qua outbox. Không còn bước nhận diện hay thay mặt, ảnh dùng nguyên key đã upload.</span></li>
+    <li><b>Đăng bài</b><span>post-service chuyển bài từ <code>PENDING_MEDIA</code> sang <code>PUBLISHED</code>. Bạn bè chỉ thấy bài sau bước này. notification-service gửi push.</span></li>
+    <li><b>Xem ảnh</b><span>App xin URL xem ngắn hạn (10 phút) từ media-service, chỉ cấp cho chủ ảnh hoặc bạn bè chưa chặn. Job <code>PENDING_UPLOAD</code> bị bỏ quá 1 giờ thì được dọn.</span></li>
   </ol>
-  <p>Quy tắc: chưa xử lý xong thì không đăng (fail closed). Người đăng thấy "đang xử lý", bạn bè thì chưa thấy gì.</p>
+  <p>Quy tắc: ảnh chưa qua bước <code>complete</code> thì không đăng (fail closed). Người đăng thấy "đang xử lý", bạn bè thì chưa thấy gì.</p>
 </section>
 
 <section>
@@ -278,35 +279,47 @@ footer { color: var(--muted); font-size: 13px; }
 </section>
 
 <section>
-  <h2>4. Ba quy tắc đi xuyên suốt</h2>
+  <h2>4. Thanh toán web: PayPal và VietQR (payOS)</h2>
+  <ol class="steps">
+    <li><b>Xin phiên thanh toán</b><span>App (có JWT) gọi <code>POST /api/v1/billing/checkout-sessions</code> với <code>sku</code>. billing-service trả URL <code>/pay/&lt;mã&gt;</code>; mã dùng một lần, lưu dạng băm SHA-256, sống 30 phút.</span></li>
+    <li><b>Mở trang thanh toán</b><span>Trình duyệt mở <code>/pay/&lt;mã&gt;</code>. Traefik có router và CSP riêng cho <code>/pay/</code>, Gateway cho qua không cần JWT, billing-service dựng trang bằng Thymeleaf. <code>publicId</code> luôn lấy từ phiên, không lấy từ URL.</span></li>
+    <li><b>Chọn phương thức</b><span>PayPal (USD): tạo đơn rồi chuyển sang paypal.com. VietQR (VND): tạo link payOS rồi chuyển sang pay.payos.vn. Giá chốt lúc tạo phiên.</span></li>
+    <li><b>Xác nhận từ nhà cung cấp</b><span>Trang quay về và webhook (<code>/webhooks/paypal</code>, <code>/webhooks/payos</code>, có chữ ký) đều hỏi lại trạng thái thật. Chỉ tiếp tục khi đúng đơn, đúng và đủ số tiền.</span></li>
+    <li><b>Cấp quyền lợi</b><span>billing-service ghi giao dịch idempotent theo <code>(store, transactionId)</code> rồi phát <span class="ev">SUBSCRIPTION_ACTIVATED</span> hoặc <span class="ev">CONSUMABLE_GRANTED</span> qua outbox, user-service và các service khác cập nhật theo.</span></li>
+    <li class="fail"><b>Khoản không khớp hoặc hoàn tiền</b><span>Sai số tiền hay khoản đang giữ: không cấp, ghi <code>ERROR</code> để xử lý tay. PayPal hoàn toàn phần hoặc chargeback: thu hồi quyền lợi. payOS không có hoàn tiền tự động.</span></li>
+  </ol>
+  <p>Luồng web dành cho đồ án và bản web; app phát hành lên store vẫn dùng thanh toán trong ứng dụng (Apple, Google). Trạng thái kiểm chứng: PayPal chỉ chạy bằng HTTP giả, payOS đã chạy thật một lần, Apple/Google thật chưa chạy; app Flutter chưa nối trang web này.</p>
+</section>
+
+<section>
+  <h2>5. Ba quy tắc đi xuyên suốt</h2>
   <div class="rules">
-    <div class="closed"><strong>Fail closed</strong>Thanh toán, xác thực, ẩn mặt và vị trí: lỗi thì từ chối hoặc không đăng, không bao giờ cho qua.</div>
+    <div class="closed"><strong>Fail closed</strong>Thanh toán, xác thực, kiểm tra ảnh và vị trí: lỗi thì từ chối hoặc không đăng, không bao giờ cho qua. Quyền lợi chỉ cấp khi nhà cung cấp xác nhận đã trả đủ.</div>
     <div class="soft"><strong>Fail soft</strong>Feed, gợi ý, thông báo: lỗi thì giảm tính năng (dùng cache, trả danh sách rỗng), app vẫn dùng được.</div>
     <div><strong>Ẩn danh từ gốc</strong>Chỉ lộ <code>publicId</code>, biệt danh, con vật. Email, SĐT và <code>sub</code> Keycloak không bao giờ ra khỏi user-service. Vị trí làm tròn ở server, chỉ trả khoảng cách theo mức.</div>
   </div>
 </section>
 
 <section>
-  <h2>5. Service, dữ liệu và sự kiện</h2>
+  <h2>6. Service, dữ liệu và sự kiện</h2>
   <div class="scroll">
   <table>
     <thead><tr><th>Service</th><th>Việc chính</th><th>Lưu trữ</th><th>Sự kiện</th></tr></thead>
     <tbody>
-      <tr><td>user-service</td><td>Hồ sơ ẩn danh, kết bạn, chặn, báo cáo, bộ sưu tập con vật, quay thưởng, device token</td><td>MySQL <code>user_db</code></td><td>Phát <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">USER_BLOCKED</span> <span class="ev">USER_DELETED</span> <span class="ev">LEAD_ANIMAL_CHANGED</span></td></tr>
-      <tr><td>post-service</td><td>Bài đăng, like, comment, feed bạn bè, hạn mức ảnh mỗi ngày</td><td>MySQL <code>post_db</code>, Redis</td><td>Nghe <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span>; phát event like, comment</td></tr>
-      <tr><td>media-service</td><td>Presigned URL, theo dõi trạng thái job ảnh</td><td>MySQL <code>media_db</code>, MinIO</td><td>Phát <span class="ev">PHOTO_UPLOADED</span></td></tr>
-      <tr><td>face-worker</td><td>Xóa EXIF, phát hiện mặt, thay mặt con vật bằng AI, dự phòng sticker</td><td>MinIO (không có DB)</td><td>Nghe <span class="ev">PHOTO_UPLOADED</span>; phát <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span></td></tr>
-      <tr><td>discovery-service</td><td>Vị trí gần đúng, trạng thái online, bộ thẻ quẹt, Boost</td><td>Redis (GEO, key có TTL)</td><td>Nghe <span class="ev">USER_BLOCKED</span> <span class="ev">CONSUMABLE_GRANTED</span></td></tr>
-      <tr><td>chat-service</td><td>Hội thoại và tin nhắn qua WebSocket, chỉ giữa bạn bè</td><td>MongoDB, Redis pub/sub</td><td>Nghe <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">USER_BLOCKED</span></td></tr>
-      <tr><td>billing-service</td><td>Gói Pro, giao dịch, mua lẻ, sổ cái số dư, webhook Apple/Google</td><td>PostgreSQL</td><td>Phát <span class="ev">SUBSCRIPTION_ACTIVATED</span> <span class="ev">SUBSCRIPTION_EXPIRED</span> <span class="ev">CONSUMABLE_GRANTED</span></td></tr>
-      <tr><td>notification-service</td><td>Gửi push FCM/APNs</td><td>Không có</td><td>Nghe các event cần thông báo</td></tr>
+      <tr><td>user-service</td><td>Hồ sơ ẩn danh, kết bạn, chặn, báo cáo, bộ sưu tập con vật, quay thưởng, device token, đồng bộ quyền lợi Pro</td><td>MySQL <code>user_db</code></td><td>Phát <span class="ev">USER_REGISTERED</span> <span class="ev">USER_DELETED</span> <span class="ev">USER_BLOCKED</span> <span class="ev">LEAD_ANIMAL_CHANGED</span> <span class="ev">FRIEND_REQUEST_RECEIVED</span> <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">FRIEND_REMOVED</span> <span class="ev">DISCOVERY_DISABLED</span>; nghe <span class="ev">SUBSCRIPTION_ACTIVATED</span> <span class="ev">SUBSCRIPTION_EXPIRED</span> <span class="ev">CONSUMABLE_GRANTED</span></td></tr>
+      <tr><td>post-service</td><td>Bài đăng, like, comment, feed bạn bè, hạn mức ảnh mỗi ngày</td><td>MySQL <code>post_db</code>, Redis</td><td>Nghe <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span> <span class="ev">FRIEND_*</span> <span class="ev">USER_*</span> <span class="ev">SUBSCRIPTION_*</span>; phát <span class="ev">POST_PUBLISHED</span> <span class="ev">POST_LIKED</span> <span class="ev">POST_COMMENTED</span></td></tr>
+      <tr><td>media-service</td><td>URL upload và xem ảnh đã ký, kiểm tra ảnh sau upload, theo dõi trạng thái job, dọn job treo</td><td>MySQL <code>media_db</code>, Cloudflare R2</td><td>Phát <span class="ev">PHOTO_READY</span> <span class="ev">PHOTO_REJECTED</span>; nghe <span class="ev">USER_REGISTERED</span> <span class="ev">LEAD_ANIMAL_CHANGED</span> <span class="ev">USER_DELETED</span></td></tr>
+      <tr><td>discovery-service</td><td>Vị trí gần đúng, trạng thái online, bộ thẻ quẹt, Boost</td><td>Redis (GEO, key có TTL)</td><td>Nghe <span class="ev">SUBSCRIPTION_ACTIVATED</span> <span class="ev">SUBSCRIPTION_EXPIRED</span> <span class="ev">DISCOVERY_DISABLED</span> <span class="ev">USER_DELETED</span>; danh sách loại trừ lấy từ user-service mỗi lần</td></tr>
+      <tr><td>chat-service</td><td>Hội thoại và tin nhắn qua WebSocket, chỉ giữa bạn bè; ký hiệu (glyph) trong hội thoại</td><td>MongoDB (Atlas), Redis pub/sub</td><td>Phát <span class="ev">MESSAGE_SENT</span>; nghe <span class="ev">FRIEND_ACCEPTED</span> <span class="ev">FRIEND_REMOVED</span> <span class="ev">USER_BLOCKED</span> <span class="ev">USER_DELETED</span></td></tr>
+      <tr><td>billing-service</td><td>Gói Pro, giao dịch, mua lẻ, sổ cái số dư; biên lai và webhook Apple/Google; thanh toán web PayPal và payOS (<code>/pay/**</code>, <code>/webhooks/**</code>)</td><td>PostgreSQL (Supabase)</td><td>Phát <span class="ev">SUBSCRIPTION_ACTIVATED</span> <span class="ev">SUBSCRIPTION_EXPIRED</span> <span class="ev">CONSUMABLE_GRANTED</span>; nghe <span class="ev">USER_DELETED</span></td></tr>
+      <tr><td>notification-service</td><td>Gửi push FCM/APNs</td><td>Không có</td><td>Nghe các topic user, friend, post, chat, media, billing</td></tr>
     </tbody>
   </table>
   </div>
 </section>
 
 <footer>
-  Dev chạy bằng Docker Compose, khoảng 23 container, chia profile <code>core</code>, <code>app</code>, <code>ai</code> (cần GPU), <code>obs</code>. Chi tiết nằm trong <code>docs/ARCHITECTURE_PLAN.md</code>.
+  Dev chạy bằng Docker Compose, khoảng 21 container (gồm một job khởi tạo Kafka), chia profile <code>core</code>, <code>app</code>, <code>obs</code>; không còn profile <code>ai</code>. Chi tiết từng lớp và luồng nằm trong <code>docs/architecture/</code>.
 </footer>
 
 </main>
