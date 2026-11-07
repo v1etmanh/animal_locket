@@ -6,6 +6,8 @@
 > **bắt buộc** chạy hết danh sách kiểm tra sandbox ở cuối tài liệu. Định dạng JSON thực tế của hai store có thể khác
 > chi tiết so với giả định trong test (tên trường, giá trị enum mới).
 
+> Thanh toán **web** (trang `/pay/**`) nằm ở tài liệu riêng: PayPal ở [PAYPAL.md](PAYPAL.md), VietQR/payOS ở [PAYOS.md](PAYOS.md).
+
 ## 1. Nguyên tắc (fail closed)
 
 - Quyền lợi (Pro, vật phẩm, gói con vật) **chỉ** được cấp từ dữ liệu do store trả về và đã xác thực chữ ký. Client chỉ

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Thanh toán · Animal Locket</title>
+    <style th:replace="~{pay/fragments :: style}"></style>
+</head>
+<body>
+<main class="card">
+    <p class="brand">Animal Locket</p>
+    <h1>Xác nhận thanh toán</h1>
+
+    <p class="notice" th:if="${message != null}" th:text="${message}"></p>
+
+    <dl class="order">
+        <dt>Sản phẩm</dt>
+        <dd th:text="${productLabel}">Animal Locket Pro (30 ngày)</dd>
+        <dt th:if="${paypalEnabled}">Giá (PayPal)</dt>
+        <dd class="price" th:if="${paypalEnabled}" th:text="${amount + ' ' + currency}">2.99 USD</dd>
+        <dt th:if="${payosEnabled}">Giá (VietQR)</dt>
+        <dd class="price" th:if="${payosEnabled}" th:text="${payosAmount}">79.000 ₫</dd>
+    </dl>
+
+    <form method="post" th:if="${paypalEnabled}" th:action="@{/pay/{t}/start(t=${token})}">
+        <button type="submit" class="primary">Thanh toán với PayPal</button>
+    </form>
+    <form method="post" th:if="${payosEnabled}" th:action="@{/pay/{t}/payos(t=${token})}">
+        <button type="submit" class="primary vietqr">Chuyển khoản VietQR</button>
+    </form>
+
+    <p class="notice" th:if="${!paypalEnabled and !payosEnabled}">
+        Hiện chưa có phương thức thanh toán nào cho sản phẩm này.
+    </p>
+
+    <p class="fine">
+        Bạn sẽ được chuyển sang PayPal hoặc trang VietQR của payOS để thanh toán. Quyền lợi chỉ được cấp sau khi nhà cung cấp
+        xác nhận khoản thanh toán. Thuê bao mua qua web là trả trước theo kỳ và không tự gia hạn.
+    </p>
+</main>
+</body>
+</html>

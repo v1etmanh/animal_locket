@@ -2,6 +2,8 @@ package com.animallocket.billing.store;
 
 import com.animallocket.billing.repo.ProductRepository;
 import com.google.auth.oauth2.GoogleCredentials;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,8 +22,14 @@ import java.time.Duration;
  * và {@link StoreRouter} sẽ từ chối (fail closed) thay vì chạy với giá trị mặc định.
  */
 @Configuration
-@EnableConfigurationProperties({AppleProperties.class, GoogleProperties.class})
+@EnableConfigurationProperties({AppleProperties.class, GoogleProperties.class, PayPalProperties.class, PayOsProperties.class})
 public class StoreConfig {
+    private static final Logger log = LoggerFactory.getLogger(StoreConfig.class);
+    private static final String PAYOS_ALL = "!'${animal.billing.payos.client-id:}'.isEmpty()"
+            + " && !'${animal.billing.payos.api-key:}'.isEmpty()"
+            + " && !'${animal.billing.payos.checksum-key:}'.isEmpty()";
+    private static final String PAYPAL_ALL = "!'${animal.billing.paypal.client-id:}'.isEmpty()"
+            + " && !'${animal.billing.paypal.client-secret:}'.isEmpty()";
     private static final String APPLE_ROOTS = "!'${animal.billing.apple.root-cert-files:}'.isEmpty()";
     private static final String APPLE_ALL = APPLE_ROOTS
             + " && !'${animal.billing.apple.bundle-id:}'.isEmpty()"
@@ -88,6 +96,27 @@ public class StoreConfig {
     @ConditionalOnExpression(GOOGLE_PUSH)
     GooglePushAuth googlePushAuth(GoogleProperties props) {
         return OidcGooglePushAuth.create(props);
+    }
+
+    // ---------------- PayPal (thanh toán web) ----------------
+
+    @Bean
+    @ConditionalOnExpression(PAYPAL_ALL)
+    PayPalClient payPalClient(PayPalProperties props, StoreCaller caller, Clock clock) {
+        props.apiBaseUrl(); // mode sai thì dừng khởi động ngay
+        if (props.isLive()) {
+            log.warn("PayPal đang ở chế độ LIVE: giao dịch sẽ thu tiền thật.");
+        }
+        return new HttpPayPalClient(props, restClient(props.getConnectTimeout(), props.getReadTimeout()), caller, clock);
+    }
+
+    // ---------------- payOS (VietQR, thanh toán web) ----------------
+
+    @Bean
+    @ConditionalOnExpression(PAYOS_ALL)
+    PayOsClient payOsClient(PayOsProperties props, StoreCaller caller) {
+        log.warn("payOS đã bật: payOS không có sandbox, mọi giao dịch là tiền thật.");
+        return new HttpPayOsClient(props, restClient(props.getConnectTimeout(), props.getReadTimeout()), caller);
     }
 
     private static RestClient restClient(Duration connect, Duration read) {

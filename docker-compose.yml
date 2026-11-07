@@ -236,6 +236,11 @@ services:
       - "traefik.http.routers.api.entrypoints=web,websecure"
       - "traefik.http.routers.api.middlewares=security-headers@file,ratelimit@file"
       - "traefik.http.routers.api.service=api"
+      # Trang thanh toán web (HTML, billing-service): router riêng vì cần CSP khác với API JSON ở trên.
+      - "traefik.http.routers.pay.rule=Host(`api.${PUBLIC_DOMAIN:-localhost}`) && PathPrefix(`/pay/`)"
+      - "traefik.http.routers.pay.entrypoints=web,websecure"
+      - "traefik.http.routers.pay.middlewares=security-headers-pay@file,ratelimit@file"
+      - "traefik.http.routers.pay.service=api"
       # WebSocket (/ws/chat) đi qua cùng router; Traefik tự chuyển tiếp header Upgrade.
       - "traefik.http.services.api.loadbalancer.server.port=8080"
 
@@ -383,6 +388,19 @@ services:
       DB_PASSWORD: ${BILLING_DB_PASSWORD:?Thiếu BILLING_DB_PASSWORD}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       BILLING_DEV_STORE: ${BILLING_DEV_STORE:-false}
+      # PayPal (thanh toán web). Để trống = tắt. Mặc định sandbox; chỉ đặt PAYPAL_MODE=live trên server thật.
+      PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      # payOS (VietQR). Để trống = tắt. KHÔNG có sandbox: giao dịch là tiền thật.
+      PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
+      PAYOS_API_KEY: ${PAYOS_API_KEY:-}
+      PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
+      PAYOS_ORDER_CODE_BASE: ${PAYOS_ORDER_CODE_BASE:-100000000000}
+      # Phải là host mà Traefik định tuyến (api.<PUBLIC_DOMAIN>), vì router /pay/ khớp theo Host.
+      PAYPAL_RETURN_BASE_URL: ${PAYPAL_RETURN_BASE_URL:-http://api.${PUBLIC_DOMAIN:-localhost}:${HTTP_PORT:-80}}
+      PAYPAL_APP_RETURN_URL: ${PAYPAL_APP_RETURN_URL:-animallocket://checkout}
     volumes:
       # Khoá App Store / Google Play (file .p8, service account JSON) đặt ở đây, KHÔNG commit.
       - ./deploy/secrets:/secrets:ro

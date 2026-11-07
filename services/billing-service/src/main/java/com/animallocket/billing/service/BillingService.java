@@ -56,7 +56,8 @@ public class BillingService {
     @Transactional(readOnly = true)
     public List<BillingDtos.ProductView> catalog() {
         return products.findByActiveTrueOrderBySku().stream()
-                .map(p -> new BillingDtos.ProductView(p.getSku(), p.getType(), p.getItem(), p.getQuantity())).toList();
+                .map(p -> new BillingDtos.ProductView(p.getSku(), p.getType(), p.getItem(), p.getQuantity(),
+                        p.getPriceUsdCents(), p.getPriceVnd(), p.getPeriodDays())).toList();
     }
 
     @Transactional(readOnly = true)

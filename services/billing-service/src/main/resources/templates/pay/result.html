@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Kết quả thanh toán · Animal Locket</title>
+    <style th:replace="~{pay/fragments :: style}"></style>
+</head>
+<body>
+<main class="card">
+    <p class="brand">Animal Locket</p>
+
+    <th:block th:if="${status == 'COMPLETED'}">
+        <h1 class="ok">Thanh toán thành công</h1>
+        <dl class="order">
+            <dt>Sản phẩm</dt>
+            <dd th:text="${productLabel}">Animal Locket Pro (30 ngày)</dd>
+            <dt>Đã thanh toán</dt>
+            <dd class="price" th:text="${provider == 'PAYOS' ? payosAmount : amount + ' ' + currency}">2.99 USD</dd>
+        </dl>
+        <p>Quyền lợi đã được cập nhật cho tài khoản của bạn. Hãy quay lại ứng dụng.</p>
+        <a class="primary" th:if="${appReturnUrl != null and !appReturnUrl.isBlank()}"
+           th:href="${appReturnUrl + '?status=success'}">Quay lại ứng dụng</a>
+    </th:block>
+
+    <th:block th:if="${status == 'HELD'}">
+        <h1 class="warn">Đang chờ xác nhận</h1>
+        <p th:text="${message}">Đang chờ nhà cung cấp xác nhận khoản thanh toán.</p>
+        <a class="primary" th:href="${provider == 'PAYOS'} ? @{/pay/{t}/payos/return(t=${token})} : @{/pay/{t}/return(t=${token})}">Kiểm tra lại</a>
+    </th:block>
+
+    <th:block th:if="${status == 'EXPIRED' or status == 'NOT_FOUND'}">
+        <h1 class="warn">Không thể tiếp tục</h1>
+        <p th:text="${message}">Liên kết không hợp lệ hoặc đã hết hạn.</p>
+        <a class="primary" th:if="${appReturnUrl != null and !appReturnUrl.isBlank()}"
+           th:href="${appReturnUrl + '?status=retry'}">Quay lại ứng dụng</a>
+    </th:block>
+
+    <th:block th:if="${status == 'FAILED' or status == 'UNAVAILABLE'}">
+        <h1 class="bad">Chưa hoàn tất</h1>
+        <p th:text="${message}">Có lỗi xảy ra.</p>
+        <a class="primary" th:if="${token != null and status == 'UNAVAILABLE'}"
+           th:href="${provider == 'PAYOS'} ? @{/pay/{t}/payos/return(t=${token})} : @{/pay/{t}/return(t=${token})}">Thử lại</a>
+    </th:block>
+</main>
+</body>
+</html>

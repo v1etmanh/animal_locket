@@ -37,10 +37,12 @@ eureka:
 animal:
   security:
     enabled: true
-    public-paths: /webhooks/**
+    public-paths: /webhooks/**,/pay/**
   outbox:
     relay:
       enabled: false
   billing:
     dev-store:
       enabled: true
+    paypal:
+      webhook-id: wh-test
