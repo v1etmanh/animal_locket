@@ -260,6 +260,8 @@ services:
       KEYCLOAK_ADMIN_URL: http://keycloak:8080
       KEYCLOAK_ADMIN_CLIENT_ID: user-service-admin
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      # Chỉ dev: tài khoản "bạn chung" để test chat (xem .env.example). Trống = tắt.
+      DEV_BUDDY_PUBLIC_ID: ${DEV_BUDDY_PUBLIC_ID:-}
 
   media-service:
     <<: *java-service
@@ -355,6 +357,12 @@ services:
       <<: [*java-env, *redis-env]
       # MongoDB Atlas. User chỉ có quyền readWrite trên chat_db. Dạng mongodb+srv://user:pass@cluster.xxxx.mongodb.net/chat_db
       MONGO_URI: ${MONGO_URI:?Thiếu MONGO_URI}
+      # Glyph chat. false = rollback: tắt tạo/gỡ/gửi ký hiệu, vẫn đọc được lịch sử và từ điển.
+      GLYPH_WRITE_ENABLED: ${GLYPH_WRITE_ENABLED:-true}
+      ANIMAL_CHAT_GLYPH_MAX_ACTIVE: ${GLYPH_MAX_ACTIVE:-100}
+      ANIMAL_CHAT_GLYPH_MAX_CREATES_PER_DAY: ${GLYPH_MAX_CREATES_PER_DAY:-20}
+      # Phải khớp bảng màu của mobile (glyph_composer_panel.dart).
+      ANIMAL_CHAT_GLYPH_PALETTE: "${GLYPH_PALETTE:-#818CF8,#34D399,#FBBF24,#F472B6,#38BDF8,#FB923C,#C084FC}"
 
   billing-service:
     <<: *java-service
