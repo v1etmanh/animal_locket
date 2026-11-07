@@ -26,6 +26,7 @@ Monorepo microservice (Java 17 / Spring Boot 3.3 / Spring Cloud 2023.0) + một 
 - `@Transactional` không chạy khi gọi qua `this`: tách bean (xem `PurchaseFlow` → `BillingService`).
 - Test dùng chung DB/kho key-value trong một Spring context: dọn dữ liệu ở `@BeforeEach`.
 - So sánh thời gian với Mongo: độ phân giải mili-giây (xem `ChatService.markRead`).
+- chat-service: `@SpringBootTest` phải dùng `RANDOM_PORT` (bean `webSocketContainer` không chạy ở web env MOCK). `ChatService` lưu đè cả document `conversations`, nên đừng đặt bộ đếm cần tăng nguyên tử vào đó: revision glyph = max revision + index unique `(conversationId, revision)` + thử lại (xem `GlyphService`).
 - Discovery: bộ thẻ = người ở gần **hoặc** đang online; thẻ không có vị trí thì `distanceBand = null`.
 - `ddl-auto` của user/media/post mặc định `none` vì chưa kiểm tra enum `validate` với MySQL thật.
 

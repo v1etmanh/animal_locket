@@ -27,7 +27,9 @@ public class ChatController {
     public record OpenRequest(@NotBlank String withPublicId) {
     }
 
-    public record SendRequest(Message.Type type, @Size(max = ChatService.MAX_TEXT) String text, String mediaId) {
+    /** GLYPH: chỉ gửi {@code glyphIds} (+ clientId), không gửi text; fallback do server tạo. */
+    public record SendRequest(Message.Type type, @Size(max = ChatService.MAX_TEXT) String text, String mediaId,
+                              List<String> glyphIds, String clientId) {
     }
 
     private final ChatService chat;
@@ -58,7 +60,8 @@ public class ChatController {
     @ResponseStatus(HttpStatus.CREATED)
     public ChatService.MessageView send(@RequestHeader(Headers.PUBLIC_ID) String me, @PathVariable String id,
                                         @Valid @RequestBody SendRequest req) {
-        return chat.send(me, id, new ChatService.SendCommand(req.type(), req.text(), req.mediaId()));
+        return chat.send(me, id, new ChatService.SendCommand(req.type(), req.text(), req.mediaId(),
+                req.glyphIds(), req.clientId()));
     }
 
     @PostMapping("/conversations/{id}/read")
