@@ -5,8 +5,10 @@ import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/auth/session_manager.dart';
 import 'package:animal_locket/core/cache/cache_database.dart';
 import 'package:animal_locket/core/config/app_config.dart';
+import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/config/glyph_feature_flags.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/network/api_client.dart';
 import 'package:animal_locket/core/network/token_store.dart';
 import 'package:animal_locket/features/chat/data/chat_realtime_service.dart';
 import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
@@ -15,6 +17,7 @@ import 'package:animal_locket/features/chat/data/glyph_repository_impl.dart';
 import 'package:animal_locket/features/chat/data/system_glyphs.dart';
 import 'package:animal_locket/features/chat/domain/chat_repository.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
+import 'package:animal_locket/features/chat/domain/glyph_server_shape.dart';
 import 'package:animal_locket/features/chat/presentation/chat_controllers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,6 +78,87 @@ void main() {
     realtime.dispose();
     await cache.close();
     if (await directory.exists()) await directory.delete(recursive: true);
+  });
+
+  GlyphRepositoryImpl repo() => GlyphRepositoryImpl(
+    cache: Future.value(cache),
+    api: ApiClient(
+      baseUrl: 'http://localhost',
+      sessionManager: SessionManager(_config, _MemoryTokenStore()),
+    ),
+    mode: BackendMode.live,
+    flags: const GlyphFeatureFlags(
+      readEnabled: true,
+      personalLibraryEnabled: true,
+      publishEnabled: true,
+      sendEnabled: true,
+    ),
+  );
+
+  test('resending a published shape reuses the server copy (no 409)', () async {
+    final repository = repo();
+    await repository.ensureSystemGlyphs();
+    final system = buildSystemGlyphs().first;
+    // Copy as synced from the server: server hash, no local link (e.g. the
+    // other participant published this shape first).
+    await local.upsertConversationGlyphs(
+      accountPublicId: 'account-a',
+      conversationId: 'conversation-1',
+      glyphs: [
+        _conversationGlyph('server-copy').copyWith(
+          shapeHash: serverShapeHash(system.points),
+          creatorPublicId: 'account-b',
+        ),
+      ],
+      checkpointRevision: 5,
+    );
+
+    // No network in this test: a publish request would throw.
+    final first = await repository.publishGlyph(
+      accountPublicId: 'account-a',
+      conversationId: 'conversation-1',
+      personalGlyph: system,
+    );
+    final second = await repository.publishGlyph(
+      accountPublicId: 'account-a',
+      conversationId: 'conversation-1',
+      personalGlyph: system,
+    );
+    expect(first.id, 'server-copy');
+    expect(second.id, 'server-copy');
+    expect(await local.lastRevision('account-a', 'conversation-1'), 5);
+    final picker = await repository.availableGlyphs(
+      'account-a',
+      'conversation-1',
+    );
+    expect(picker.map((g) => g.id), isNot(contains('server-copy')));
+  });
+
+  test('bubbles resolve the conversation copy the picker hides', () async {
+    final repository = repo();
+    await repository.ensureSystemGlyphs();
+    final system = buildSystemGlyphs().first;
+    // What publishGlyph stores on the sender's device: a server copy linked to
+    // the local (here: system) glyph. Messages carry this copy's id.
+    await local.upsertConversationGlyphs(
+      accountPublicId: 'account-a',
+      conversationId: 'conversation-1',
+      glyphs: [
+        _conversationGlyph('server-copy').copyWith(sourceLocalId: system.id),
+      ],
+      checkpointRevision: 1,
+    );
+
+    final picker = await repository.availableGlyphs(
+      'account-a',
+      'conversation-1',
+    );
+    final bubbles = await repository.messageGlyphs(
+      'account-a',
+      'conversation-1',
+    );
+    expect(picker.map((g) => g.id), isNot(contains('server-copy')));
+    expect(bubbles.map((g) => g.id), contains('server-copy'));
   });
 
   test('adds optimistic glyph then resolves it from websocket ack', () async {

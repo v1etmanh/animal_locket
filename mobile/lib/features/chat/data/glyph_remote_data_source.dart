@@ -1,5 +1,6 @@
 import 'package:animal_locket/core/network/api_client.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
+import 'package:animal_locket/features/chat/domain/glyph_server_shape.dart';
 
 class GlyphRemoteDataSource {
   const GlyphRemoteDataSource(this._api);
@@ -45,14 +46,7 @@ class GlyphRemoteDataSource {
         'clientMutationId': clientMutationId,
         'meaning': glyph.meaning,
         'color': _colorHex(glyph.colorArgb),
-        'points': glyph.points
-            .expand(
-              (point) => [
-                (point.x.clamp(-1.0, 1.0) * 1000).round(),
-                (point.y.clamp(-1.0, 1.0) * 1000).round(),
-              ],
-            )
-            .toList(growable: false),
+        'points': glyphWirePoints(glyph.points),
         'pointCount': 64,
       },
     );

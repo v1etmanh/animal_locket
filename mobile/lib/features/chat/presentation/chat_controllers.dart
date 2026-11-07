@@ -522,7 +522,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     );
     if (message.type == ChatMessageType.glyph) {
       final dictionary = await ref.read(
-        conversationGlyphsProvider(conversationId).future,
+        conversationMessageGlyphsProvider(conversationId).future,
       );
       final byId = {for (final glyph in dictionary) glyph.id: glyph};
       await sendGlyphs(

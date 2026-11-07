@@ -124,6 +124,17 @@ final conversationGlyphsProvider =
       String
     >(ConversationGlyphsController.new);
 
+/// Glyphs used to render message bubbles (see
+/// [GlyphRepositoryImpl.messageGlyphs]). Recomputed whenever the conversation
+/// dictionary syncs; a failed sync still renders from the local cache.
+final conversationMessageGlyphsProvider =
+    FutureProvider.family<List<GlyphDefinition>, String>((ref, conversationId) {
+      ref.watch(conversationGlyphsProvider(conversationId));
+      return ref
+          .watch(glyphRepositoryProvider)
+          .messageGlyphs(glyphAccountId(ref), conversationId);
+    });
+
 class GlyphComposerState {
   const GlyphComposerState({
     this.selected = const [],

@@ -9,6 +9,7 @@ import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:animal_locket/features/chat/domain/glyph_point_codec.dart';
 import 'package:animal_locket/features/chat/domain/glyph_recognizer.dart';
 import 'package:animal_locket/features/chat/domain/glyph_repository.dart';
+import 'package:animal_locket/features/chat/domain/glyph_server_shape.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -69,6 +70,23 @@ class GlyphRepositoryImpl implements GlyphRepository {
     ].where((glyph) => glyph.isAvailable).toList(growable: false);
   }
 
+  /// Every glyph a message in this conversation may reference, for rendering
+  /// bubbles. Unlike [availableGlyphs] (the picker), this keeps the
+  /// conversation copy of a local glyph — sent messages carry that copy's id —
+  /// and glyphs retired after the message was sent.
+  Future<List<GlyphDefinition>> messageGlyphs(
+    String accountPublicId,
+    String conversationId,
+  ) async {
+    final local = await _local;
+    await local.ensureSystemGlyphs();
+    return [
+      ...await local.systemGlyphs(),
+      ...await local.personalGlyphs(accountPublicId),
+      ...await local.conversationGlyphs(accountPublicId, conversationId),
+    ].where((glyph) => glyph.points.isNotEmpty).toList(growable: false);
+  }
+
   @override
   Future<List<GlyphDefinition>> conversationGlyphs(
     String accountPublicId,
@@ -127,17 +145,13 @@ class GlyphRepositoryImpl implements GlyphRepository {
     required GlyphDefinition personalGlyph,
   }) async {
     final local = await _local;
-    final existing =
-        (await local.conversationGlyphs(accountPublicId, conversationId))
-            .where(
-              (item) =>
-                  item.sourceLocalId == personalGlyph.id &&
-                  item.shapeHash == personalGlyph.shapeHash,
-            )
-            .firstOrNull;
-    if (existing != null && existing.status == GlyphStatus.active) {
-      return existing;
-    }
+    final existing = await _activeCopy(
+      local,
+      accountPublicId,
+      conversationId,
+      personalGlyph,
+    );
+    if (existing != null) return existing;
     if (mode == BackendMode.live && !flags.publishEnabled) {
       throw const GlyphFeatureUnavailable();
     }
@@ -185,12 +199,32 @@ class GlyphRepositoryImpl implements GlyphRepository {
         accountPublicId: accountPublicId,
         conversationId: conversationId,
         glyphs: [published],
-        checkpointRevision: published.serverRevision ?? 0,
+        // Keep the checkpoint: revisions between it and ours (other people's
+        // glyphs) have not been synced yet and must not be skipped.
+        checkpointRevision: await local.lastRevision(
+          accountPublicId,
+          conversationId,
+        ),
       );
       await local.completeMutation(operationId);
       return published;
     } catch (error) {
       final code = error is ApiProblem ? error.code : null;
+      if (code == 'GLYPH_DUPLICATE') {
+        // Same shape already published (by the other person, another device,
+        // or a cache without the local link): use that copy instead.
+        await syncConversation(accountPublicId, conversationId);
+        final copy = await _activeCopy(
+          local,
+          accountPublicId,
+          conversationId,
+          personalGlyph,
+        );
+        if (copy != null) {
+          await local.completeMutation(operationId);
+          return copy;
+        }
+      }
       await local.failMutation(
         operationId,
         attemptCount: 0,
@@ -199,6 +233,43 @@ class GlyphRepositoryImpl implements GlyphRepository {
       );
       rethrow;
     }
+  }
+
+  /// The ACTIVE conversation glyph with [source]'s shape, if any. Matches on
+  /// the server's canonical hash, so it also finds copies published by the
+  /// other participant; links an unlinked copy to [source] so the picker does
+  /// not list the shape twice.
+  Future<GlyphDefinition?> _activeCopy(
+    GlyphLocalDataSource local,
+    String accountPublicId,
+    String conversationId,
+    GlyphDefinition source,
+  ) async {
+    final serverHash = serverShapeHash(source.points);
+    final copies =
+        (await local.conversationGlyphs(accountPublicId, conversationId)).where(
+          (item) =>
+              item.status == GlyphStatus.active &&
+              (item.shapeHash == serverHash ||
+                  // Demo copies carry the local hash.
+                  (item.sourceLocalId == source.id &&
+                      item.shapeHash == source.shapeHash)),
+        );
+    final copy =
+        copies.where((item) => item.sourceLocalId == source.id).firstOrNull ??
+        copies.firstOrNull;
+    if (copy == null || copy.sourceLocalId != null) return copy;
+    final linked = copy.copyWith(sourceLocalId: source.id);
+    await local.upsertConversationGlyphs(
+      accountPublicId: accountPublicId,
+      conversationId: conversationId,
+      glyphs: [linked],
+      checkpointRevision: await local.lastRevision(
+        accountPublicId,
+        conversationId,
+      ),
+    );
+    return linked;
   }
 
   @override
@@ -283,7 +354,10 @@ class GlyphRepositoryImpl implements GlyphRepository {
           accountPublicId: accountPublicId,
           conversationId: record.conversationId,
           glyphs: [published],
-          checkpointRevision: published.serverRevision ?? 0,
+          checkpointRevision: await local.lastRevision(
+            accountPublicId,
+            record.conversationId,
+          ),
         );
         await local.completeMutation(record.operationId);
       } catch (error) {

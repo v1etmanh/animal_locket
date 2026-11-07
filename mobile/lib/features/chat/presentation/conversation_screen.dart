@@ -67,7 +67,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
       conversationControllerProvider(widget.conversationId),
     );
     final glyphs =
-        ref.watch(conversationGlyphsProvider(widget.conversationId)).value ??
+        ref
+            .watch(conversationMessageGlyphsProvider(widget.conversationId))
+            .value ??
         const <GlyphDefinition>[];
     final myId = ref.watch(authControllerProvider).profile?.publicId;
     return AppBackground(
