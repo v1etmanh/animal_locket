@@ -53,6 +53,23 @@ void main() {
       expect(message.text, isNull);
       expect(message.mediaId, 'm');
     });
+
+    test('chat message maps glyph ids and fallback text', () {
+      final message = ChatMessage.fromJson({
+        'id': 'g1',
+        'conversationId': 'c',
+        'senderId': 'u',
+        'type': 'GLYPH',
+        'text': 'Đồng ý · Đang tới',
+        'glyphIds': ['sys-ok', 'sys-coming'],
+        'dictionaryRevision': 3,
+        'createdAt': '2026-01-01T00:00:00Z',
+      });
+      expect(message.type, ChatMessageType.glyph);
+      expect(message.glyphIds, ['sys-ok', 'sys-coming']);
+      expect(message.dictionaryRevision, 3);
+      expect(message.text, contains('Đồng ý'));
+    });
   });
 
   test('RFC 7807 problem keeps code, status and retry-after', () {

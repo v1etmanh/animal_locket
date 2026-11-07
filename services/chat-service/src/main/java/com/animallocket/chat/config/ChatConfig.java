@@ -4,6 +4,7 @@ import com.animallocket.chat.bus.LocalMessageBus;
 import com.animallocket.chat.bus.MessageBus;
 import com.animallocket.chat.bus.RedisMessageBus;
 import com.animallocket.chat.service.ChatService;
+import com.animallocket.chat.service.GlyphSettings;
 import com.animallocket.chat.ws.ChatWebSocketHandler;
 import com.animallocket.chat.ws.PublicIdHandshakeInterceptor;
 import com.animallocket.chat.ws.SessionRegistry;
@@ -22,6 +23,8 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
+
+import java.util.Set;
 
 @Configuration
 @EnableWebSocket
@@ -53,6 +56,17 @@ public class ChatConfig implements WebSocketConfigurer {
         @ConditionalOnMissingBean(KeyValueStore.class)
         KeyValueStore fallbackKeyValueStore() {
             return new InMemoryKeyValueStore();
+        }
+
+        /** Palette là chuỗi phân cách bằng dấu phẩy (YAML list không bind được qua @Value). */
+        @Bean
+        GlyphSettings glyphSettings(@Value("${animal.chat.glyph.write-enabled:true}") boolean writeEnabled,
+                                    @Value("${animal.chat.glyph.palette:}") String palette,
+                                    @Value("${animal.chat.glyph.max-active:100}") int maxActive,
+                                    @Value("${animal.chat.glyph.max-creates-per-day:20}") int maxCreatesPerDay) {
+            Set<String> colors = palette.isBlank() ? Set.copyOf(GlyphSettings.DEFAULT_PALETTE)
+                    : Set.of(palette.split(","));
+            return new GlyphSettings(writeEnabled, colors, maxActive, maxCreatesPerDay);
         }
 
         @Bean

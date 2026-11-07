@@ -12,6 +12,8 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,8 +21,10 @@ import java.util.Map;
  * <pre>
  *  client → server:  {"type":"send","conversationId":"..","text":"..","clientId":".."}
  *                    {"type":"send","conversationId":"..","messageType":"IMAGE","mediaId":"..","clientId":".."}
+ *                    {"type":"send","conversationId":"..","messageType":"GLYPH","glyphIds":[..],"clientId":".."}
  *                    {"type":"read","conversationId":".."}   {"type":"ping"}
  *  server → client:  {"type":"message","data":{..}}  {"type":"ack","data":{"clientId":..,"messageId":..}}
+ *                    {"type":"dictionary_changed","data":{"conversationId":..,"revision":..,"glyphId":..,"change":"UPSERT|ARCHIVE"}}
  *                    {"type":"read","data":{..}}  {"type":"closed","data":{..}}  {"type":"error","data":{"code":..}}  {"type":"pong"}
  * </pre>
  */
@@ -68,9 +72,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
                 case "read" -> chat.markRead(me, in.path("conversationId").asText());
                 case "send" -> {
-                    Message.Type t = "IMAGE".equals(in.path("messageType").asText("TEXT")) ? Message.Type.IMAGE : Message.Type.TEXT;
+                    Message.Type t = messageType(in.path("messageType").asText("TEXT"));
                     var sent = chat.send(me, in.path("conversationId").asText(),
-                            new ChatService.SendCommand(t, in.path("text").asText(null), in.path("mediaId").asText(null)));
+                            new ChatService.SendCommand(t, textOrNull(in, "text"), textOrNull(in, "mediaId"),
+                                    glyphIds(in), clientId));
                     reply(session, "ack", Map.of("clientId", clientId == null ? "" : clientId, "messageId", sent.id()));
                 }
                 default -> reply(session, "error", Map.of("code", "UNKNOWN_TYPE"));
@@ -90,6 +95,33 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (me != null) {
             registry.remove((String) me, session);
         }
+    }
+
+    /** Client cũ không gửi messageType (hoặc gửi giá trị lạ) vẫn được hiểu là TEXT như trước. */
+    private static Message.Type messageType(String raw) {
+        return switch (raw) {
+            case "IMAGE" -> Message.Type.IMAGE;
+            case "GLYPH" -> Message.Type.GLYPH;
+            default -> Message.Type.TEXT;
+        };
+    }
+
+    private static String textOrNull(JsonNode in, String field) {
+        JsonNode n = in.get(field);
+        return n == null || n.isNull() ? null : n.asText();
+    }
+
+    /** null nếu thiếu hoặc không phải mảng chuỗi; ChatService sẽ trả INVALID_GLYPH_MESSAGE. */
+    private static List<String> glyphIds(JsonNode in) {
+        JsonNode arr = in.get("glyphIds");
+        if (arr == null || !arr.isArray()) {
+            return null;
+        }
+        List<String> ids = new ArrayList<>(arr.size());
+        for (JsonNode n : arr) {
+            ids.add(n.isTextual() ? n.asText() : null);
+        }
+        return ids;
     }
 
     private void reply(WebSocketSession session, String type, Object data) throws Exception {

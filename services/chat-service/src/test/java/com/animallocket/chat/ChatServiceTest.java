@@ -5,8 +5,10 @@ import com.animallocket.chat.client.Gateways;
 import com.animallocket.chat.domain.Conversation;
 import com.animallocket.chat.domain.Message;
 import com.animallocket.chat.repo.ConversationRepository;
+import com.animallocket.chat.repo.GlyphRepository;
 import com.animallocket.chat.repo.MessageRepository;
 import com.animallocket.chat.service.ChatService;
+import com.animallocket.chat.service.GlyphSettings;
 import com.animallocket.chat.ws.ChatWebSocketHandler;
 import com.animallocket.chat.ws.PublicIdHandshakeInterceptor;
 import com.animallocket.chat.ws.SessionRegistry;
@@ -115,7 +117,7 @@ class ChatServiceTest {
     }
 
     private ChatService newChat(int limit) {
-        return new ChatService(convRepo, msgRepo,
+        return new ChatService(convRepo, msgRepo, mock(GlyphRepository.class), GlyphSettings.defaults(),
                 (a, b) -> {
                     relationCalls.incrementAndGet();
                     return relations.getOrDefault(rel(a, b), new Gateways.Relationship(false, false));
@@ -380,7 +382,8 @@ class ChatServiceTest {
         var registry = new SessionRegistry(new InMemoryKeyValueStore());
         var wsBus = new LocalMessageBus();
         wsBus.subscribe(registry::deliver);
-        ChatService wsChat = new ChatService(convRepo, msgRepo, (a, b) -> new Gateways.Relationship(true, false),
+        ChatService wsChat = new ChatService(convRepo, msgRepo, mock(GlyphRepository.class), GlyphSettings.defaults(),
+                (a, b) -> new Gateways.Relationship(true, false),
                 mediaMap::get, (c, f, t) -> { }, wsBus, new InMemoryKeyValueStore(), 20);
         var handler = new ChatWebSocketHandler(registry, wsChat);
 

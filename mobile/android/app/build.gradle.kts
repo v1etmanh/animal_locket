@@ -18,6 +18,10 @@ android {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.animallocket.app"
         manifestPlaceholders["appAuthRedirectScheme"] = "com.animallocket.app"
+        // Mặc định chặn http (cleartext). Bản test trỏ vào backend local qua http thì build với
+        // `--android-project-arg allowCleartext=true`; không dùng cờ này cho bản phát hành.
+        manifestPlaceholders["usesCleartextTraffic"] =
+            (project.findProperty("allowCleartext")?.toString() == "true").toString()
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -31,6 +35,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

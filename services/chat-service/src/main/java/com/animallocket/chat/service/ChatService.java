@@ -3,12 +3,15 @@ package com.animallocket.chat.service;
 import com.animallocket.chat.bus.MessageBus;
 import com.animallocket.chat.client.Gateways;
 import com.animallocket.chat.domain.Conversation;
+import com.animallocket.chat.domain.ConversationGlyph;
 import com.animallocket.chat.domain.Message;
 import com.animallocket.chat.repo.ConversationRepository;
+import com.animallocket.chat.repo.GlyphRepository;
 import com.animallocket.chat.repo.MessageRepository;
 import com.animallocket.common.event.EventJson;
 import com.animallocket.common.kv.KeyValueStore;
 import com.animallocket.common.web.ApiException;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
@@ -16,22 +19,36 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
     public static final int MAX_TEXT = 2000;
+    public static final int MAX_GLYPHS = 12;
+    public static final int MAX_CLIENT_ID = 64;
+    static final String GLYPH_FALLBACK_SEPARATOR = " · ";
     private static final Duration REL_CACHE = Duration.ofSeconds(30);
 
-    public record SendCommand(Message.Type type, String text, String mediaId) {
+    /** {@code clientId} (tuỳ chọn) chống gửi trùng khi client thử lại: cùng người gửi + clientId trả lại tin cũ. */
+    public record SendCommand(Message.Type type, String text, String mediaId, List<String> glyphIds, String clientId) {
+        public SendCommand(Message.Type type, String text, String mediaId) {
+            this(type, text, mediaId, null, null);
+        }
     }
 
+    /** Trường mới (glyphIds, dictionaryRevision, clientId) bị bỏ khi null nên contract TEXT/IMAGE giữ nguyên. */
     public record MessageView(String id, String conversationId, String senderId, Message.Type type, String text,
-                              String mediaId, Instant createdAt) {
+                              String mediaId, Instant createdAt,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) List<String> glyphIds,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) Long dictionaryRevision,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) String clientId) {
         static MessageView of(Message m) {
             return new MessageView(m.getId(), m.getConversationId(), m.getSenderId(), m.getType(), m.getText(),
-                    m.getMediaId(), m.getCreatedAt());
+                    m.getMediaId(), m.getCreatedAt(), m.getGlyphIds(), m.getDictionaryRevision(), m.getClientId());
         }
     }
 
@@ -41,6 +58,8 @@ public class ChatService {
 
     private final ConversationRepository conversations;
     private final MessageRepository messages;
+    private final GlyphRepository glyphs;
+    private final GlyphSettings glyphSettings;
     private final Gateways.UserGateway users;
     private final Gateways.MediaGateway media;
     private final Gateways.EventPublisher events;
@@ -48,11 +67,14 @@ public class ChatService {
     private final KeyValueStore kv;
     private final int maxPerWindow;
 
-    public ChatService(ConversationRepository conversations, MessageRepository messages, Gateways.UserGateway users,
+    public ChatService(ConversationRepository conversations, MessageRepository messages, GlyphRepository glyphs,
+                       GlyphSettings glyphSettings, Gateways.UserGateway users,
                        Gateways.MediaGateway media, Gateways.EventPublisher events, MessageBus bus, KeyValueStore kv,
                        @Value("${animal.chat.max-messages-per-10s:20}") int maxPerWindow) {
         this.conversations = conversations;
         this.messages = messages;
+        this.glyphs = glyphs;
+        this.glyphSettings = glyphSettings;
         this.users = users;
         this.media = media;
         this.events = events;
@@ -93,19 +115,30 @@ public class ChatService {
     }
 
     public MessageView send(String me, String conversationId, SendCommand cmd) {
-        Conversation c = participant(me, conversationId);
-        if (c.getStatus() != Conversation.Status.ACTIVE) {
-            throw ApiException.forbidden("Hội thoại đã bị đóng");
+        Message.Type type = cmd.type() == null ? Message.Type.TEXT : cmd.type();
+        if (type == Message.Type.GLYPH && !glyphSettings.writeEnabled()) {
+            throw GlyphErrors.disabled();
         }
+        Conversation c = writable(me, conversationId);
         String other = c.other(me);
-        requireFriends(me, other);
+
+        String clientId = cmd.clientId() == null || cmd.clientId().isBlank() ? null : cmd.clientId().strip();
+        if (clientId != null && clientId.length() > MAX_CLIENT_ID) {
+            throw ApiException.badRequest("INVALID_MESSAGE", "clientId quá dài");
+        }
+        if (clientId != null) {
+            var replay = messages.findBySenderIdAndClientId(me, clientId);
+            if (replay.isPresent()) {
+                return MessageView.of(replay.get()); // thử lại: không lưu và không phát lại
+            }
+        }
 
         long window = Instant.now().getEpochSecond() / 10;
         if (kv.increment("chat:rl:" + me + ":" + window, Duration.ofSeconds(30)) > maxPerWindow) {
             throw ApiException.tooMany("CHAT_RATE_LIMIT", "Bạn nhắn quá nhanh, hãy chậm lại một chút");
         }
 
-        Message m = switch (cmd.type() == null ? Message.Type.TEXT : cmd.type()) {
+        Message m = switch (type) {
             case TEXT -> {
                 String text = cmd.text() == null ? "" : cmd.text().strip();
                 if (text.isEmpty() || text.length() > MAX_TEXT) {
@@ -126,8 +159,21 @@ public class ChatService {
                 }
                 yield new Message(conversationId, me, Message.Type.IMAGE, null, cmd.mediaId());
             }
+            case GLYPH -> glyphMessage(conversationId, me, cmd);
         };
-        m = messages.save(m);
+        m.setClientId(clientId);
+        try {
+            m = messages.save(m);
+        } catch (DuplicateKeyException e) {
+            // Hai lần thử lại đến đồng thời: lần ghi sau thua index (senderId, clientId).
+            if (clientId != null) {
+                var replay = messages.findBySenderIdAndClientId(me, clientId);
+                if (replay.isPresent()) {
+                    return MessageView.of(replay.get());
+                }
+            }
+            throw e;
+        }
         c.setLastMessageAt(m.getCreatedAt());
         // Người gửi mặc định đã đọc tới tin của chính mình.
         c.getLastReadAt().put(me, m.getCreatedAt());
@@ -202,6 +248,7 @@ public class ChatService {
     public void onUserDeleted(String publicId) {
         for (Conversation c : conversations.findByParticipantsOrderByLastMessageAtDesc(publicId)) {
             messages.deleteByConversationId(c.getId());
+            glyphs.deleteByConversationId(c.getId());
             conversations.delete(c);
             bus.publish(c.other(publicId), frame("closed", Map.of("conversationId", c.getId(), "reason", "DELETED")));
         }
@@ -209,7 +256,56 @@ public class ChatService {
 
     // ---------- nội bộ ----------
 
-    private Conversation participant(String me, String id) {
+    /**
+     * Tin GLYPH: mọi glyph phải thuộc hội thoại và đang ACTIVE; giữ nguyên thứ tự (cho phép lặp).
+     * Client không được gửi text/mediaId: fallback do server tạo từ nghĩa của glyph.
+     */
+    private Message glyphMessage(String conversationId, String me, SendCommand cmd) {
+        List<String> ids = cmd.glyphIds();
+        if (ids == null || ids.isEmpty() || cmd.text() != null || cmd.mediaId() != null
+                || ids.stream().anyMatch(id -> id == null || id.isBlank() || id.length() > 64)) {
+            throw GlyphErrors.invalidMessage();
+        }
+        if (ids.size() > MAX_GLYPHS) {
+            throw GlyphErrors.sequenceTooLong();
+        }
+        long revision = glyphRevision(conversationId);
+        Map<String, ConversationGlyph> found = glyphs.findByConversationIdAndIdIn(conversationId, new HashSet<>(ids))
+                .stream().collect(Collectors.toMap(ConversationGlyph::getId, Function.identity()));
+        StringBuilder fallback = new StringBuilder();
+        for (String id : ids) {
+            ConversationGlyph g = found.get(id);
+            if (g == null) {
+                throw GlyphErrors.notFound();
+            }
+            if (g.getStatus() != ConversationGlyph.Status.ACTIVE) {
+                throw GlyphErrors.notActive();
+            }
+            if (!fallback.isEmpty()) {
+                fallback.append(GLYPH_FALLBACK_SEPARATOR);
+            }
+            fallback.append(g.getMeaning());
+        }
+        return Message.glyph(conversationId, me, ids, fallback.toString(), revision);
+    }
+
+    /** Revision từ điển hiện tại của hội thoại = revision lớn nhất đã ghi (0 nếu chưa có glyph). */
+    long glyphRevision(String conversationId) {
+        return glyphs.findFirstByConversationIdOrderByRevisionDesc(conversationId)
+                .map(ConversationGlyph::getRevision).orElse(0L);
+    }
+
+    /** Người gọi là thành viên, hội thoại còn mở và hai bên vẫn là bạn (không chặn). */
+    Conversation writable(String me, String conversationId) {
+        Conversation c = participant(me, conversationId);
+        if (c.getStatus() != Conversation.Status.ACTIVE) {
+            throw ApiException.forbidden("Hội thoại đã bị đóng");
+        }
+        requireFriends(me, c.other(me));
+        return c;
+    }
+
+    Conversation participant(String me, String id) {
         Conversation c = conversations.findById(id).orElseThrow(() -> ApiException.notFound("Hội thoại"));
         if (!c.has(me)) {
             throw ApiException.notFound("Hội thoại");

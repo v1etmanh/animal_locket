@@ -59,6 +59,10 @@ animal:
     spin-interval:
       free: 7d
       pro: 1d
+  # CHỈ DÙNG KHI DEV: publicId của một tài khoản đã đăng ký; tài khoản này tự thành bạn của mọi người
+  # (khi đăng ký mới và khi service khởi động) để test chat. Để trống = tắt.
+  dev-buddy:
+    public-id: ${DEV_BUDDY_PUBLIC_ID:}
 
 eureka:
   client:

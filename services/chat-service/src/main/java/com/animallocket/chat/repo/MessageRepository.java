@@ -13,4 +13,6 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     long countByConversationIdAndSenderIdNotAndCreatedAtGreaterThan(String conversationId, String notSender, Instant after);
 
     void deleteByConversationId(String conversationId);
+
+    java.util.Optional<Message> findBySenderIdAndClientId(String senderId, String clientId);
 }

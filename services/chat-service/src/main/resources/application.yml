@@ -38,6 +38,13 @@ animal:
     enabled: true
   chat:
     max-messages-per-10s: 20
+    glyph:
+      # false = rollback: tắt tạo/archive/gửi glyph, vẫn đọc được lịch sử và từ điển.
+      write-enabled: ${GLYPH_WRITE_ENABLED:true}
+      # Khớp bảng màu của mobile (glyph_composer_panel.dart).
+      palette: "#818CF8,#34D399,#FBBF24,#F472B6,#38BDF8,#FB923C,#C084FC"
+      max-active: 100
+      max-creates-per-day: 20
 
 resilience4j:
   circuitbreaker:

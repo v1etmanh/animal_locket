@@ -178,6 +178,12 @@ public class FriendService {
         return friendships.findByUserLowAndUserHigh(min(a, b), max(a, b)).isPresent();
     }
 
+    /** Kết bạn trực tiếp, bỏ qua lời mời/giới hạn/nhóm tuổi. Chỉ dùng cho {@link DevBuddy}. Idempotent. */
+    @Transactional
+    public void forceFriends(String a, String b) {
+        makeFriends(a, b);
+    }
+
     private void makeFriends(String a, String b) {
         if (areFriends(a, b)) {
             return;

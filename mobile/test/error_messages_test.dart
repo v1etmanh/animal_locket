@@ -5,6 +5,7 @@ void main() {
   test('maps stable RFC 7807 codes to Vietnamese messages', () {
     expect(messageForApiCode('INVALID_ALIAS'), contains('Biệt danh'));
     expect(messageForApiCode('SWIPE_LIMIT'), contains('hết lượt'));
+    expect(messageForApiCode('GLYPH_NOT_ACTIVE'), contains('không còn'));
   });
 
   test('falls back by status and for unknown codes', () {
