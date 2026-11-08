@@ -56,6 +56,7 @@ class PostFlowIntegrationTest {
     @Autowired OutboxRepository outbox;
     @Autowired PostRepository posts;
     @Autowired PostEventsListener listener;
+    @Autowired com.animallocket.post.service.PendingPostReconciler reconciler;
     @MockBean UserDirectory users;
     @MockBean JwtDecoder jwtDecoder;
 
@@ -143,6 +144,24 @@ class PostFlowIntegrationTest {
         MvcResult r = mvc.perform(as(post("/api/v1/posts"), ALICE).content("{\"mediaId\":\"" + m + "\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("PUBLISHED")).andReturn();
         assertTrue(body(r).get("publishedAt").asText().length() > 5);
+    }
+
+    @Test
+    void reconcilerPublishesPostThatLostTheRaceWithPhotoReady() throws Exception {
+        String m = media();
+        String id = createPost(ALICE, m);
+        // Mô phỏng cuộc đua: listener đã lưu kết quả ảnh nhưng không thấy bài (chưa commit) nên không cập nhật.
+        mediaStateRepo.save(new com.animallocket.post.domain.MediaState(m, ALICE, "READY", "pub/" + m + ".jpg", null));
+        assertEquals(Post.Status.PENDING_MEDIA, posts.findById(id).orElseThrow().getStatus());
+
+        reconciler.reconcile();
+        reconciler.reconcile(); // chạy lại không phát event lần hai
+
+        Post p = posts.findById(id).orElseThrow();
+        assertEquals(Post.Status.PUBLISHED, p.getStatus());
+        assertEquals("pub/" + m + ".jpg", p.getPublicKey());
+        assertEquals(1, events(EventTypes.POST_PUBLISHED).size());
+        mvc.perform(as(get("/api/v1/feed"), BOB)).andExpect(jsonPath("$.items[0].id").value(id));
     }
 
     @Test

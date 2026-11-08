@@ -19,6 +19,9 @@ class FeedScreen extends ConsumerWidget {
     final feed = ref.watch(feedControllerProvider);
     return AppPage(
       title: 'Khoảnh khắc',
+      // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
+      scrollable: false,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       actions: [
         IconButton(
           tooltip: 'Bạn bè',
@@ -42,7 +45,8 @@ class FeedScreen extends ConsumerWidget {
                   },
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    shrinkWrap: true,
+                    // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
+                    padding: const EdgeInsets.only(bottom: 110),
                     itemCount: data.items.length + (data.loadingMore ? 1 : 0),
                     separatorBuilder: (_, _) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {

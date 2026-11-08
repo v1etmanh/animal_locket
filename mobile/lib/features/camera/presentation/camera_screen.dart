@@ -1,5 +1,6 @@
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
+import 'package:animal_locket/features/camera/presentation/send_status_pill.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -148,6 +149,23 @@ class _CameraScreenState extends State<CameraScreen>
     await _controller?.setExposurePoint(point);
   }
 
+  Widget _preview(bool initialized, CameraController? controller) => ClipRRect(
+    borderRadius: BorderRadius.circular(34),
+    child: ColoredBox(
+      color: AppColors.ink,
+      child: _permissionDenied
+          ? _PermissionExplainer(onAllow: _requestPermission)
+          : !initialized
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                onTapDown: (details) => _focus(details, constraints),
+                child: SizedBox.expand(child: CameraPreview(controller!)),
+              ),
+            ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -180,25 +198,16 @@ class _CameraScreenState extends State<CameraScreen>
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(34),
-              child: ColoredBox(
-                color: AppColors.ink,
-                child: _permissionDenied
-                    ? _PermissionExplainer(onAllow: _requestPermission)
-                    : !initialized
-                    ? const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) => GestureDetector(
-                          onTapDown: (details) => _focus(details, constraints),
-                          child: SizedBox.expand(
-                            child: CameraPreview(controller!),
-                          ),
-                        ),
-                      ),
-              ),
+            child: Stack(
+              children: [
+                Positioned.fill(child: _preview(initialized, controller)),
+                const Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child: Center(child: SendStatusPill()),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),

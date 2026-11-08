@@ -202,22 +202,38 @@ public class PostService {
     @Transactional
     public void onPhotoReady(Events.PhotoReady e) {
         MediaState state = mediaStates.save(new MediaState(e.mediaId(), e.ownerPublicId(), "READY", e.publicKey(), null));
-        posts.findByMediaId(e.mediaId()).filter(p -> p.getStatus() == Post.Status.PENDING_MEDIA).ifPresent(p -> {
-            applyMedia(p, state);
-            if (p.getStatus() == Post.Status.PUBLISHED) {
-                outbox.publish(Topics.POST, EventTypes.POST_PUBLISHED, p.getId(),
-                        new Events.PostPublished(p.getId(), p.getAuthorId()));
-            }
-        });
+        posts.findForUpdateByMediaId(e.mediaId()).ifPresent(p -> settle(p, state));
     }
 
     @Transactional
     public void onPhotoRejected(Events.PhotoRejected e) {
         MediaState state = mediaStates.save(new MediaState(e.mediaId(), e.ownerPublicId(), "REJECTED", null, e.reason()));
-        posts.findByMediaId(e.mediaId()).filter(p -> p.getStatus() == Post.Status.PENDING_MEDIA).ifPresent(p -> {
-            applyMedia(p, state);
+        posts.findForUpdateByMediaId(e.mediaId()).ifPresent(p -> settle(p, state));
+    }
+
+    /**
+     * Gỡ một bài kẹt ở PENDING_MEDIA dù đã có kết quả ảnh. Xảy ra khi {@link #create} và {@link #onPhotoReady}
+     * chạy song song: mỗi transaction không thấy dòng của bên kia nên không bên nào chuyển trạng thái.
+     * Gọi từ {@link PendingPostReconciler}, mỗi bài một transaction.
+     */
+    @Transactional
+    public void settlePending(String postId) {
+        posts.findForUpdateById(postId).ifPresent(p ->
+                mediaStates.findById(p.getMediaId()).ifPresent(state -> settle(p, state)));
+    }
+
+    /** Chỉ đổi bài đang PENDING_MEDIA; bài đã được gọi phải đang giữ khoá dòng để không phát event hai lần. */
+    private void settle(Post p, MediaState state) {
+        if (p.getStatus() != Post.Status.PENDING_MEDIA) {
+            return;
+        }
+        applyMedia(p, state);
+        if (p.getStatus() == Post.Status.PUBLISHED) {
+            outbox.publish(Topics.POST, EventTypes.POST_PUBLISHED, p.getId(),
+                    new Events.PostPublished(p.getId(), p.getAuthorId()));
+        } else if (!state.ready()) {
             quota.refund(p.getAuthorId(), p.getCreatedAt());
-        });
+        }
     }
 
     /** Xoá toàn bộ dữ liệu của người dùng đã xoá tài khoản (bài, like, bình luận của họ). */
