@@ -3,6 +3,8 @@ import 'package:animal_locket/features/camera/data/media_repository_impl.dart';
 import 'package:animal_locket/features/camera/domain/media_repository.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
+import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
+import 'package:animal_locket/features/feed/presentation/my_posts_grid.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -81,7 +83,12 @@ class UploadController extends Notifier<UploadFlowState> {
         label: 'Đang đổi mặt thành con vật',
         post: post,
       );
+      ref.invalidate(myPostsProvider);
       final result = await media.waitUntilProcessed(ticket.mediaId);
+      // Bài đã đổi trạng thái (PUBLISHED/REJECTED): tải lại feed và lưới ảnh hồ sơ.
+      ref
+        ..invalidate(myPostsProvider)
+        ..invalidate(feedControllerProvider);
       if (result.status == MediaStatus.rejected) {
         state = UploadFlowState(
           stage: UploadStage.rejected,

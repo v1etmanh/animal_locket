@@ -35,6 +35,11 @@ class AppShell extends StatelessWidget {
                 label: l10n.photosTab,
               ),
               NavigationDestination(
+                icon: const Icon(Icons.photo_library_outlined),
+                selectedIcon: const Icon(Icons.photo_library),
+                label: l10n.feedTab,
+              ),
+              NavigationDestination(
                 icon: const Icon(Icons.explore_outlined),
                 selectedIcon: const Icon(Icons.explore),
                 label: l10n.discoverTab,

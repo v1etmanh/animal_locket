@@ -7,6 +7,7 @@ import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
+import 'package:animal_locket/features/feed/presentation/my_posts_grid.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,6 +92,16 @@ class _ProfileContent extends ConsumerWidget {
           ),
         ],
       ),
+      const SizedBox(height: 24),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Ảnh của tôi',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+      ),
+      const SizedBox(height: 12),
+      const MyPostsGrid(),
       const SizedBox(height: 24),
       Align(
         alignment: Alignment.centerLeft,

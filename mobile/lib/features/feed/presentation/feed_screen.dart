@@ -6,6 +6,7 @@ import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
+import 'package:animal_locket/features/feed/presentation/my_posts_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,10 +49,26 @@ class FeedScreen extends ConsumerWidget {
                       if (index == data.items.length) {
                         return const Center(child: CircularProgressIndicator());
                       }
+                      final day = _dayLabel(data.items[index]);
+                      final newDay =
+                          index == 0 || day != _dayLabel(data.items[index - 1]);
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (index == 0 && data.degraded)
                             const _DegradedBanner(),
+                          if (newDay)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: 10,
+                                left: 4,
+                              ),
+                              child: Text(
+                                day,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
                           _PostCard(post: data.items[index]),
                         ],
                       );
@@ -210,6 +227,9 @@ class _PostCard extends ConsumerWidget {
     );
   }
 }
+
+String _dayLabel(Post post) =>
+    formatPostDay((post.publishedAt ?? post.createdAt).toLocal());
 
 String _relativeTime(DateTime value) {
   final difference = DateTime.now().toUtc().difference(value.toUtc());
