@@ -62,9 +62,10 @@ Future<_FakeFeed> _pump(
   WidgetTester tester,
   FeedState state, {
   double width = 400,
+  double height = 2400,
 }) async {
   // Tall enough that the lazy ListView builds every card.
-  tester.view.physicalSize = Size(width, 2400);
+  tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final fake = _FakeFeed(state);
@@ -218,5 +219,36 @@ void main() {
 
   test('tilt angles in degrees convert as expected', () {
     expect(WashiPhotoCard.tiltFor(1) * math.pi / 180, closeTo(.0209, .0001));
+  });
+
+  testWidgets('author row is at least 48pt tall to tap', (tester) async {
+    await _pump(tester, three);
+    final row = find.ancestor(
+      of: find.text('Cáo Lém Lỉnh 042').first,
+      matching: find.byType(InkWell),
+    );
+    expect(tester.getSize(row.first).height, greaterThanOrEqualTo(48));
+  });
+
+  testWidgets('cards do not replay their entrance after scrolling back', (
+    tester,
+  ) async {
+    // Only posts whose photo resolves (no endless loading spinner).
+    final five = FeedState(
+      items: [for (var i = 0; i < 5; i++) _post(i.isEven ? '1' : '2')],
+    );
+    await _pump(tester, five, height: 700);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.drag(find.byType(ListView), const Offset(0, -3000));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.drag(find.byType(ListView), const Offset(0, 3000));
+    await tester.pump(const Duration(seconds: 1));
+    // Back at the top: one frame later the first card is already at its tilt,
+    // not restarting its slide-and-tilt entrance from 0.
+    await tester.pump();
+    final first = tester.widget<WashiPhotoCard>(
+      find.byType(WashiPhotoCard).first,
+    );
+    expect(first.tiltDegrees, WashiPhotoCard.tiltFor(0));
   });
 }

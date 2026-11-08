@@ -26,6 +26,12 @@ class WashiNavBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   static const _height = 68.0;
+  static const _radius = BorderRadius.only(
+    topLeft: Radius.circular(4),
+    topRight: Radius.circular(4),
+    bottomLeft: Radius.circular(18),
+    bottomRight: Radius.circular(18),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -35,17 +41,10 @@ class WashiNavBar extends StatelessWidget {
         : const Duration(milliseconds: 200);
     return SafeArea(
       minimum: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Container(
-        height: _height,
-        decoration: BoxDecoration(
-          color: p.paper,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(4),
-            bottomLeft: Radius.circular(18),
-            bottomRight: Radius.circular(18),
-          ),
-          boxShadow: const [
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          borderRadius: _radius,
+          boxShadow: [
             BoxShadow(
               color: Color(0x1A3C2814),
               blurRadius: 22,
@@ -53,51 +52,63 @@ class WashiNavBar extends StatelessWidget {
             ),
           ],
         ),
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final slot = box.maxWidth / items.length;
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: CustomPaint(
-                    size: const Size.fromHeight(3),
-                    painter: _TornEdgePainter(p.fold1),
-                  ),
-                ),
-                // Mẩu washi trượt tới tab đang chọn.
-                AnimatedPositioned(
-                  duration: slide,
-                  curve: Curves.easeOutCubic,
-                  left: slot * currentIndex + (slot - 52) / 2,
-                  top: 6,
-                  child: Transform.rotate(
-                    angle: -4 * math.pi / 180,
-                    child: Opacity(
-                      opacity: .7,
-                      child: Container(width: 52, height: 30, color: p.tape1),
-                    ),
-                  ),
-                ),
-                Row(
+        // Material (không phải Container) để hiệu ứng gợn khi chạm hiện lên.
+        child: Material(
+          color: p.paper,
+          borderRadius: _radius,
+          child: SizedBox(
+            height: _height,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final slot = box.maxWidth / items.length;
+                return Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    for (var i = 0; i < items.length; i++)
-                      Expanded(
-                        child: _NavButton(
-                          item: items[i],
-                          selected: i == currentIndex,
-                          polaroid: i == 0,
-                          onTap: () => onSelected(i),
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: CustomPaint(
+                        size: const Size.fromHeight(3),
+                        painter: _TornEdgePainter(p.fold1),
+                      ),
+                    ),
+                    // Mẩu washi trượt tới tab đang chọn.
+                    AnimatedPositioned(
+                      duration: slide,
+                      curve: Curves.easeOutCubic,
+                      left: slot * currentIndex + (slot - 52) / 2,
+                      top: 6,
+                      child: Transform.rotate(
+                        angle: -4 * math.pi / 180,
+                        child: Opacity(
+                          opacity: .7,
+                          child: Container(
+                            width: 52,
+                            height: 30,
+                            color: p.tape1,
+                          ),
                         ),
                       ),
+                    ),
+                    Row(
+                      children: [
+                        for (var i = 0; i < items.length; i++)
+                          Expanded(
+                            child: _NavButton(
+                              item: items[i],
+                              selected: i == currentIndex,
+                              polaroid: i == 0,
+                              onTap: () => onSelected(i),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

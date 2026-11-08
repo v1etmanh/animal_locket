@@ -132,4 +132,32 @@ void main() {
       expect(tester.hasRunningAnimations, isFalse);
     });
   });
+
+  testWidgets('card content sits on a transparent Material so taps show ink', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        SizedBox(
+          width: 300,
+          child: WashiPhotoCard(
+            header: InkWell(onTap: () {}, child: const Text('Cáo')),
+            photo: const ColoredBox(color: Colors.grey),
+            footer: const Text('24'),
+          ),
+        ),
+      ),
+    );
+    final inkHost = find.ancestor(
+      of: find.byType(InkWell),
+      matching: find.byWidgetPredicate(
+        (w) => w is Material && w.type == MaterialType.transparency,
+      ),
+    );
+    // The Material must sit inside the card (above its paper decoration).
+    expect(
+      find.descendant(of: find.byType(WashiPhotoCard), matching: inkHost),
+      findsOneWidget,
+    );
+  });
 }

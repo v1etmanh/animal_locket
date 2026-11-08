@@ -106,4 +106,14 @@ void main() {
     // Tiles grow with the text instead of clipping it.
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('theme tiles paint with Ink so taps show a splash', (
+    tester,
+  ) async {
+    await _pump(tester, const Scaffold(body: ThemePicker()));
+    expect(
+      find.descendant(of: find.byType(ThemePicker), matching: find.byType(Ink)),
+      findsNWidgets(4),
+    );
+  });
 }

@@ -43,19 +43,27 @@ class WashiPhotoCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AspectRatio(aspectRatio: 4 / 5, child: photo),
-                  const SizedBox(height: 12),
-                  header,
-                  if (caption != null) ...[const SizedBox(height: 6), caption!],
-                  const SizedBox(height: 8),
-                  footer,
-                ],
+            // Material trong suốt nằm trên lớp giấy để InkWell/InkResponse
+            // bên trong (hàng tác giả, con dấu) hiện hiệu ứng gợn khi chạm.
+            child: Material(
+              type: MaterialType.transparency,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AspectRatio(aspectRatio: 4 / 5, child: photo),
+                    const SizedBox(height: 12),
+                    header,
+                    if (caption != null) ...[
+                      const SizedBox(height: 6),
+                      caption!,
+                    ],
+                    const SizedBox(height: 8),
+                    footer,
+                  ],
+                ),
               ),
             ),
           ),

@@ -72,50 +72,54 @@ class _ThemeTile extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
+              // Ink (không phải Container) để hiệu ứng gợn của InkWell hiện
+              // trên nền giấy của ô.
+              ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 64),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: active.paper,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: selected ? active.accent : active.fold1,
-                    width: selected ? 2 : 1,
+                child: Ink(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: active.paper,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: selected ? active.accent : active.fold1,
+                      width: selected ? 2 : 1,
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      children: [
-                        for (final c in [
-                          own.background,
-                          own.fold1,
-                          own.tape1,
-                          own.accent,
-                        ])
-                          Container(
-                            width: 16,
-                            height: 16,
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: c,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: active.fold1),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          for (final c in [
+                            own.background,
+                            own.fold1,
+                            own.tape1,
+                            own.accent,
+                          ])
+                            Container(
+                              width: 16,
+                              height: 16,
+                              margin: const EdgeInsets.only(right: 4),
+                              decoration: BoxDecoration(
+                                color: c,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: active.fold1),
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _themeNames[id]!,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        _themeNames[id]!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (selected)

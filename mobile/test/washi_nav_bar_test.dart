@@ -149,4 +149,19 @@ void main() {
     await tester.pump();
     expect(tester.hasRunningAnimations, isFalse);
   });
+
+  testWidgets('bar surface is a paper Material so tab taps show ink', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_material(_bar(1)));
+    expect(
+      find.descendant(
+        of: find.byType(WashiNavBar),
+        matching: find.byWidgetPredicate(
+          (w) => w is Material && w.color == _palette.paper,
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
 }

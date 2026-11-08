@@ -239,35 +239,40 @@ class _PostCard extends ConsumerWidget {
       ),
       header: InkWell(
         onTap: () => context.push('/user/${post.author.publicId}'),
-        child: Row(
-          children: [
-            AnimalAvatar(
-              avatar: post.author.avatar,
-              leadAnimal: post.author.leadAnimal,
-              size: 40,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    post.author.displayAlias,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Text(
-                    _relativeTime(post.createdAt),
-                    style: TextStyle(fontSize: 12, color: p.muted),
-                  ),
-                ],
+        borderRadius: BorderRadius.circular(10),
+        // Vùng chạm tối thiểu 48pt (hướng dẫn Android).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              AnimalAvatar(
+                avatar: post.author.avatar,
+                leadAnimal: post.author.leadAnimal,
+                size: 40,
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.author.displayAlias,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _relativeTime(post.createdAt),
+                      style: TextStyle(fontSize: 12, color: p.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       caption: caption?.isNotEmpty == true
@@ -298,15 +303,42 @@ class _PostCard extends ConsumerWidget {
       ),
     );
 
-    // Thẻ hiện ra: trượt lên và nghiêng dần về góc của nó.
-    if (MediaQuery.disableAnimationsOf(context)) return card(1);
+    return _Entrance(postId: post.id, builder: card);
+  }
+}
+
+/// Bài đã chạy hiệu ứng xuất hiện trong phiên (theo ProviderScope), để thẻ
+/// cuộn ra khỏi màn rồi quay lại không chạy lại hiệu ứng.
+/// ponytail: Set lớn dần theo số bài đã xem trong phiên; vài nghìn id chuỗi là
+/// không đáng kể, cần thì giới hạn kích thước (LRU).
+final _shownEntrancesProvider = Provider<Set<String>>((ref) => <String>{});
+
+/// Thẻ hiện ra lần đầu: trượt lên và nghiêng dần về góc của nó.
+class _Entrance extends ConsumerStatefulWidget {
+  const _Entrance({required this.postId, required this.builder});
+  final String postId;
+  final Widget Function(double t) builder;
+
+  @override
+  ConsumerState<_Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends ConsumerState<_Entrance> {
+  // Quyết định một lần cho mỗi phần tử, để rebuild giữa chừng không cắt hiệu ứng.
+  late final bool _animate =
+      ref.read(_shownEntrancesProvider).add(widget.postId) &&
+      !MediaQuery.disableAnimationsOf(context);
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_animate) return widget.builder(1);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
       builder: (context, t, _) => Transform.translate(
         offset: Offset(0, 12 * (1 - t)),
-        child: Opacity(opacity: math.min(1, .4 + t), child: card(t)),
+        child: Opacity(opacity: math.min(1, .4 + t), child: widget.builder(t)),
       ),
     );
   }
