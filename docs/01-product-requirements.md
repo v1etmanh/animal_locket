@@ -1,5 +1,7 @@
 # 1. Yêu cầu sản phẩm (PRD)
 
+> **Cập nhật (ADR-014)**: yêu cầu "thay mặt người trong ảnh bằng mặt con vật" **đã bị bỏ**. Ảnh được đăng nguyên bản (chỉ bạn bè xem), app xoá EXIF/GPS trước khi upload; "khuôn mặt" con vật của mỗi người giờ là **avatar duy nhất** ([19-avatar-mechanism.md](19-avatar-mechanism.md)). Các mục liên quan bên dưới được đánh dấu ~~gạch ngang~~ hoặc ghi chú.
+
 ## 1.1 Tầm nhìn
 
 Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **không ai phải lộ mặt hay danh tính**. Mặt người trong ảnh được thay bằng mặt con vật, vừa bảo vệ riêng tư vừa tạo nét vui nhộn riêng. Người dùng kết bạn mới bằng cách quẹt thẻ người lân cận hoặc đang online.
@@ -9,7 +11,7 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 **Mục tiêu**
 1. Gửi/nhận ảnh trong vòng bạn bè nhanh như Locket.
 2. Không thể suy ra danh tính thật hoặc vị trí chính xác của người dùng từ bất kỳ dữ liệu nào app trả ra.
-3. Không có ảnh chứa mặt thật nào đến được người khác (bỏ sót mặt dưới 1% trên bộ test).
+3. ~~Không có ảnh chứa mặt thật nào đến được người khác (bỏ sót mặt dưới 1% trên bộ test).~~ Đã bỏ (ADR-014): ảnh chỉ đến được bạn bè; không còn ẩn mặt.
 4. Kết bạn với người lạ nhanh, nhưng có chặn/báo cáo và mặc định an toàn.
 
 **Không mục tiêu (giai đoạn đầu)**
@@ -48,7 +50,7 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 
 | ID | User story | Ưu tiên |
 |---|---|---|
-| B1 | Tôi có một con vật chủ đạo; nó là khuôn mặt thay thế trên ảnh của tôi | P0 |
+| B1 | Tôi có một avatar con vật duy nhất (không ai trùng); nó là "mặt" của tôi khi người khác thấy tôi ở thẻ, bài đăng, chat | P0 |
 | B2 | Tôi quay thưởng để nhận thêm con vật vào bộ sưu tập | P1 |
 | B3 | Là người dùng Pro, tôi chọn con vật chủ đạo từ bộ sưu tập; người dùng free chỉ có con vật ngẫu nhiên đã cấp | P1 |
 | B4 | Tôi mua gói con vật để mở rộng bộ sưu tập | P2 |
@@ -57,9 +59,9 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 
 | ID | User story | Ưu tiên |
 |---|---|---|
-| C1 | Tôi chụp/chọn ảnh và đăng; ảnh được xử lý ẩn mặt rồi mới hiện với bạn bè | P0 |
-| C2 | Trong lúc xử lý, tôi thấy ảnh ở trạng thái "đang xử lý"; bạn bè chưa thấy | P0 |
-| C3 | Nếu ảnh bị từ chối (nội dung vi phạm, lỗi xử lý), tôi nhận thông báo rõ ràng | P0 |
+| C1 | Tôi chụp/chọn ảnh và đăng; ảnh (đã xoá EXIF/GPS) hiện với bạn bè ngay sau khi upload xong. ~~Ảnh được xử lý ẩn mặt~~ (đã bỏ) | P0 |
+| C2 | Trong lúc upload, tôi thấy ảnh ở trạng thái "đang tải"; bạn bè chưa thấy | P0 |
+| C3 | Nếu ảnh bị từ chối (sai định dạng, quá cỡ), tôi nhận thông báo rõ ràng | P0 |
 | C4 | Tôi xem feed bài của bạn bè, mới nhất trước | P0 |
 | C5 | Tôi thả cảm xúc (like) và bình luận bài của bạn bè | P0 |
 | C6 | Tôi xoá bài của mình | P0 |
@@ -87,7 +89,7 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 | ID | User story | Ưu tiên |
 |---|---|---|
 | E1 | Tôi nhắn tin văn bản thời gian thực với bạn bè | P0 |
-| E2 | Tôi gửi ảnh trong chat; ảnh cũng được ẩn mặt | P1 |
+| E2 | Tôi gửi ảnh trong chat (cùng luồng upload, không ẩn mặt) | P1 |
 | E3 | Tôi chat với người lạ chỉ khi họ đã chấp nhận lời mời | P0 |
 | E4 | Khi tôi chặn ai, hội thoại bị cắt ngay | P0 |
 | E5 | Tôi thấy tin chưa đọc, đã đọc | P1 |
@@ -140,10 +142,10 @@ PENDING_MEDIA ──PHOTO_READY──► PUBLISHED ──xoá──► DELETED
 | Hạng mục | Mục tiêu |
 |---|---|
 | Hiệu năng API | p95 < 300 ms cho đọc thông thường; feed p95 < 500 ms |
-| Xử lý ảnh | p95 dưới 20 s với AI, dưới 3 s với sticker |
+| Đăng ảnh | Từ lúc upload xong tới khi bài `PUBLISHED`: p95 dưới 3 s |
 | Chat | Độ trễ gửi–nhận p95 < 500 ms trong cùng khu vực |
 | Sẵn sàng | 99,5% (giai đoạn đầu); các luồng fail closed ưu tiên đúng hơn sẵn sàng |
-| Chất lượng ẩn mặt | Bỏ sót mặt < 1% trên bộ ảnh test tự gán nhãn |
+| ~~Chất lượng ẩn mặt~~ | Đã bỏ (ADR-014). Thay bằng: ảnh trên kho không còn EXIF/GPS |
 | Bảo mật | Không lộ `sub`, email, SĐT, toạ độ chính xác qua bất kỳ API nào |
 | Quyền xoá dữ liệu | Hoàn tất xoá tài khoản trong tối đa 30 ngày, dữ liệu truy cập được xoá ngay (đề xuất) |
 | Khả năng mở rộng | Chạy nhiều instance mỗi service; chat dùng Redis pub/sub |
@@ -153,10 +155,10 @@ PENDING_MEDIA ──PHOTO_READY──► PUBLISHED ──xoá──► DELETED
 ## 1.8 Tiêu chí chấp nhận (mẫu cho các luồng cốt lõi)
 
 **Đăng ảnh (C1–C3)**
-- Cho ảnh có 1 mặt rõ: ảnh public không còn nhận diện được mặt gốc; vùng mặt khác hẳn ảnh gốc; EXIF rỗng.
-- Cho ảnh không có mặt: vẫn đăng, EXIF rỗng.
-- Face-worker chết giữa chừng: bài ở `PENDING_MEDIA`, không xuất hiện trong feed bạn bè; sau 3 lần retry vào DLQ và người đăng nhận thông báo lỗi.
-- Ảnh gốc bị xoá khỏi bucket `raw` sau xử lý thành công; mọi ảnh còn lại tự xoá sau tối đa 1 giờ.
+- Ảnh JPEG/PNG/HEIC từ điện thoại: ảnh trên kho có EXIF rỗng (không GPS); bài `PUBLISHED`, chỉ bạn bè xem được.
+- File sai định dạng hoặc quá 10 MB: bài `REJECTED`, người đăng nhận thông báo, được hoàn lượt ảnh; object bị xoá khỏi kho.
+- Chưa có `PHOTO_READY` (Kafka/Outbox gián đoạn): bài ở `PENDING_MEDIA`, không xuất hiện trong feed bạn bè.
+- Yêu cầu upload bị bỏ dở (không gọi `complete`) tự xoá sau tối đa 1 giờ.
 
 **Quẹt thẻ (D2–D4, D8)**
 - Bộ thẻ không chứa người đã là bạn, đã bị chặn, đã tắt khám phá, hoặc bị mình quẹt trái trong 30 ngày.

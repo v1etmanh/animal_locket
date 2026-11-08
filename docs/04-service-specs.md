@@ -64,28 +64,27 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ---
 
-## 4.4 media-service (8103, MySQL `media_db` + MinIO)
+## 4.4 media-service (8103, MySQL `media_db` + Cloudflare R2)
 
-**Trách nhiệm**: cấp biểu mẫu upload (presigned POST policy), theo dõi job ảnh, nhận kết quả từ face-worker, phát `PHOTO_*`, cấp URL xem ngắn hạn, dọn ảnh gốc.
+**Trách nhiệm**: cấp URL upload ký sẵn (presigned PUT), kiểm tra ảnh khi client báo xong, phát `PHOTO_READY/REJECTED`, cấp URL xem ngắn hạn, dọn job bỏ dở. **Không xử lý ảnh** (face-worker đã gỡ; client tự nén và xoá EXIF).
 
-**Dữ liệu**: `media_jobs` (trạng thái `PENDING_UPLOAD → UPLOADED → READY | REJECTED`), `owner_animals`, outbox/processed. MinIO: bucket `raw` (khoá `{mediaId}.{ext}`), `public` (khoá `pub/{mediaId}.jpg`).
+**Dữ liệu**: `media_jobs` (trạng thái `PENDING_UPLOAD → READY | REJECTED`), `owner_animals`, outbox/processed. R2: **một** bucket private (`R2_BUCKET`), khoá `{mediaId}.{ext}`; `publicKey` = `rawKey` (cùng object, không sao chép). Các cột `method`, `faces_detected`, `lead_animal` còn trong bảng nhưng không còn ý nghĩa (`method = "NONE"`, `faces_detected = 0`).
 
 **API**: `POST /media/uploads`, `POST /media/{id}/complete`, `GET /media/{id}`, `GET /media/{id}/url`; nội bộ `GET /internal/media/{id}`.
 
-**Event phát**: `PHOTO_UPLOADED`, `PHOTO_READY`, `PHOTO_REJECTED` (topic `media.events`, khoá = `mediaId`).
-**Event nhận** (group `media-service`): `FACE_PROCESSED`, `FACE_FAILED` (topic `media.results`); `USER_REGISTERED`, `LEAD_ANIMAL_CHANGED` → `owner_animals`; `USER_DELETED` → xoá job và object.
+**Event phát**: `PHOTO_READY`, `PHOTO_REJECTED` (topic `media.events`, khoá = `mediaId`).
+**Event nhận** (group `media-service`, topic `user.events`): `USER_REGISTERED`, `LEAD_ANIMAL_CHANGED` → `owner_animals` (bản sao hiện không được đọc ở đâu); `USER_DELETED` → xoá job và object.
 
 **Quy tắc**
 - Chỉ nhận `image/jpeg|png|webp|heic`, tối đa `animal.media.max-bytes` (10 MB), tối đa 60 yêu cầu upload/giờ/người (`UPLOAD_LIMIT`).
-- Biểu mẫu POST có điều kiện `key`, `Content-Type`, `content-length-range 1..max` và hết hạn sau 5 phút; client không thể tự chọn khoá hay vượt kích thước.
-- `complete`: kiểm tra object tồn tại (`409 NOT_UPLOADED` nếu chưa), con vật chủ đạo lấy từ `owner_animals` hoặc REST sang user-service, rồi phát `PHOTO_UPLOADED` (idempotent: gọi lại không phát thêm).
-- **Khác kế hoạch**: kế hoạch để face-worker phát thẳng `PHOTO_READY/REJECTED`. Code dùng **hai bước**: worker phát `FACE_PROCESSED/FACE_FAILED` lên `media.results`; media-service cập nhật job rồi phát `PHOTO_READY/REJECTED` qua Outbox, để trạng thái job và event luôn nhất quán.
+- `POST /media/uploads` trả `{mediaId, uploadUrl, headers, expiresInSeconds: 300}`. Client `PUT` file tới `uploadUrl` kèm đúng `headers` (`Content-Type`). R2 **không hỗ trợ presigned POST** nên không ràng buộc được cỡ file lúc upload.
+- `complete`: kiểm tra object tồn tại (`409 NOT_UPLOADED` nếu chưa), rồi kiểm tra lại cỡ và `Content-Type` thật của object (chữ ký PUT không khoá được hai thứ này). Sai → xoá object, job `REJECTED` (`FILE_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE`), phát `PHOTO_REJECTED`. Đúng → job `READY`, phát `PHOTO_READY`. Idempotent: gọi lại khi job đã khỏi `PENDING_UPLOAD` chỉ trả trạng thái.
 - Xem ảnh (`/url`): chủ ảnh, hoặc bạn bè **không bị chặn**; còn lại `404`. URL ký sẵn hiệu lực 10 phút.
-- Dọn dẹp định kỳ (`MediaJanitor`): job `UPLOADED` quá `processing-timeout` (10 phút) → `REJECTED/PROCESSING_TIMEOUT` + xoá raw; job `PENDING_UPLOAD` quá 1 giờ bị xoá; mọi object `raw` cũ hơn `raw-max-age` (1 giờ) bị xoá (quét mỗi 10 phút).
+- Dọn dẹp định kỳ (`MediaJanitor`, mỗi 60 giây, tắt bằng `animal.media.janitor.enabled=false`): job `PENDING_UPLOAD` quá 1 giờ bị xoá cùng object.
 
-**Cấu hình**: `minio.endpoint` (nội bộ) và `minio.public-endpoint` (địa chỉ điện thoại truy cập được, chữ ký gắn với host), `minio.access-key/secret-key`, `animal.media.*`.
+**Cấu hình**: `storage.endpoint` (`R2_ENDPOINT`, dạng `https://<account-id>.r2.cloudflarestorage.com`), `storage.region=auto`, `storage.access-key/secret-key` (`R2_ACCESS_KEY/R2_SECRET_KEY`), `storage.bucket` (`R2_BUCKET`), `animal.media.*`.
 
-**Khi lỗi**: user-service lỗi và thiếu bản sao con vật → `503`; worker chết → job tự `REJECTED` sau 10 phút (không bao giờ tự đăng).
+**Khi lỗi**: user-service lỗi khi xem ảnh của người khác → không cấp URL (fail closed). R2 lỗi → `complete` lỗi, client gọi lại được (idempotent).
 
 ---
 
@@ -103,8 +102,8 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 **Quy tắc**
 - Tạo bài từ `mediaId` đã upload. Bài ở `PENDING_MEDIA`; chuyển `PUBLISHED` khi `PHOTO_READY` và **chủ ảnh trùng tác giả** (sai → `REJECTED/OWNER_MISMATCH`). `PHOTO_READY` đến **trước** khi tạo bài được xử lý nhờ bảng `media_states`.
 - Hạn mức ảnh: free 10, Pro 50 mỗi ngày giờ Việt Nam; ảnh bị từ chối được hoàn lượt.
-- Chỉ tác giả và bạn bè thấy bài `PUBLISHED`; người khác nhận `404` (không lộ sự tồn tại). Chỉ lưu `publicKey` ảnh đã ẩn mặt và **không bao giờ** trả ra DTO.
-- Xoá bài: trạng thái `DELETED`, xoá like/bình luận. (Ảnh trong MinIO chưa được xoá — xem [14-roadmap-risks.md](14-roadmap-risks.md).)
+- Chỉ tác giả và bạn bè thấy bài `PUBLISHED`; người khác nhận `404` (không lộ sự tồn tại). Chỉ lưu `publicKey` của ảnh và **không bao giờ** trả ra DTO.
+- Xoá bài: trạng thái `DELETED`, xoá like/bình luận. (Ảnh trên R2 chưa được xoá — xem [14-roadmap-risks.md](14-roadmap-risks.md).)
 
 **Cấu hình**: `animal.limits.photos-per-day.free|pro` (10/50), `animal.kv.type`, `REDIS_HOST`.
 **Khi lỗi**: user-service lỗi → feed trả rỗng `degraded=true`; xem bài lẻ `404`.
@@ -206,11 +205,6 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ---
 
-## 4.10 face-worker (Python, không DB, cổng metrics 8110)
+## 4.10 face-worker — đã gỡ
 
-**Trách nhiệm**: biến `PHOTO_UPLOADED` thành ảnh đã ẩn mặt. Chi tiết ở [08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md).
-
-- Nhận `media.events` (group `face-worker`, commit thủ công sau khi xử lý xong), chỉ xử lý `PHOTO_UPLOADED`.
-- Phát `FACE_PROCESSED`/`FACE_FAILED` lên `media.results`; thông điệp lỗi hạ tầng sau 3 lần thử đi vào `media.events.dlq`.
-- Idempotent khi giao lại: nếu `pub/{mediaId}.jpg` đã tồn tại thì chỉ phát lại kết quả (đọc `method` và `faces` từ metadata object).
-- Cấu hình bằng biến môi trường (`KAFKA_BOOTSTRAP`, `MINIO_*`, `DETECTORS`, `AI_ENABLED`, ...).
+Worker Python ẩn mặt đã bị gỡ khỏi repo. media-service tự đánh dấu ảnh `READY` khi client báo upload xong (xem 4.4). Lịch sử thiết kế cũ ở [08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md).

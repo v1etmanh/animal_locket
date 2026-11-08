@@ -1,6 +1,6 @@
 # 8. Pipeline ẩn mặt (face-worker)
 
-> **ĐÃ NGỪNG DÙNG.** Tính năng ẩn mặt bằng AI đã bị gỡ khỏi hệ thống: `face-worker` không còn trong docker-compose, `media-service` chuyển ảnh thẳng từ bucket `raw` sang `public` khi nhận `complete` rồi phát `PHOTO_READY` (method `NONE`). Tài liệu bên dưới giữ lại để tham khảo, KHÔNG còn mô tả hành vi hiện tại. Xoá EXIF/GPS hiện do client làm (`keepExif: false`).
+> **ĐÃ NGỪNG DÙNG.** Tính năng ẩn mặt đã bị gỡ khỏi hệ thống: thư mục `face-worker/` không còn trong repo. Ảnh nằm trên **một** bucket Cloudflare R2 private; khi nhận `complete`, media-service kiểm tra object rồi đánh dấu `READY` và phát `PHOTO_READY` (`method = "NONE"`, không sao chép object). Khuôn mặt thật **hiển thị nguyên** cho bạn bè. Xoá EXIF/GPS do client làm (`keepExif: false`). Hành vi hiện tại: [04-service-specs.md](04-service-specs.md) §4.4; lý do: ADR-014 trong [15-adr.md](15-adr.md). Toàn bộ phần dưới chỉ là lịch sử thiết kế, **không** mô tả code hiện tại.
 
 Đây là tính năng cốt lõi và rủi ro lớn nhất của sản phẩm. Tài liệu mô tả **đúng những gì code trong `face-worker/` làm**, cách đo chất lượng và các giới hạn đã biết.
 

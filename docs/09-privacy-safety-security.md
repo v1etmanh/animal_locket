@@ -13,8 +13,8 @@ Tài liệu ánh xạ các cam kết ẩn danh/an toàn trong kế hoạch sang 
 | Không lộ người dùng có thật hay không | `404` thay vì `403` cho bài/ảnh/hồ sơ không được phép xem; hồ sơ giữa hai bên có chặn đều `404` |
 | Event/Kafka không chứa dữ liệu định danh | Payload chỉ `publicId` và mã nghiệp vụ; `MESSAGE_SENT` không chứa nội dung |
 | Push không lộ danh tính | Tiêu đề/nội dung chung chung (`NotificationPlanner`); `data` chỉ có `type`, `postId`/`conversationId`/`mediaId` |
-| Mặt thật không đến được người khác | Pipeline ẩn mặt + fail closed ([08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md)); `PostView` không có đường dẫn kho ảnh; ảnh xem qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè |
-| EXIF/GPS bị xoá | `decode_clean` tạo ảnh mới từ điểm ảnh, có test chứng minh |
+| ~~Mặt thật không đến được người khác~~ | **Không còn đảm bảo** (ADR-014): ảnh hiển thị nguyên khuôn mặt. Còn lại: chỉ chủ ảnh và bạn bè không bị chặn xem được; `PostView` không có đường dẫn kho ảnh; ảnh xem qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè |
+| EXIF/GPS bị xoá | **Chỉ ở client**: app nén lại ảnh với `keepExif: false` (`ImagePreparationService`). Server **không** kiểm tra — client sửa đổi có thể gửi ảnh kèm GPS |
 
 Quy tắc code (bắt buộc khi review): **mọi DTO mới trả cho người khác chỉ được chứa `publicId`, alias, con vật** hoặc dữ liệu của chính người gọi. Test `cardsNeverExposeCoordinatesOrDistancesInMeters` dùng reflection để bắt trường toạ độ trong `Card`; nên có test tương tự cho DTO mới.
 
@@ -93,7 +93,7 @@ Quy tắc code (bắt buộc khi review): **mọi DTO mới trả cho người k
 | Khoá gọi nội bộ | `INTERNAL_TOKEN` | Đổi khỏi mặc định |
 | Khoá offset vị trí | `DISCOVERY_SECRET` | ≥ 16 ký tự; **đổi sẽ làm toàn bộ offset đổi** — chỉ đổi cùng lúc xoá dữ liệu vị trí |
 | DB | `DB_USER`, `DB_PASSWORD` | Mỗi service một user chỉ có quyền trên DB của nó (production) |
-| MinIO | `MINIO_ACCESS_KEY/SECRET_KEY` | Tài khoản riêng cho worker/media-service, giới hạn theo bucket |
+| Cloudflare R2 | `R2_ACCESS_KEY/R2_SECRET_KEY` | Token chỉ có quyền *Object Read & Write* trên đúng bucket |
 | Config Server | `CONFIG_USER/CONFIG_PASSWORD` | |
 | Keycloak Admin | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service account chỉ có quyền xoá user |
 | FCM | `FCM_CREDENTIALS_FILE` | File khoá dịch vụ, mount read-only |
@@ -108,7 +108,7 @@ Cửa hàng ứng dụng yêu cầu với ứng dụng có nội dung người d
 ## 9.9 Điểm cần rà soát pháp lý (không phải tư vấn pháp lý)
 
 - **Trẻ vị thành niên**: kế hoạch cho phép mọi lứa tuổi. Nhiều khu vực yêu cầu độ tuổi tối thiểu và sự đồng ý của cha mẹ cho trẻ nhỏ (ví dụ 13 tuổi theo COPPA ở Mỹ, 13–16 theo GDPR tuỳ nước) và hạn chế dữ liệu vị trí/quảng cáo/tin nhắn với người lạ. Code chỉ **tự khai ngày sinh** (không xác minh). Cần luật sư rà soát trước khi phát hành, đặc biệt tính năng lân cận và chat với người lạ có liên quan trẻ em.
-- **Dữ liệu sinh trắc học**: xử lý khuôn mặt để che có thể bị coi là xử lý dữ liệu nhạy cảm ở một số luật (GDPR, BIPA…) dù không lưu khuôn mặt. Ảnh gốc xoá ngay, không gửi ra bên thứ ba — cần ghi vào chính sách quyền riêng tư.
+- **Ảnh có khuôn mặt người**: server không còn xử lý khuôn mặt (không phát hiện, không che), nhưng lưu ảnh có mặt thật — kể cả mặt của người khác không dùng app — trên Cloudflare R2 (bên thứ ba lưu trữ) tới khi xoá tài khoản. Cần ghi vào chính sách quyền riêng tư và cân nhắc quyền yêu cầu gỡ ảnh của người xuất hiện trong ảnh.
 - **Xoá dữ liệu / quyền của chủ thể dữ liệu**: App Store và Google Play yêu cầu xoá tài khoản trong ứng dụng; code đáp ứng luồng cơ bản (9.4) nhưng cần chốt thời hạn lưu `reports`, backup, log, Kafka.
 - **Lưu trữ dữ liệu tại Việt Nam**: cân nhắc quy định về lưu trữ/xuất dữ liệu nếu vận hành tại Việt Nam.
 - **Thanh toán**: tuân thủ chính sách in-app purchase của Apple/Google; người dưới 18 cần cơ chế đồng ý của phụ huynh do nền tảng cung cấp.

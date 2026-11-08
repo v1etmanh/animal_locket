@@ -33,10 +33,10 @@ Nguồn: các file Flyway `src/main/resources/db/migration/V1__init.sql` và ent
 
 | Bảng | Cột chính | Ghi chú |
 |---|---|---|
-| `media_jobs` | `id` (UUID), `owner_public_id`, `context` (`POST`/`CHAT`), `ref_id`, `raw_key`, `public_key`, `status` (`PENDING_UPLOAD`/`UPLOADED`/`READY`/`REJECTED`), `lead_animal`, `method` (`AI`/`STICKER`/`NONE`), `faces_detected`, `reject_reason`, `created_at`, `updated_at` | INDEX `owner_public_id`, `(status, updated_at)` |
-| `owner_animals` | `public_id` PK, `lead_animal` | Bản sao từ `USER_REGISTERED`/`LEAD_ANIMAL_CHANGED` |
+| `media_jobs` | `id` (UUID), `owner_public_id`, `context` (`POST`/`CHAT`), `ref_id`, `raw_key`, `public_key`, `status` (`PENDING_UPLOAD`/`READY`/`REJECTED`), `lead_animal`, `method`, `faces_detected`, `reject_reason`, `created_at`, `updated_at` | INDEX `owner_public_id`, `(status, updated_at)`. `public_key` = `raw_key`. `lead_animal` không còn được ghi; `method` luôn `NONE`, `faces_detected` luôn `0` (di sản face-worker) |
+| `owner_animals` | `public_id` PK, `lead_animal` | Bản sao từ `USER_REGISTERED`/`LEAD_ANIMAL_CHANGED`; hiện không được đọc |
 
-Mã `reject_reason` thường gặp: `FILE_TOO_LARGE`, `PROCESSING_TIMEOUT`, `UNREADABLE_IMAGE`, `IMAGE_TOO_LARGE`, `RAW_MISSING`, `PROCESSING_FAILED`.
+Mã `reject_reason`: `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE` (đặt bởi `complete`). Các mã cũ (`PROCESSING_TIMEOUT`, `UNREADABLE_IMAGE`, `RAW_MISSING`, `PROCESSING_FAILED`…) chỉ còn trong dữ liệu cũ.
 
 ## 5.3 post-service — MySQL `post_db`
 
@@ -115,20 +115,19 @@ Hai nhóm: khoá qua `KeyValueStore` (hạn mức, cache) và cấu trúc riêng
 
 `geo:*`, `geo:exp:*`, `online:*` tách theo nhóm tuổi để người lớn và người dưới 18 **không bao giờ thấy nhau**.
 
-## 5.8 MinIO
+## 5.8 Cloudflare R2 (kho ảnh)
 
 | Bucket | Khoá | Nội dung | Vòng đời |
 |---|---|---|---|
-| `raw` (private) | `{mediaId}.{jpg\|png\|webp\|heic}` | Ảnh gốc người dùng upload | Xoá ngay khi xử lý thành công; `MediaJanitor` xoá mọi object cũ hơn **1 giờ** (quét mỗi 10 phút); không sao lưu |
-| `public` (private, **không** public-read) | `pub/{mediaId}.jpg` | Ảnh đã ẩn mặt, đã xoá EXIF, kèm metadata `x-amz-meta-method`, `x-amz-meta-faces` | Chỉ phát qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè; xoá khi chủ tài khoản bị xoá |
+| `R2_BUCKET` (một bucket, private, **không** public-read) | `{mediaId}.{jpg\|png\|webp\|heic}` | Ảnh người dùng upload, giữ nguyên (client đã nén lại và xoá EXIF) | Chỉ phát qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè; bị xoá khi `complete` từ chối, khi job `PENDING_UPLOAD` quá 1 giờ (`MediaJanitor`), hoặc khi chủ tài khoản bị xoá. **Không** bị xoá khi xoá bài |
 
-Cả hai bucket do `MinioObjectStorage` tự tạo lúc khởi động nếu chưa có. MinIO lifecycle tối thiểu 1 ngày nên cam kết "tối đa 1 giờ" do `MediaJanitor` thực hiện, không phải lifecycle rule.
+Bucket phải được tạo sẵn trên R2 (`S3ObjectStorage` không tự tạo). Không có lifecycle rule.
 
 ## 5.9 Bảng tóm tắt lưu giữ dữ liệu
 
 | Dữ liệu | Thời gian giữ | Cơ chế |
 |---|---|---|
-| Ảnh gốc | ≤ 1 giờ (xoá ngay sau xử lý) | worker + `MediaJanitor` |
+| Ảnh (R2) | đến khi xoá tài khoản (xoá bài **không** xoá ảnh); upload bỏ dở ≤ 1 giờ | `MediaService.onUserDeleted` + `MediaJanitor` |
 | Vị trí đã làm nhiễu | 30 phút kể từ lần cập nhật cuối | `geo:exp` + job purge 60 giây |
 | Lượt quẹt trái | 30 ngày (key 35 ngày) | Redis TTL |
 | `outbox_events` đã đẩy | 1 ngày | `OutboxRelay.cleanup` |

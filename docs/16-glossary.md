@@ -16,12 +16,11 @@
 | **Gói con vật (animal pack)** | Vật phẩm mua lẻ: nhóm con vật thêm vào bộ sưu tập. |
 | **Pro** | Gói thuê bao: chọn con vật chủ đạo, nới hạn mức. |
 | **Entitlement (quyền lợi)** | Bản sao trạng thái Pro và vật phẩm đang có hiệu lực, cập nhật bằng event, cache ở Redis. |
-| **Raw bucket** | Bucket MinIO private chứa ảnh gốc chưa xử lý, tự xoá sau tối đa 1 giờ. |
-| **Public bucket** | Bucket chứa ảnh đã ẩn mặt, được phép phát cho bạn bè. |
-| **Face-worker** | Worker Python xử lý ảnh: xoá EXIF, phát hiện mặt, thay mặt. |
-| **Inpainting** | Kỹ thuật AI sinh lại một vùng ảnh (ở đây là vùng mặt) theo mặt nạ. |
-| **Sticker fallback** | Phương án dự phòng: chèn sticker 2D con vật lên bounding box của mặt. |
-| **Fail closed** | Khi lỗi thì từ chối/không đăng (áp dụng cho thanh toán, xác thực, ẩn mặt, vị trí). |
+| **R2** | Cloudflare R2, kho object tương thích S3; chứa ảnh người dùng trong **một** bucket private. |
+| **Avatar** | Hình con vật (con vật × màu × phụ kiện) gán duy nhất cho mỗi người, là "mặt" ẩn danh của họ (xem 19). |
+| **Face-worker** | (Đã gỡ) Worker Python cũ xử lý ảnh: xoá EXIF, phát hiện mặt, thay mặt. |
+| **Inpainting**, **Sticker fallback** | (Thuật ngữ của face-worker đã gỡ) AI sinh lại vùng mặt / chèn sticker 2D lên mặt. |
+| **Fail closed** | Khi lỗi thì từ chối/không đăng (áp dụng cho thanh toán, xác thực, quan hệ bạn bè, đăng ảnh, vị trí). |
 | **Fail soft** | Khi lỗi thì suy giảm nhẹ nhàng, app vẫn dùng được (feed, thông báo, gợi ý). |
 | **Outbox pattern** | Ghi event vào bảng `outbox` cùng transaction với dữ liệu nghiệp vụ, tiến trình riêng đẩy lên Kafka. Tránh mất event hoặc ghi đôi. |
 | **Idempotent consumer** | Consumer xử lý cùng một event nhiều lần vẫn cho kết quả như một lần (dựa vào `eventId`). |
@@ -29,5 +28,5 @@
 | **Geohash / ô lưới** | Cách chia bản đồ thành ô, dùng để làm tròn vị trí về ~500 m. |
 | **Trilateration** | Kỹ thuật kẻ tấn công dò vị trí thật bằng cách truy vấn từ nhiều điểm. Hệ thống có biện pháp chống. |
 | **Nhóm tuổi** | `MINOR` (dưới 18) hoặc `ADULT` (từ 18). Quyết định ghép thẻ và độ thô của vị trí. |
-| **Presigned URL** | URL upload/download có chữ ký, hết hạn ngắn, cho client truyền thẳng với MinIO. |
+| **Presigned URL** | URL upload/download có chữ ký, hết hạn ngắn, cho client truyền thẳng với R2 (upload bằng PUT, xem bằng GET). |
 | **Troik** | Cách gọi "Traefik" trong yêu cầu gốc. |

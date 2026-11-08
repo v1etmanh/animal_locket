@@ -84,13 +84,13 @@ Cộng thêm nền tảng chung (khung app, theme, `GlassContainer`, API client,
 **S02 – Con vật đầu tiên**: gọi `register` với `birthDate` (từ S11) và `alias` (tuỳ chọn; để trống thì server gợi ý). Nút xúc xắc đặt biệt danh ngẫu nhiên là **logic phía client** (API không có endpoint này; danh sách từ ghép do client giữ). Lỗi `INVALID_ALIAS`, `INVALID_BIRTHDATE` hiện ngay dưới ô nhập. Gọi lại `register` là an toàn (idempotent).
 
 **S03/S04 – Đăng ảnh** (luồng 5 bước trong tài liệu 06 §6.3):
-1. `POST /media/uploads {context:"POST", contentType, sizeBytes}` — ảnh ≤ 10 MB; nén/đổi cỡ phía client nếu lớn hơn.
-2. `POST <uploadUrl>` multipart gửi thẳng MinIO: các trường `fields` giữ nguyên văn, trường `file` **phải là trường cuối**; `Content-Type` phần file = `contentType` đã khai. Không gắn `Authorization` vào request này.
-3. `POST /media/{id}/complete`.
-4. `POST /posts {mediaId, caption≤200}` → bài `PENDING_MEDIA`.
-5. Hỏi `GET /media/{id}` định kỳ (2 s, tối đa ~60 s) hoặc nhận push; `READY` → bài `PUBLISHED`; `REJECTED` → hiện `rejectReason`, cho "Chụp lại".
+1. `POST /media/uploads {context:"POST", contentType, sizeBytes}` — ảnh ≤ 10 MB; client nén lại **và xoá EXIF/GPS** (`keepExif: false`) trước khi gửi.
+2. `PUT <uploadUrl>` thân là file, gửi thẳng Cloudflare R2, gắn đúng các `headers` nhận được (`Content-Type`). Không gắn `Authorization` vào request này.
+3. `POST /media/{id}/complete` → trả ngay `READY` hoặc `REJECTED` (`FILE_TOO_LARGE`/`UNSUPPORTED_MEDIA_TYPE`).
+4. `POST /posts {mediaId, caption≤200}` → bài `PENDING_MEDIA`, chuyển `PUBLISHED` khi post-service nhận `PHOTO_READY` (thường dưới vài giây).
+5. `REJECTED` → hiện `rejectReason`, cho "Chụp lại".
 
-Thanh "Đang đổi mặt thành <con vật> 68%": API **không trả phần trăm**. Dùng tiến trình giả (tiệm cận ~90% rồi đứng chờ) và ghi rõ đó là ước lượng. Chọn người nhận "Tất cả / từng bạn": **API tạo bài không có tham số người nhận** (bài hiển thị cho mọi bạn bè). Cần quyết định: bỏ phần chọn người nhận hoặc yêu cầu backend bổ sung (xem mục 7, câu hỏi Q1).
+~~Thanh "Đang đổi mặt thành <con vật> 68%"~~: không còn bước đổi mặt (ADR-014); chỉ cần tiến trình upload. Chọn người nhận "Tất cả / từng bạn": **API tạo bài không có tham số người nhận** (bài hiển thị cho mọi bạn bè). Cần quyết định: bỏ phần chọn người nhận hoặc yêu cầu backend bổ sung (xem mục 7, câu hỏi Q1).
 
 **S05 – Feed**: `GET /feed?limit=20`, trang kế bằng `before=nextBefore`. `degraded:true` → hiện banner "Đang tải chậm", không coi là lỗi. Ảnh lấy bằng `GET /media/{mediaId}/url` (URL hết hạn sau 600 s: cache theo `expiresInSeconds`, gọi lại khi hết hạn). `author.alias/leadAnimal` có thể `null` → hiện placeholder. Like là `PUT/DELETE` idempotent, cập nhật lạc quan và hoàn lại nếu lỗi. Bình luận phân trang `after`. Bài `PENDING_MEDIA`/`REJECTED` của mình xem qua `GET /posts/mine`.
 

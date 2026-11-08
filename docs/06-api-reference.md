@@ -86,26 +86,28 @@ AnimalView   {code, name, rarity: "COMMON|RARE|EPIC", packCode|null}
 
 ```
 1. POST /api/v1/media/uploads  {context, refId?, contentType, sizeBytes}
-        ← 201 {mediaId, uploadUrl, fields:{...}, expiresInSeconds: 300}
-2. POST <uploadUrl>   (multipart/form-data, gửi THẲNG tới MinIO qua Traefik, không qua gateway)
-        các trường của "fields" đúng nguyên văn, rồi trường "file" PHẢI LÀ TRƯỜNG CUỐI CÙNG
-        Content-Type của phần file = contentType đã khai báo; kích thước 1..10 MB
-        ← 204 từ MinIO
+        ← 201 {mediaId, uploadUrl, headers:{"Content-Type": ...}, expiresInSeconds: 300}
+2. PUT <uploadUrl>    (thân = file, gửi THẲNG tới Cloudflare R2, không qua gateway/Traefik)
+        gắn đúng các "headers" đã nhận; KHÔNG gắn Authorization của app
+        ← 200 từ R2
 3. POST /api/v1/media/{mediaId}/complete
-        ← 200 {mediaId, status:"UPLOADED"}     (phát PHOTO_UPLOADED)
-4. Hỏi trạng thái:  GET /api/v1/media/{mediaId}  →  UPLOADED → READY | REJECTED
-   (hoặc chờ push PHOTO_REJECTED; với POST thì bài tự chuyển PUBLISHED)
-5. Xem ảnh đã ẩn mặt:  GET /api/v1/media/{mediaId}/url  → {url, expiresInSeconds: 600}
+        ← 200 {mediaId, status:"READY", method:"NONE"}            (phát PHOTO_READY)
+           hoặc {status:"REJECTED", rejectReason:"FILE_TOO_LARGE"|"UNSUPPORTED_MEDIA_TYPE"}  (phát PHOTO_REJECTED)
+4. Với context=POST bài tự chuyển PUBLISHED khi post-service nhận PHOTO_READY
+   (GET /api/v1/media/{mediaId} để xem lại trạng thái)
+5. Xem ảnh:  GET /api/v1/media/{mediaId}/url  → {url, expiresInSeconds: 600}
 ```
+
+R2 không hỗ trợ presigned POST, nên lúc upload không ràng buộc được cỡ file; `complete` đọc cỡ và `Content-Type` thật của object rồi mới quyết định. Ảnh không qua xử lý nào ở server: client phải tự xoá EXIF/GPS trước khi upload.
 
 | Method & đường dẫn | Request | Response | Lỗi |
 |---|---|---|---|
-| `POST /media/uploads` | `{context: POST\|CHAT, refId?(≤64), contentType: image/jpeg\|png\|webp\|heic, sizeBytes(1..50_000_000)}` | `201 {mediaId, uploadUrl, fields, expiresInSeconds}` | `400 UNSUPPORTED_MEDIA_TYPE`, `400 FILE_TOO_LARGE` (> 10 MB), `429 UPLOAD_LIMIT` (60/giờ) |
-| `POST /media/{id}/complete` | — | `{mediaId, status, method, rejectReason}` | `409 NOT_UPLOADED`, `404`, `503 USER_SERVICE_UNAVAILABLE` |
+| `POST /media/uploads` | `{context: POST\|CHAT, refId?(≤64), contentType: image/jpeg\|png\|webp\|heic, sizeBytes(1..50_000_000)}` | `201 {mediaId, uploadUrl, headers, expiresInSeconds}` | `400 UNSUPPORTED_MEDIA_TYPE`, `400 FILE_TOO_LARGE` (> 10 MB), `429 UPLOAD_LIMIT` (60/giờ) |
+| `POST /media/{id}/complete` | — | `{mediaId, status, method, rejectReason}` | `409 NOT_UPLOADED`, `404` |
 | `GET /media/{id}` | — | `{mediaId, status, method, rejectReason}` | 404 (chỉ chủ ảnh) |
 | `GET /media/{id}/url` | — | `{url, expiresInSeconds}` | 404 (chưa `READY`, không phải chủ/bạn, hoặc bị chặn) |
 
-`status`: `PENDING_UPLOAD`, `UPLOADED`, `READY`, `REJECTED`. `method`: `AI`, `STICKER`, `NONE`.
+`status`: `PENDING_UPLOAD`, `READY`, `REJECTED`. `method`: luôn `NONE` khi `READY` (giữ trường cho tương thích; không còn ẩn mặt).
 
 ---
 
