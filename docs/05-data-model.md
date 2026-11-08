@@ -23,7 +23,7 @@ Nguồn: các file Flyway `src/main/resources/db/migration/V1__init.sql` và ent
 | `user_animals` | `public_id`, `animal_code`, `acquired_at` (legacy, không còn ghi khi đăng ký) | UNIQUE `(public_id, animal_code)` |
 | `avatar_pool` | `avatar_key` PK ("fox:0:none"), `lib_version`, `owner_public_id` (đã gán thì không về null), `assigned_at` | INDEX `owner_public_id`. Seed lúc khởi động từ avatar-lib (docs/19) |
 | `user_avatars` | `public_id`, `avatar_key`, `lib_version`, `source` (`REGISTER`/`BACKFILL`/`PURCHASE`/`ADMIN`), `source_ref`, `created_at` | UNIQUE `avatar_key` toàn bảng |
-| `spin_log` | `public_id`, `animal_code`, `spun_at` | INDEX `(public_id, spun_at)` |
+| `spin_log` | `public_id`, `animal_code`, `spun_at` | INDEX `(public_id, spun_at)`. Legacy: quay thưởng đã ngừng, bảng không còn được ghi |
 | `device_tokens` | `public_id`, `token` (255), `platform`, `updated_at` | UNIQUE `token` |
 | `entitlements` | `public_id` PK, `plan`, `expires_at` | Bản sao quyền lợi Pro từ event billing |
 
@@ -79,7 +79,9 @@ Số dư đổi bằng `UPDATE ... WHERE balance >= n` nguyên tử, kèm một 
 | `createdAt`, `lastMessageAt` | |
 | `lastReadAt` | map `publicId → Instant` (mốc đã đọc) |
 
-**`messages`**: `_id`, `conversationId`, `senderId`, `type` (`TEXT`/`IMAGE`), `text`, `mediaId`, `createdAt`. Chỉ mục ghép `conv_created` = `{conversationId:1, createdAt:-1}`. `auto-index-creation: true`.
+**`messages`**: `_id`, `conversationId`, `senderId`, `type` (`TEXT`/`IMAGE`/`GLYPH`), `text` (với GLYPH: nghĩa dự phòng), `mediaId`, `glyphIds`, `dictionaryRevision`, `clientId` (khử trùng lặp khi gửi lại), `createdAt`. Chỉ mục ghép `conv_created` = `{conversationId:1, createdAt:-1}`; unique `sender_client` = `{senderId:1, clientId:1}` (chỉ tin có `clientId`). `auto-index-creation: true`.
+
+**`conversation_glyphs`** (từ điển glyph mỗi hội thoại): `_id`, `conversationId`, `creatorPublicId`, `clientMutationId`, `meaning`, `color`, `normalizedPoints` (64 cặp x,y trong -1000..1000), `shapeHash`, `status` (`ACTIVE`/`ARCHIVED`), `revision`, `createdAt`, `archivedAt`. Chỉ mục unique: `(conversationId, creatorPublicId, clientMutationId)` (tạo idempotent), `(conversationId, revision)`, `(conversationId, shapeHash)` chỉ với `status=ACTIVE`; chỉ mục thường `(conversationId, status)`.
 
 Lưu ý: MongoDB lưu thời gian ở độ phân giải **mili-giây**; mốc đọc vì thế dùng thời điểm của tin mới nhất thực sự đã đọc, và mặc định "chưa đọc từ EPOCH".
 
@@ -103,11 +105,13 @@ Hai nhóm: khoá qua `KeyValueStore` (hạn mức, cache) và cấu trúc riêng
 | `friends:stale:{id}` | CSV | 1 giờ | post | Bản dự phòng khi user-service lỗi |
 | `rl:cards:{id}:{epochMinute}` | counter | 2 phút | discovery | Giới hạn 10 lần tìm/phút |
 | `chat:rl:{id}:{epoch/10s}` | counter | 30 giây | chat | Giới hạn 20 tin/10 giây |
+| `chat:glyph:rl:{id}:{epochDay UTC}` | counter | 2 ngày | chat | Số glyph đã tạo trong ngày (tối đa 20) |
+| `presence:{id}` | string (epoch giây) | 3 phút | discovery | Lần heartbeat cuối, ghi cho **mọi** người; bạn bè xem trạng thái online qua `/presence` |
 | `chat:rel:{a}:{b}` | `ok`/`no` | 30 giây | chat | Cache quan hệ bạn bè/chặn |
 | `chat:conn:{id}` | string | 90 giây | chat | Đang có kết nối WebSocket |
 | `geo:{MINOR\|ADULT}` | GEO | — | discovery | Vị trí đã làm nhiễu của từng người |
 | `geo:exp:{ageGroup}` | ZSET | — | discovery | `score` = thời điểm hết hạn (giây); job dọn xoá member hết hạn khỏi GEO |
-| `online:{ageGroup}` | ZSET | — | discovery | `score` = lần heartbeat cuối; "online" = trong 60 giây |
+| `online:{ageGroup}` | ZSET | — | discovery | `score` = lần heartbeat cuối; "online" = trong 60 giây. Chỉ chứa người **đang bật khám phá** (ứng viên bộ thẻ) |
 | `boost` | ZSET | — | discovery | `score` = thời điểm hết Boost |
 | `swipe:left:{me}` | ZSET | 35 ngày | discovery | Người đã quẹt trái (nhớ 30 ngày) |
 | `swipe:right:{me}` | SET | 35 ngày | discovery | Người đã quẹt phải |

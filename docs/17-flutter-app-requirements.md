@@ -67,7 +67,7 @@ Tổng **13 màn**: 10 màn trong thiết kế (S01–S10) và 3 màn thiết k�
 | S06 | Khám phá (`Discover`) | Khám phá | Chồng thẻ, quẹt trái/phải, Boost, còn N lượt, nút "Bạn bè (badge)" | `/discovery/*` | 5 |
 | S07 | Bạn bè & lời mời (`Friends`) | Khám phá | 3 tab Bạn bè / Lời mời / Đã gửi; chấp nhận, từ chối, huỷ; thẻ "N người đã quẹt phải bạn" (Pro) | `/friends/*` | 3 |
 | S08 | Chat (`Chat`)* | Chat | Danh sách hội thoại + màn trò chuyện thời gian thực, chưa đọc, gửi ảnh | `/chat/*`, `WS /ws/chat` | 8 |
-| S09 | Hồ sơ (`Profile`) | Hồ sơ | Avatar, thống kê, con vật đang dùng, bộ sưu tập, quay thưởng, đổi biệt danh | `/users/me*`, `/animals`, `spin` | 4 |
+| S09 | Hồ sơ (`Profile`) | Hồ sơ | Avatar, thống kê, bộ sưu tập, đổi biệt danh (quay thưởng đã ngừng) | `/users/me*`, `/animals` | 4 |
 | S10 | Paywall Pro (`Pro`) | — | Lợi ích Pro, chọn gói 1/6/12 tháng, mua, khôi phục giao dịch | `/billing/*` + store | 4 |
 | S11 | Ngày sinh & đồng ý điều khoản | — | Chọn ngày sinh (bắt buộc, quyết định nhóm tuổi), tick điều khoản | `POST /users/register` | 1 |
 | S12 | Cài đặt & riêng tư | Hồ sơ | Bật/tắt khám phá, danh sách đã chặn, đăng xuất, **xoá tài khoản** (xác nhận 2 bước) | `PATCH/DELETE /users/me`, `/blocks`, `/discovery/location` | 3 |
@@ -113,7 +113,7 @@ Cộng thêm nền tảng chung (khung app, theme, `GlassContainer`, API client,
 - Gửi ảnh: upload `context=CHAT, refId=<conversationId>`, đợi `READY` (hỏi `GET /media/{id}`), rồi gửi `IMAGE`. Nhận ảnh: `GET /media/{id}/url`. `MEDIA_NOT_READY (409)` → chờ và thử lại.
 - Tạo hội thoại từ S13/S07: `POST /chat/conversations {withPublicId}`; `403` → "Chỉ nhắn được với bạn bè".
 
-**S09 – Hồ sơ**: `GET /users/me`, `GET /users/me/animals`, `GET /animals` (đếm "5 / 24"). **Không có API thống kê** "Bạn bè", "Ảnh đã gửi": lấy bạn bè = `length` của `/friends`; "ảnh đã gửi" = số bài `PUBLISHED` từ `/posts/mine` (giới hạn `limit` 50 nên có thể thiếu → xem Q4, hoặc ẩn ô này). Quay thưởng: `POST /users/me/spin` → hoạt ảnh nhận con vật; `SPIN_COOLDOWN` hiện `nextSpinAt` từ lần trước (lưu cục bộ); `COLLECTION_COMPLETE` ẩn nút. Số "Còn 2 lượt" trong thiết kế **không có trong API** (chỉ có `nextSpinAt`): hiển thị theo thời gian chờ thay vì số lượt. Đổi con vật chủ đạo: `PUT /users/me/lead-animal`; Free nhận `402 PRO_REQUIRED` → S10; `ANIMAL_NOT_OWNED` → thông báo. Sửa biệt danh: `PATCH /users/me`; `ALIAS_COOLDOWN` hiện "chỉ đổi được 1 lần/24 giờ".
+**S09 – Hồ sơ**: `GET /users/me`, `GET /users/me/animals`, `GET /animals` (đếm "5 / 24"). **Không có API thống kê** "Bạn bè", "Ảnh đã gửi": lấy bạn bè = `length` của `/friends`; "ảnh đã gửi" = số bài `PUBLISHED` từ `/posts/mine` (giới hạn `limit` 50 nên có thể thiếu → xem Q4, hoặc ẩn ô này). ~~Quay thưởng (`POST /users/me/spin`) và đổi con vật chủ đạo (`PUT /users/me/lead-animal`)~~ — **đã ngừng**, server trả `410 FEATURE_RETIRED`; ẩn hai nút này. Hồ sơ hiển thị avatar duy nhất của người dùng (`avatar` trong `/users/me`, vẽ bằng `AnimalAvatar`, xem docs/19). Sửa biệt danh: `PATCH /users/me`; `ALIAS_COOLDOWN` hiện "chỉ đổi được 1 lần/24 giờ".
 
 **S10 – Paywall**: lấy `GET /billing/products` (sku/loại/số lượng) rồi hỏi store lấy **giá hiển thị thật** (giá trong thiết kế `[Giá tháng]`… là chỗ giữ chỗ — không hard-code giá). Mua xong → `POST /billing/purchases/verify {store: APPLE|GOOGLE, sku, token}`; **chỉ gọi `completePurchase` với store sau khi nhận 200**. "Khôi phục giao dịch" gọi lại `verify` cho từng giao dịch cũ. Sau thành công làm mới `/billing/me` và `/users/me` (`plan`). Xử lý `RECEIPT_ALREADY_USED`, `STORE_UNAVAILABLE` (thử lại), `INVALID_RECEIPT`. Tài khoản dưới 18 (`ageGroup=MINOR`): **không hiện** nút mua/ưu đãi gây áp lực (theo tài liệu 02 §2.7–2.8). Không dùng `store=DEV` trong bản phát hành.
 
@@ -127,7 +127,7 @@ Tất cả qua `API_BASE_URL/api/v1`. Chi tiết request/response/lỗi: tài li
 
 | Nhóm | Endpoint | Màn dùng |
 |---|---|---|
-| Hồ sơ | `POST /users/register`, `GET/PATCH/DELETE /users/me`, `GET /users/{publicId}`, `PUT /users/me/lead-animal`, `GET /users/me/animals`, `POST /users/me/spin`, `GET /animals` | S02, S09, S12, S13 |
+| Hồ sơ | `POST /users/register`, `GET/PATCH/DELETE /users/me`, `GET /users/{publicId}`, `GET /users/me/animals`, `GET /animals` (`PUT /users/me/lead-animal`, `POST /users/me/spin` đã ngừng → `410`) | S02, S09, S12, S13 |
 | Bạn bè | `GET /friends`, `DELETE /friends/{id}`, `GET /friends/requests/incoming|outgoing`, `POST /friends/requests`, `POST /friends/requests/{id}/accept|decline`, `DELETE /friends/requests/{id}` | S04, S07, S13 |
 | An toàn | `GET /blocks`, `PUT|DELETE /blocks/{id}`, `POST /reports` | S12, S13 |
 | Thiết bị | `PUT /devices`, `DELETE /devices/{token}` | khởi động, S12 |
@@ -246,8 +246,7 @@ Mỗi dòng là một test case tối thiểu; người nhận việc bổ sung 
 - T57 Tin quá 2000 ký tự bị chặn ở UI.
 
 **Hồ sơ & Pro (S09, S10, S12)**
-- T60 Quay thưởng thành công hiển thị con vật mới và vào bộ sưu tập; `SPIN_COOLDOWN` hiện thời gian chờ; `COLLECTION_COMPLETE` ẩn nút.
-- T61 Free đổi con vật chủ đạo → `PRO_REQUIRED` → mở S10; Pro đổi thành công, avatar cập nhật ngay.
+- ~~T60, T61 (quay thưởng, đổi con vật chủ đạo)~~ — đã ngừng; thay bằng: hồ sơ không có nút quay/đổi con vật, avatar hiển thị đúng `avatar` từ `/users/me`.
 - T62 Đổi biệt danh lần 2 trong 24 giờ → `ALIAS_COOLDOWN`.
 - T63 Mua Pro (sandbox): `verify` 200 → `plan=PRO`, giao dịch được kết thúc với store; `verify` lỗi → **không** kết thúc giao dịch, cho thử lại.
 - T64 Khôi phục giao dịch trên máy mới; `RECEIPT_ALREADY_USED` được xử lý.

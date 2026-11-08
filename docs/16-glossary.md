@@ -5,16 +5,16 @@
 | **Alias** | Tên hiển thị tự chọn của người dùng. Không phải tên thật, có thể đổi (có giới hạn tần suất). |
 | **publicId** | Mã định danh công khai, ngẫu nhiên (ULID/UUIDv4), không suy ra được từ `sub` Keycloak. Là định danh duy nhất được phép xuất hiện trong API, event gửi ra ngoài và URL. |
 | **sub** | Subject trong JWT Keycloak. Chỉ ánh xạ sang `publicId` bên trong user-service, không bao giờ trả ra ngoài. |
-| **Con vật chủ đạo (lead animal)** | Con vật người dùng đang dùng làm danh tính và là **khuôn mặt thay thế** trên ảnh của họ. |
-| **Bộ sưu tập con vật** | Các con vật người dùng sở hữu (qua quay thưởng, mua gói). |
-| **Quay thưởng (spin)** | Cơ chế nhận con vật mới ngẫu nhiên, có giới hạn lượt. |
+| **Con vật chủ đạo (lead animal)** | Con vật của avatar người dùng (`users.lead_animal`). Không còn đổi được, không còn dùng để thay mặt trên ảnh. |
+| **Bộ sưu tập con vật** | Các con vật người dùng sở hữu qua mua gói (`user_animals`; phần quay thưởng cũ đã ngừng). |
+| **Quay thưởng (spin)** | (Đã ngừng, `410 FEATURE_RETIRED`) Cơ chế nhận con vật mới ngẫu nhiên. Nay avatar chỉ quay một lần lúc đăng ký. |
 | **Thẻ (card)** | Một gợi ý kết bạn trong bộ thẻ quẹt: alias, con vật, khoảng cách theo mức. |
 | **Quẹt phải / trái** | Phải = gửi lời mời kết bạn (hoặc chấp nhận nếu bên kia đã quẹt phải). Trái = bỏ qua, ẩn thẻ trong một thời gian. |
 | **Match** | Hai người cùng quẹt phải, thành bạn ngay. |
 | **Boost** | Vật phẩm mua lẻ: được ưu tiên xuất hiện trong bộ thẻ của người khác 30 phút. |
 | **Lời mời ưu tiên** | Vật phẩm mua lẻ: lời mời kết bạn được đẩy lên đầu hàng đợi của người nhận. |
 | **Gói con vật (animal pack)** | Vật phẩm mua lẻ: nhóm con vật thêm vào bộ sưu tập. |
-| **Pro** | Gói thuê bao: chọn con vật chủ đạo, nới hạn mức. |
+| **Pro** | Gói thuê bao: nới hạn mức (ảnh, quẹt, lời mời). |
 | **Entitlement (quyền lợi)** | Bản sao trạng thái Pro và vật phẩm đang có hiệu lực, cập nhật bằng event, cache ở Redis. |
 | **R2** | Cloudflare R2, kho object tương thích S3; chứa ảnh người dùng trong **một** bucket private. |
 | **Avatar** | Hình con vật (con vật × màu × phụ kiện) gán duy nhất cho mỗi người, là "mặt" ẩn danh của họ (xem 19). |

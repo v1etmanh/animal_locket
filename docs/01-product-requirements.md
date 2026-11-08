@@ -51,8 +51,8 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 | ID | User story | Ưu tiên |
 |---|---|---|
 | B1 | Tôi có một avatar con vật duy nhất (không ai trùng); nó là "mặt" của tôi khi người khác thấy tôi ở thẻ, bài đăng, chat | P0 |
-| B2 | Tôi quay thưởng để nhận thêm con vật vào bộ sưu tập | P1 |
-| B3 | Là người dùng Pro, tôi chọn con vật chủ đạo từ bộ sưu tập; người dùng free chỉ có con vật ngẫu nhiên đã cấp | P1 |
+| B2 | ~~Tôi quay thưởng để nhận thêm con vật vào bộ sưu tập~~ — đã ngừng (`410 FEATURE_RETIRED`); avatar quay đúng một lần lúc đăng ký, quay thêm sẽ gắn với nạp tiền (docs/19 §8, chưa làm) | P1 |
+| B3 | ~~Là người dùng Pro, tôi chọn con vật chủ đạo từ bộ sưu tập~~ — đã ngừng; con vật hiển thị chính là avatar | P1 |
 | B4 | Tôi mua gói con vật để mở rộng bộ sưu tập | P2 |
 
 ### C. Ảnh và feed
@@ -122,9 +122,9 @@ Một nơi để bạn bè chia sẻ khoảnh khắc ảnh nhanh gọn, mà **kh
 
 1. **Chỉ bạn bè xem bài**: không có feed công khai.
 2. **Kết bạn**: quẹt phải tạo lời mời; nếu bên kia đã quẹt phải trước thì thành bạn ngay.
-3. **Ảnh chỉ đăng khi đã xử lý xong**; xử lý lỗi thì không đăng.
-4. **Thay hoàn toàn vùng mặt**, không blur.
-5. **Con vật thay mặt** là con vật chủ đạo của người đăng tại thời điểm upload. Mặt người khác trong ảnh dùng ngẫu nhiên hoặc cùng con vật.
+3. **Ảnh chỉ đăng khi upload đã được kiểm tra** (đúng chủ, đúng loại, ≤ 10 MB); sai thì không đăng.
+4. ~~Thay hoàn toàn vùng mặt, không blur~~ — đã bỏ (ADR-014).
+5. ~~Con vật thay mặt là con vật chủ đạo của người đăng~~ — đã bỏ; người dùng hiện ra bằng avatar duy nhất của họ.
 6. **Nhóm tuổi**: dưới 18 chỉ ghép với dưới 18; vị trí hiển thị thô hơn.
 7. **Chặn** có hiệu lực hai chiều: không thấy nhau trong thẻ, feed, chat.
 8. **Hạn mức** (ảnh, quẹt phải, lời mời) theo gói, đếm bằng Redis theo ngày UTC+7. Bảng số liệu ở [02-business-monetization.md](02-business-monetization.md).

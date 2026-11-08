@@ -117,6 +117,7 @@ R2 không hỗ trợ presigned POST, nên lúc upload không ràng buộc đư�
 |---|---|---|---|---|
 | `POST /posts` | Tạo bài từ `mediaId` đã upload | `{mediaId, caption?(≤200)}` | `201 PostView` (`PENDING_MEDIA` hoặc `PUBLISHED` nếu ảnh đã xong) | `403 FORBIDDEN` (ảnh của người khác), `429 PHOTO_LIMIT` |
 | `GET /posts/mine` | Bài của tôi (mọi trạng thái trừ `DELETED`) | `?limit` | `[PostView]` | |
+| `GET /posts/by/{publicId}` | Bài của một người, mới nhất trước (lưới "ảnh của tôi"/hồ sơ bạn). Chính mình: mọi trạng thái trừ `DELETED`, phân trang theo `createdAt`; bạn bè: chỉ `PUBLISHED`, theo `publishedAt` | `?before=&limit=30` (tối đa 50) | `{items:[PostView], nextBefore, degraded:false}` | `404` (không phải bạn, hoặc không xác minh được quan hệ) |
 | `GET /posts/{id}` | Xem bài | — | `PostView` | 404 (không phải tác giả/bạn, hoặc chưa `PUBLISHED`) |
 | `DELETE /posts/{id}` | Xoá bài (tác giả) | — | `204` | 404 |
 | `GET /feed` | Feed bạn bè + của tôi | `?before=&limit=20` | `{items:[PostView], nextBefore, degraded}` | — (lỗi bạn bè → `degraded:true`, `items:[]`) |

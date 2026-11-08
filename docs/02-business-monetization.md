@@ -16,12 +16,11 @@
 | Đăng ảnh / ngày | 10 | 50 |
 | Quẹt phải / ngày | 30 | 150 |
 | Lời mời kết bạn / ngày | 20 | 80 |
-| Con vật chủ đạo | Ngẫu nhiên được cấp lúc đăng ký | Chọn từ bộ sưu tập |
-| Quay thưởng | 1 lượt/tuần | 1 lượt/ngày |
+| Avatar | Một avatar duy nhất, quay một lần lúc đăng ký | Như Free (đổi con vật chủ đạo và quay thưởng **đã ngừng**; quay thêm sẽ gắn với nạp tiền, docs/19 §8) |
 | Hoàn tác quẹt trái | Không | Có (câu hỏi mở) |
 | Quảng cáo | Không (đề xuất giữ app sạch) | Không |
 
-Giá tham khảo (đề xuất): Pro tháng 49.000đ, năm 399.000đ.
+Giá tham khảo (đề xuất): Pro tháng 49.000đ, năm 399.000đ. **Lưu ý**: giá web đang seed trong code (migration billing V2/V4, giá tạm) khác: Pro tháng 79.000đ / 2,99 USD, năm 649.000đ / 24,99 USD — cần chốt một bộ giá.
 
 ## 2.3 Mua lẻ (consumable)
 

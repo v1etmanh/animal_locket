@@ -19,10 +19,11 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 | discovery-service | `/api/v1/discovery/**` (CB `discovery` + limiter chặt 2 req/s, burst 10) | `lb://discovery-service` |
 | chat-ws | `/ws/**` | `lb:ws://chat-service` |
 | chat-service | `/api/v1/chat/**` | `lb://chat-service` |
-| billing-service | `/api/v1/billing/**, /webhooks/**` | `lb://billing-service` |
+| billing-service | `/api/v1/billing/**, /webhooks/**, /pay/**` | `lb://billing-service` |
 
 - `/internal/**` **không có route** nên không bao giờ ra ngoài.
-- **Công khai (không JWT)**: `/actuator/health/**`, `/actuator/prometheus`, `/fallback/**`, `/webhooks/**`, mọi `OPTIONS`.
+- **Công khai (không JWT)**: `/actuator/health/**`, `/actuator/prometheus`, `/fallback/**`, `/webhooks/**`, `/pay/**` (trang thanh toán web), mọi `OPTIONS`.
+- **Rate limit** mặc định 20 req/s, burst 40 (khoá = `publicId` hoặc IP từ `X-Forwarded-For`).
 - **Lỗi**: user-service không trả lời và chưa có cache → `503 IDENTITY_UNAVAILABLE`; mạch mở → `503 SERVICE_UNAVAILABLE` (hoặc discovery trả rỗng).
 - **Cấu hình**: `KEYCLOAK_JWK_URI`, `REDIS_HOST/PORT`, `EUREKA_URL`, `INTERNAL_TOKEN`, `animal.security.enabled`.
 
@@ -36,29 +37,30 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.3 user-service (8101, MySQL `user_db`)
 
-**Trách nhiệm**: danh tính ẩn danh, kết bạn, chặn, báo cáo, bộ sưu tập con vật, quay thưởng, thiết bị push, bản sao quyền lợi Pro.
+**Trách nhiệm**: danh tính ẩn danh, **avatar con vật duy nhất** ([19-avatar-mechanism.md](19-avatar-mechanism.md)), kết bạn, chặn, báo cáo, gói con vật (bộ sưu tập cũ), thiết bị push, bản sao quyền lợi Pro.
 
-**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `spin_log`, `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
+**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `avatar_pool`, `user_avatars`, `spin_log` (legacy), `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
 
-**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, đổi con vật chủ đạo (Pro), con vật đã sở hữu, quay thưởng, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị.
+**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, bộ sưu tập avatar, con vật đã sở hữu, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị. `PUT /users/me/lead-animal` và `POST /users/me/spin` **đã ngừng** (`410 FEATURE_RETIRED`).
 **API nội bộ**: `identity/{sub}`, `users/{id}`, `users?ids=`, `friends/{id}`, `relationship`, `exclusions/{id}`, `swipes/right`, `devices/{id}`, `DELETE devices/{token}`.
 
-**Event phát** (Outbox): `USER_REGISTERED`, `USER_DELETED`, `USER_BLOCKED`, `LEAD_ANIMAL_CHANGED` (topic `user.events`); `FRIEND_REQUEST_RECEIVED`, `FRIEND_ACCEPTED` (topic `friend.events`).
-**Event nhận** (`billing.events`, group `user-service`): `SUBSCRIPTION_ACTIVATED/EXPIRED` → bảng `entitlements`; `CONSUMABLE_GRANTED` với `item=ANIMAL_PACK:<mã>` → thêm con vật của gói.
+**Event phát** (Outbox): `USER_REGISTERED` (kèm `avatar`), `USER_DELETED`, `USER_BLOCKED`, `DISCOVERY_DISABLED` (khi tắt `discoverable`), `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED` (khi cấp avatar cho tài khoản cũ) (topic `user.events`); `FRIEND_REQUEST_RECEIVED`, `FRIEND_ACCEPTED`, `FRIEND_REMOVED` (topic `friend.events`).
+**Event nhận** (`billing.events`, group `user-service`): `SUBSCRIPTION_ACTIVATED/EXPIRED` → bảng `entitlements`; `CONSUMABLE_GRANTED` với `item=ANIMAL_PACK:<mã>` → thêm con vật của gói vào `user_animals`.
 
 **Quy tắc nghiệp vụ chính**
 - Đăng ký idempotent theo `sub`. Ngày sinh → `ageGroup` (`MINOR` nếu dưới 18). Tuổi > 120 hoặc ngày sinh tương lai → `400 INVALID_BIRTHDATE`. Không chặn theo tuổi.
 - `discoverable` mặc định **false** cho mọi người.
-- Con vật đầu tiên: ngẫu nhiên trong nhóm COMMON của bộ cơ bản. Alias gợi ý dạng "`<Tên con vật> <Tính từ> <3 chữ số>`".
+- **Avatar**: lúc đăng ký "quay" đúng một lần — `AvatarAllocator` lấy ngẫu nhiên một avatar còn trống trong `avatar_pool` (UPDATE có điều kiện, nên không hai người trùng) trong cùng transaction; `lead_animal` = con vật của avatar. Alias gợi ý theo tên con vật đó nếu người dùng không nhập. Kho được nạp lúc khởi động (`AvatarPoolSeeder`, thư viện v1: 50 con × 10 màu × 6 phụ kiện = 3.000). Tài khoản cũ chưa có avatar được cấp lúc khởi động (`AvatarBackfill`). Avatar **không bao giờ thu hồi**, kể cả khi xoá tài khoản.
 - Alias: 3–20 ký tự (chữ, số, khoảng trắng, `_ . -`), chặn từ khoá (`admin`, `moderator`, `support`, `animallocket`, `staff` — so sánh sau khi bỏ dấu), đổi tối đa 1 lần/24 giờ.
-- Đổi con vật chủ đạo: cần Pro (`402 PRO_REQUIRED`) và đã sở hữu (`400 ANIMAL_NOT_OWNED`).
-- Quay thưởng: chọn theo trọng số COMMON 70 / RARE 25 / EPIC 5 trong bộ cơ bản chưa sở hữu; cooldown free 7 ngày, Pro 1 ngày.
+- Đổi con vật chủ đạo và quay thưởng miễn phí: **đã ngừng** (`410 FEATURE_RETIRED`); quay thêm sẽ gắn với nạp tiền (docs/19 §8, chưa làm).
+- **Dev buddy** (`DEV_BUDDY_PUBLIC_ID`, chỉ dev): nếu đặt, mỗi tài khoản mới tự thành bạn với tài khoản này. Để trống ở production.
 - `connect(from,to,source)` (dùng cho quẹt phải và lời mời): chặn → `BLOCKED`; khác nhóm tuổi → `403`; đã là bạn → `ALREADY_FRIENDS`; bên kia đã mời → `MATCHED` (thành bạn ngay, phát `FRIEND_ACCEPTED`); đã mời → `ALREADY_REQUESTED`; vượt hạn mức → `429 INVITE_LIMIT`; còn lại tạo/tái dùng lời mời → `REQUESTED` (phát `FRIEND_REQUEST_RECEIVED`).
 - Chặn: lưu `blocks`, xoá quan hệ bạn, huỷ lời mời đang chờ hai chiều, phát `USER_BLOCKED`. Hồ sơ người chặn/bị chặn trả `404` cho nhau.
-- Xoá tài khoản: xoá quan hệ/chặn/thiết bị/con vật/lượt quay/quyền lợi, ẩn danh bản ghi (`alias="deleted"`, `keycloak_sub="deleted:<publicId>"`, `birth_date=null`), phát `USER_DELETED`, gọi Keycloak Admin xoá user. Lỗi Keycloak → rollback (người dùng thử lại).
+- Huỷ kết bạn: xoá quan hệ, phát `FRIEND_REMOVED` (post xoá cache bạn bè, chat đóng hội thoại).
+- Xoá tài khoản: xoá quan hệ/chặn/thiết bị/con vật/lượt quay/quyền lợi (giữ avatar), ẩn danh bản ghi (`alias="deleted"`, `keycloak_sub="deleted:<publicId>"`, `birth_date=null`), phát `USER_DELETED`, gọi Keycloak Admin xoá user. Lỗi Keycloak → rollback (người dùng thử lại).
 - Báo cáo: tối đa 20/24 giờ. **Không xoá `reports` khi xoá tài khoản** (giữ cho an toàn/pháp lý).
 
-**Cấu hình**: `animal.limits.invites-per-day.free|pro` (20/80), `animal.limits.spin-interval.free|pro` (7d/1d), `keycloak.admin.url|realm|client-id|client-secret`, `DB_URL/DB_USER/DB_PASSWORD`, `KAFKA_BOOTSTRAP`.
+**Cấu hình**: `animal.limits.invites-per-day.free|pro` (20/80), `animal.limits.spin-interval.free|pro` (còn trong YAML, không còn dùng), `animal.dev-buddy.public-id` (`DEV_BUDDY_PUBLIC_ID`), `keycloak.admin.url|realm|client-id|client-secret`, `DB_URL/DB_USER/DB_PASSWORD`, `KAFKA_BOOTSTRAP`.
 
 **Khi lỗi**: Keycloak Admin không cấu hình → `NoopIdentityProviderClient` chỉ ghi cảnh báo (chỉ cho dev). Kafka tạm hỏng không ảnh hưởng ghi DB (event nằm trong outbox).
 
@@ -94,13 +96,13 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 **Dữ liệu**: `posts`, `post_likes`, `comments`, `media_states`, outbox/processed. Redis: `quota:photo:*`, `pro:*`, `friends:*`.
 
-**API**: tạo/xem/xoá bài, bài của tôi, feed (`before`, `limit`), like/unlike, bình luận (thêm/liệt kê/xoá).
+**API**: tạo/xem/xoá bài, bài của tôi, bài của một người (`/posts/by/{publicId}`, chỉ chính mình hoặc bạn bè), feed (`before`, `limit`), like/unlike, bình luận (thêm/liệt kê/xoá).
 
 **Event phát** (`post.events`): `POST_PUBLISHED`, `POST_LIKED` (không phát khi tự like), `POST_COMMENTED`.
-**Event nhận** (group `post-service`): `PHOTO_READY/REJECTED` (chỉ `context=POST`), `USER_DELETED`, `USER_BLOCKED` và `FRIEND_ACCEPTED` (xoá cache bạn bè), `SUBSCRIPTION_ACTIVATED/EXPIRED` (khoá `pro:{id}`).
+**Event nhận** (group `post-service`): `PHOTO_READY/REJECTED` (chỉ `context=POST`), `USER_DELETED`, `USER_BLOCKED`, `FRIEND_ACCEPTED` và `FRIEND_REMOVED` (xoá cache bạn bè), `SUBSCRIPTION_ACTIVATED/EXPIRED` (khoá `pro:{id}`).
 
 **Quy tắc**
-- Tạo bài từ `mediaId` đã upload. Bài ở `PENDING_MEDIA`; chuyển `PUBLISHED` khi `PHOTO_READY` và **chủ ảnh trùng tác giả** (sai → `REJECTED/OWNER_MISMATCH`). `PHOTO_READY` đến **trước** khi tạo bài được xử lý nhờ bảng `media_states`.
+- Tạo bài từ `mediaId` đã upload. Bài ở `PENDING_MEDIA`; chuyển `PUBLISHED` khi `PHOTO_READY` và **chủ ảnh trùng tác giả** (sai → `REJECTED/OWNER_MISMATCH`). `PHOTO_READY` đến **trước** khi tạo bài được xử lý nhờ bảng `media_states`; `PendingPostReconciler` (mỗi 3 giây, `animal.post.reconcile-interval-ms`) gỡ bài kẹt `PENDING_MEDIA` khi đã có kết quả trong `media_states` (cuộc đua giữa tạo bài và listener).
 - Hạn mức ảnh: free 10, Pro 50 mỗi ngày giờ Việt Nam; ảnh bị từ chối được hoàn lượt.
 - Chỉ tác giả và bạn bè thấy bài `PUBLISHED`; người khác nhận `404` (không lộ sự tồn tại). Chỉ lưu `publicKey` của ảnh và **không bao giờ** trả ra DTO.
 - Xoá bài: trạng thái `DELETED`, xoá like/bình luận. (Ảnh trên R2 chưa được xoá — xem [14-roadmap-risks.md](14-roadmap-risks.md).)
@@ -126,14 +128,15 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 **Trách nhiệm**: vị trí gần đúng, trạng thái online, bộ thẻ quẹt, lượt quẹt phải, Boost.
 
-**Dữ liệu (Redis)**: `geo:{ageGroup}`, `geo:exp:{ageGroup}`, `online:{ageGroup}`, `boost`, `swipe:left:{me}`, `swipe:right:{me}`, khoá hạn mức qua `KeyValueStore` ([05-data-model.md](05-data-model.md)).
+**Dữ liệu (Redis)**: `geo:{ageGroup}`, `geo:exp:{ageGroup}`, `online:{ageGroup}`, `presence:{id}`, `boost`, `swipe:left:{me}`, `swipe:right:{me}`, khoá hạn mức qua `KeyValueStore` ([05-data-model.md](05-data-model.md)).
 
 **API**: `PUT/DELETE /discovery/location`, `POST /heartbeat`, `GET /presence?ids=`, `GET /cards`, `POST /swipes`, `POST /boost`.
 
-**Event nhận** (group `discovery-service`): `USER_DELETED` → xoá mọi dấu vết; `SUBSCRIPTION_*` → khoá `pro:{id}`. `USER_BLOCKED`/`FRIEND_ACCEPTED` **không cần** xử lý vì danh sách loại trừ lấy trực tiếp từ user-service mỗi lần.
+**Event nhận** (group `discovery-service`): `USER_DELETED` → xoá mọi dấu vết; `DISCOVERY_DISABLED` → xoá vị trí, online và Boost (giữ lịch sử quẹt); `SUBSCRIPTION_*` → khoá `pro:{id}`. `USER_BLOCKED`/`FRIEND_ACCEPTED` **không cần** xử lý vì danh sách loại trừ lấy trực tiếp từ user-service mỗi lần.
 
 **Quy tắc**
 - Cập nhật vị trí chỉ khi hồ sơ đang `discoverable`; vị trí được làm tròn lưới 500 m, cộng độ lệch cố định theo người, TTL 30 phút; chỉ ghép trong cùng nhóm tuổi ([09-privacy-safety-security.md](09-privacy-safety-security.md)).
+- Heartbeat ghi `presence:{id}` cho mọi người (bạn bè xem qua `GET /presence`, chỉ trả trạng thái của bạn bè); chỉ người đang `discoverable` mới vào danh sách online của bộ thẻ.
 - **Bộ thẻ = người lân cận HOẶC đang online** (online = heartbeat trong 60 giây). Người online ngoài bán kính vẫn có thẻ nhưng **không có mức khoảng cách**. Bán kính: người lớn 10 km, dưới 18 5 km.
 - Loại trừ: chính mình, bạn bè, chặn hai chiều, đã quẹt trái trong 30 ngày, đã quẹt phải. Hồ sơ ứng viên được lấy **mới** từ user-service để lọc `active && discoverable && cùng nhóm tuổi`.
 - Sắp xếp: đang Boost → gần hơn → đang online → `publicId`.
@@ -148,16 +151,19 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.8 chat-service (8105, MongoDB + Redis)
 
-**Trách nhiệm**: hội thoại 1-1 giữa bạn bè, tin nhắn văn bản và ảnh, WebSocket thời gian thực.
+**Trách nhiệm**: hội thoại 1-1 giữa bạn bè, **chat bằng ký hiệu (glyph)** — mặc định là loại tin duy nhất được gửi mới —, tin văn bản/ảnh (tắt mặc định), từ điển glyph theo hội thoại, WebSocket thời gian thực. Kế hoạch chi tiết: [glyph-chat-implementation-plan/](glyph-chat-implementation-plan/).
 
-**Dữ liệu**: Mongo `conversations` (khoá duy nhất `a:b` theo thứ tự), `messages` (index `conversationId + createdAt desc`). Redis: pub/sub `chat:user:{id}`, `chat:conn:{id}`, `chat:rel:*`, `chat:rl:*`.
+**Dữ liệu**: Mongo `conversations` (khoá duy nhất `a:b` theo thứ tự), `messages` (index `conversationId + createdAt desc`), `conversation_glyphs` (từ điển glyph). Redis: pub/sub `chat:user:{id}`, `chat:conn:{id}`, `chat:rel:*`, `chat:rl:*`.
 
-**API**: REST (mở hội thoại, danh sách, lịch sử, gửi, đánh dấu đã đọc) và WebSocket `/ws/chat` ([06-api-reference.md](06-api-reference.md)).
+**API**: REST (mở hội thoại, danh sách, lịch sử, gửi, đánh dấu đã đọc), từ điển glyph `/chat/conversations/{id}/glyphs` (tạo, đồng bộ theo `afterRevision`, xem, archive) và WebSocket `/ws/chat` ([06-api-reference.md](06-api-reference.md)).
 
-**Event phát**: `MESSAGE_SENT` (topic `chat.events`, trực tiếp, không Outbox). **Event nhận** (group `chat-service`): `USER_BLOCKED` → đóng hội thoại và báo cả hai đầu; `FRIEND_ACCEPTED` → xoá cache quan hệ; `USER_DELETED` → xoá hội thoại và tin nhắn.
+**Event phát**: `MESSAGE_SENT` (topic `chat.events`, trực tiếp, không Outbox). **Event nhận** (group `chat-service`): `USER_BLOCKED` → đóng hội thoại và báo cả hai đầu; `FRIEND_ACCEPTED` → xoá cache quan hệ; `FRIEND_REMOVED` → đóng hội thoại (`UNFRIENDED`); `USER_DELETED` → xoá hội thoại và tin nhắn.
 
 **Quy tắc**
 - Chỉ mở/gửi khi `friends && !blocked` (cache 30 giây). Người lạ chỉ chat được sau khi **đã thành bạn** (lời mời được chấp nhận ≡ bạn bè).
+- Loại tin được gửi mới: `animal.chat.allowed-types` (`CHAT_ALLOWED_TYPES`, mặc định `GLYPH`); loại khác → `403 MESSAGE_TYPE_DISABLED`. Lịch sử TEXT/IMAGE vẫn đọc được.
+- Tin glyph: tối đa 12 glyph/tin, glyph phải `ACTIVE` trong từ điển của chính hội thoại; tin lưu kèm `dictionaryRevision` và trường `text` dự phòng (nghĩa các glyph nối bằng ` · `).
+- Từ điển glyph: glyph đã tạo **bất biến** (chỉ archive); hình được chuẩn hoá thành 64 điểm, trùng hình với glyph `ACTIVE` khác bị từ chối; tối đa 100 glyph `ACTIVE`/hội thoại, 20 lần tạo/người/ngày (UTC); màu thuộc bảng màu cấu hình. `revision` tăng dần mỗi hội thoại (max + 1, index unique, va chạm thì thử lại) để client đồng bộ delta. `GLYPH_WRITE_ENABLED=false` tắt tạo/archive/gửi glyph (rollback), vẫn đọc được.
 - Tin văn bản 1–2000 ký tự. Tin ảnh: `mediaId` phải của chính người gửi, `context=CHAT`, trạng thái `READY` (`INVALID_MEDIA`, `MEDIA_NOT_READY`).
 - Giới hạn 20 tin/10 giây/người (`CHAT_RATE_LIMIT`).
 - Xác thực WebSocket ngay lúc bắt tay: JWT (Spring Security) + `X-Public-Id` do gateway gắn; thiếu → `403`. Khung > 16 KB đóng kết nối.
