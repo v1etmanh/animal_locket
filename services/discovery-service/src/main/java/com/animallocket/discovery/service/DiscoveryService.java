@@ -160,7 +160,7 @@ public class DiscoveryService {
                         .thenComparing(p -> !onlineSet.contains(p.publicId()))
                         .thenComparing(Gateways.Profile::publicId))
                 .limit(size)
-                .map(p -> new DiscoveryDtos.Card(p.publicId(), p.alias(), p.leadAnimal(),
+                .map(p -> new DiscoveryDtos.Card(p.publicId(), p.alias(), p.leadAnimal(), p.avatar(),
                         distance.containsKey(p.publicId())
                                 ? LocationPrivacy.band(distance.get(p.publicId()), minor) : null,
                         onlineSet.contains(p.publicId()), boosted.contains(p.publicId())))

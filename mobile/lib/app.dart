@@ -1,3 +1,6 @@
+import 'package:animal_locket/core/avatar/avatar_library.dart';
+import 'package:animal_locket/core/config/backend_mode.dart';
+import 'package:animal_locket/core/network/api_client.dart';
 import 'package:animal_locket/core/router/app_router.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/features/devices/data/push_service.dart';
@@ -11,6 +14,7 @@ class AnimalLocketApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(pushBootstrapProvider);
+    ref.watch(avatarRemoteBootstrapProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
@@ -22,3 +26,12 @@ class AnimalLocketApp extends ConsumerWidget {
     );
   }
 }
+
+/// Cho phép tải thư viện avatar phiên bản mới (app chỉ đóng gói sẵn v1).
+final avatarRemoteBootstrapProvider = Provider<void>((ref) {
+  if (ref.watch(backendModeProvider) == BackendMode.demo) return;
+  final api = ref.watch(apiClientProvider);
+  AvatarLibraries.instance.remote = (version) async =>
+      (await api.get<Map<String, dynamic>>('/animals/avatar-lib/$version'))
+          .data!;
+});

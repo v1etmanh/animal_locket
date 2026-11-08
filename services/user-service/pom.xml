@@ -72,6 +72,19 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- Thư viện avatar dùng chung với mobile: libs/avatar-lib/avatar-lib.vN.json → classpath:avatar/ -->
+            <resource>
+                <directory>${project.basedir}/../../libs/avatar-lib</directory>
+                <targetPath>avatar</targetPath>
+                <includes>
+                    <include>avatar-lib.v*.json</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

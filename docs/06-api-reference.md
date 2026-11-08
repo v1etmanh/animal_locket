@@ -37,14 +37,16 @@ Mọi đường dẫn dưới đây đi qua gateway (`https://<domain>`) trừ p
 
 | Method & đường dẫn | Mô tả | Request | Response | Lỗi |
 |---|---|---|---|---|
-| `POST /users/register` | Đăng ký hồ sơ lần đầu (idempotent theo `sub`; gọi lại trả hồ sơ cũ) | `{alias?: string(3–20), birthDate: "YYYY-MM-DD"}` | `201` `MeProfile` | `400 INVALID_BIRTHDATE`, `INVALID_ALIAS` |
+| `POST /users/register` | Đăng ký hồ sơ lần đầu (idempotent theo `sub`; gọi lại trả hồ sơ cũ). Cấp một avatar duy nhất. | `{alias?: string(3–20), birthDate: "YYYY-MM-DD"}` | `201` `MeProfile` | `400 INVALID_BIRTHDATE`, `INVALID_ALIAS`, `503 AVATAR_POOL_EXHAUSTED`, `503 AVATAR_BUSY` |
 | `GET /users/me` | Hồ sơ của tôi | — | `MeProfile` | 404 |
 | `PATCH /users/me` | Đổi alias / bật-tắt khám phá | `{alias?, discoverable?}` | `MeProfile` | `400 INVALID_ALIAS`, `429 ALIAS_COOLDOWN` (1 lần/24 giờ) |
 | `DELETE /users/me` | Xoá tài khoản và dữ liệu | — | `204` | 503 nếu Keycloak lỗi |
 | `GET /users/{publicId}` | Hồ sơ công khai | — | `PublicProfile` | `404` nếu không tồn tại hoặc có chặn |
-| `PUT /users/me/lead-animal` | Đổi con vật chủ đạo | `{animalCode}` | `MeProfile` | `402 PRO_REQUIRED`, `400 ANIMAL_NOT_OWNED` |
-| `GET /users/me/animals` | Con vật đã sở hữu | — | `[AnimalView]` | |
-| `POST /users/me/spin` | Quay thưởng | — | `{animal: AnimalView, nextSpinAt}` | `429 SPIN_COOLDOWN`, `409 COLLECTION_COMPLETE` |
+| `PUT /users/me/lead-animal` | **Đã ngừng** (con vật hiển thị = avatar) | `{animalCode}` | — | `410 FEATURE_RETIRED` |
+| `GET /users/me/animals` | Con vật đã sở hữu (legacy) | — | `[AnimalView]` | |
+| `POST /users/me/spin` | **Đã ngừng** (avatar quay một lần lúc đăng ký) | — | — | `410 FEATURE_RETIRED` |
+| `GET /users/me/avatars` | Bộ sưu tập avatar (docs/19) | — | `[{avatar, source, acquiredAt}]` | |
+| `GET /animals/avatar-lib/{version}` | Thư viện avatar (JSON, `Cache-Control: immutable`) | — | JSON thư viện | `404` |
 | `GET /animals` | Danh mục con vật | — | `[AnimalView]` | |
 
 ```

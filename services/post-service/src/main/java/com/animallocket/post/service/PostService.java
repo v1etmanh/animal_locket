@@ -284,7 +284,8 @@ public class PostService {
     private PostDtos.PostView view(String me, Post p, Map<String, UserDirectory.Profile> profiles, Set<String> liked) {
         UserDirectory.Profile prof = profiles.get(p.getAuthorId());
         PostDtos.Author author = new PostDtos.Author(p.getAuthorId(),
-                prof == null ? null : prof.alias(), prof == null ? null : prof.leadAnimal());
+                prof == null ? null : prof.alias(), prof == null ? null : prof.leadAnimal(),
+                prof == null ? null : prof.avatar());
         return new PostDtos.PostView(p.getId(), author, p.getCaption(), p.getMediaId(), p.getStatus(),
                 p.getLikeCount(), p.getCommentCount(), liked.contains(p.getId()), p.getCreatedAt(), p.getPublishedAt());
     }
@@ -292,6 +293,7 @@ public class PostService {
     private PostDtos.CommentView commentView(Comment c, Map<String, UserDirectory.Profile> profiles) {
         UserDirectory.Profile prof = profiles.get(c.getAuthorId());
         return new PostDtos.CommentView(c.getId(), new PostDtos.Author(c.getAuthorId(),
-                prof == null ? null : prof.alias(), prof == null ? null : prof.leadAnimal()), c.getText(), c.getCreatedAt());
+                prof == null ? null : prof.alias(), prof == null ? null : prof.leadAnimal(),
+                prof == null ? null : prof.avatar()), c.getText(), c.getCreatedAt());
     }
 }

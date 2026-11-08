@@ -55,7 +55,7 @@ class DiscoveryServiceTest {
         final List<String> swipes = new ArrayList<>();
 
         void add(String id, String ageGroup, boolean discoverable) {
-            profiles.put(id, new Gateways.Profile(id, "alias-" + id, "fox", ageGroup, discoverable, true, false));
+            profiles.put(id, new Gateways.Profile(id, "alias-" + id, "fox", "1:fox:0:none", ageGroup, discoverable, true, false));
         }
 
         public Gateways.Profile profile(String id) {

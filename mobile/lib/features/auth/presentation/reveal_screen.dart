@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:math';
 
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
+import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
@@ -34,10 +35,32 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Mã đang hiện trong lúc chạy hiệu ứng quay; null = đã dừng ở avatar thật.
+  String? _spinning;
+  Timer? _spinTimer;
+
   @override
   void dispose() {
+    _spinTimer?.cancel();
     _alias.dispose();
     super.dispose();
+  }
+
+  /// Hiệu ứng quay ~1,2 giây rồi dừng ở avatar server đã cấp (kết quả có trước khi hiệu ứng chạy).
+  void _playSpin() {
+    final random = Random();
+    var ticks = 0;
+    _spinTimer?.cancel();
+    _spinTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
+      if (!mounted) return timer.cancel();
+      ticks++;
+      setState(() {
+        _spinning = ticks >= 15
+            ? null
+            : AvatarLibraries.instance.randomCodeForAnimation(random);
+      });
+      if (ticks >= 15) timer.cancel();
+    });
   }
 
   Future<void> _register() async {
@@ -49,7 +72,10 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
       final profile = await ref
           .read(authControllerProvider.notifier)
           .registerProfile(birthDate: widget.birthDate, alias: _alias.text);
-      if (mounted) setState(() => _profile = profile);
+      if (mounted) {
+        setState(() => _profile = profile);
+        _playSpin();
+      }
     } on ApiProblem catch (problem) {
       if (mounted) {
         setState(() {
@@ -63,15 +89,23 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final leadAnimal = _profile?.leadAnimal;
-    final emoji = const AnimalAssetResolver().emojiFor(leadAnimal);
+    final profile = _profile;
+    final spinning = _spinning != null;
+    final animalName =
+        AvatarLibraries.instance.animalName(profile?.avatar) ??
+        profile?.leadAnimal;
     return AppPage(
       child: Column(
         children: [
           const SizedBox(height: 28),
-          const SectionLabel('Con vật đầu tiên của bạn'),
+          const SectionLabel('Avatar của riêng bạn'),
           const SizedBox(height: 22),
-          AnimalAvatar(emoji: emoji, size: 184),
+          AnimalAvatar(
+            avatar: _spinning ?? profile?.avatar,
+            leadAnimal: profile?.leadAnimal,
+            locked: profile == null,
+            size: 184,
+          ),
           const SizedBox(height: 22),
           Text(
             _profile == null
@@ -84,7 +118,10 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
           Text(
             _profile == null
                 ? 'Biệt danh của bạn không cần là tên thật.'
-                : 'Con vật chủ đạo: ${leadAnimal ?? 'đang cập nhật'}',
+                : spinning
+                ? 'Đang quay…'
+                : '${animalName ?? 'Con vật'} · không ai khác có avatar này',
+            textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.muted),
           ),
           const SizedBox(height: 32),
@@ -110,10 +147,10 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
           const SizedBox(height: 18),
           GradientButton(
             label: _profile == null
-                ? (_busy ? 'Đang đăng ký…' : 'Nhận con vật')
+                ? (_busy ? 'Đang đăng ký…' : 'Quay avatar')
                 : 'Vào app',
             icon: Icons.arrow_forward_rounded,
-            onPressed: _busy
+            onPressed: _busy || spinning
                 ? null
                 : _profile == null
                 ? _register

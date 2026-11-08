@@ -14,7 +14,8 @@ public final class PostDtos {
     public record CreatePostRequest(@NotBlank @Size(max = 36) String mediaId, @Size(max = 200) String caption) {
     }
 
-    public record Author(String publicId, String alias, String leadAnimal) {
+    /** {@code avatar} = "v:animal:palette:accessory", client tự vẽ (docs/19-avatar-mechanism.md). */
+    public record Author(String publicId, String alias, String leadAnimal, String avatar) {
     }
 
     public record PostView(String id, Author author, String caption, String mediaId, Post.Status status,

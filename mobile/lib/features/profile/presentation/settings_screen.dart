@@ -1,4 +1,3 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
@@ -72,9 +71,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Row(
                               children: [
                                 AnimalAvatar(
-                                  emoji: AnimalAssetResolver.emoji(
-                                    person.leadAnimal,
-                                  ),
+                                  avatar: person.avatar,
+                                  leadAnimal: person.leadAnimal,
                                   size: 46,
                                 ),
                                 const SizedBox(width: 12),

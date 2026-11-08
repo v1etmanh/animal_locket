@@ -1,4 +1,3 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
@@ -69,15 +68,25 @@ class _ConversationTile extends ConsumerWidget {
           height: 58,
           child: Center(child: LinearProgressIndicator()),
         ),
-        error: (_, _) => _row(context, conversation.withPublicId, null),
-        data: (person) => _row(context, person.displayAlias, person.leadAnimal),
+        error: (_, _) => _row(context, conversation.withPublicId, null, null),
+        data: (person) => _row(
+          context,
+          person.displayAlias,
+          person.leadAnimal,
+          person.avatar,
+        ),
       ),
     );
   }
 
-  Widget _row(BuildContext context, String alias, String? animal) => Row(
+  Widget _row(
+    BuildContext context,
+    String alias,
+    String? animal,
+    String? avatar,
+  ) => Row(
     children: [
-      AnimalAvatar(emoji: AnimalAssetResolver.emoji(animal), size: 58),
+      AnimalAvatar(avatar: avatar, leadAnimal: animal, size: 58),
       const SizedBox(width: 12),
       Expanded(
         child: Column(

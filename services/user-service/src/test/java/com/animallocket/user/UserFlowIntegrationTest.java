@@ -250,25 +250,41 @@ class UserFlowIntegrationTest {
     }
 
     @Test
-    void leadAnimalRequiresPro() throws Exception {
+    void registerGivesAvatarThatShowsEverywhere() throws Exception {
         String a = register("1995-01-01");
-        mvc.perform(as(put("/api/v1/users/me/lead-animal"), a).content("{\"animalCode\":\"cat\"}"))
-                .andExpect(status().isPaymentRequired());
+        String b = register("1995-01-01");
+        JsonNode me = body(mvc.perform(as(get("/api/v1/users/me"), a)).andExpect(status().isOk()).andReturn());
+        String avatar = me.get("avatar").asText();
+        assertTrue(avatar.matches("1:[a-z]+:[0-9]:[a-z]+"), avatar);
+        assertEquals(avatar.split(":")[1], me.get("leadAnimal").asText(), "leadAnimal = con vật của avatar");
 
-        entitlements.save(new Entitlement(a, "PRO", Instant.now().plusSeconds(3600)));
-        // Pro nhưng chưa sở hữu con "lion".
-        mvc.perform(as(put("/api/v1/users/me/lead-animal"), a).content("{\"animalCode\":\"lion\"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ANIMAL_NOT_OWNED"));
+        mvc.perform(as(get("/api/v1/users/" + a), b)).andExpect(jsonPath("$.avatar").value(avatar));
+        mvc.perform(get("/internal/users/" + a).header(Headers.INTERNAL_TOKEN, "dev-internal-token"))
+                .andExpect(jsonPath("$.avatar").value(avatar));
+        mvc.perform(as(get("/api/v1/users/me/avatars"), a)).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].avatar").value(avatar)).andExpect(jsonPath("$[0].source").value("REGISTER"));
+        assertTrue(outbox.findAll().stream().anyMatch(e -> e.getType().equals("USER_REGISTERED")
+                && e.getKey().equals(a) && e.getPayload().contains(avatar)));
     }
 
     @Test
-    void spinGivesNewAnimalThenCoolsDown() throws Exception {
+    void oldFreeSpinAndLeadAnimalSwitchAreRetired() throws Exception {
         String a = register("1995-01-01");
-        mvc.perform(as(post("/api/v1/users/me/spin"), a)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.animal.code").exists());
-        mvc.perform(as(post("/api/v1/users/me/spin"), a)).andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.code").value("SPIN_COOLDOWN"));
-        mvc.perform(as(get("/api/v1/users/me/animals"), a)).andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(as(post("/api/v1/users/me/spin"), a)).andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("FEATURE_RETIRED"));
+        mvc.perform(as(put("/api/v1/users/me/lead-animal"), a).content("{\"animalCode\":\"cat\"}"))
+                .andExpect(status().isGone());
+    }
+
+    @Test
+    void avatarLibraryIsServedAndCacheable() throws Exception {
+        mvc.perform(get("/api/v1/animals/avatar-lib/1").with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.palettes.length()").value(10))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Cache-Control", org.hamcrest.Matchers.containsString("immutable")));
+        mvc.perform(get("/api/v1/animals/avatar-lib/99").with(jwt())).andExpect(status().isNotFound());
     }
 
     @Test

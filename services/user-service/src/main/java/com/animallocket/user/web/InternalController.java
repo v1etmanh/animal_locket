@@ -105,7 +105,8 @@ public class InternalController {
     }
 
     private Dtos.InternalUser toInternal(UserAccount u) {
-        return new Dtos.InternalUser(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.getAgeGroup().name(),
+        return new Dtos.InternalUser(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.avatarCode(),
+                u.getAgeGroup().name(),
                 u.isDiscoverable(), u.isActive(), entitlements.isPro(u.getPublicId()));
     }
 }

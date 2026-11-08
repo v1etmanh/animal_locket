@@ -1,4 +1,3 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
@@ -129,7 +128,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                                 ),
                               ),
                             AnimalAvatar(
-                              emoji: AnimalAssetResolver.emoji(card.leadAnimal),
+                              avatar: card.avatar,
+                              leadAnimal: card.leadAnimal,
                               size: 190,
                             ),
                             const SizedBox(height: 24),

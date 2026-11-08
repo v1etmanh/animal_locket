@@ -2,6 +2,7 @@ package com.animallocket.user.dto;
 
 import com.animallocket.user.domain.Animal;
 import com.animallocket.user.domain.Report;
+import com.animallocket.user.domain.UserAccount;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
@@ -25,11 +26,18 @@ public final class Dtos {
     public record LeadAnimalRequest(@NotBlank String animalCode) {
     }
 
-    public record MeProfile(String publicId, String alias, String leadAnimal, String ageGroup,
+    /** {@code avatar} = "v:animal:palette:accessory", duy nhất toàn hệ thống (docs/19-avatar-mechanism.md). */
+    public record MeProfile(String publicId, String alias, String leadAnimal, String avatar, String ageGroup,
                             boolean discoverable, String plan, Instant createdAt) {
     }
 
-    public record PublicProfile(String publicId, String alias, String leadAnimal) {
+    public record PublicProfile(String publicId, String alias, String leadAnimal, String avatar) {
+        public static PublicProfile of(UserAccount u) {
+            return new PublicProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.avatarCode());
+        }
+    }
+
+    public record AvatarView(String avatar, String source, Instant acquiredAt) {
     }
 
     public record AnimalView(String code, String name, Animal.Rarity rarity, String packCode) {
@@ -62,7 +70,7 @@ public final class Dtos {
     public record IdentityResponse(String publicId) {
     }
 
-    public record InternalUser(String publicId, String alias, String leadAnimal, String ageGroup,
+    public record InternalUser(String publicId, String alias, String leadAnimal, String avatar, String ageGroup,
                                boolean discoverable, boolean active, boolean pro) {
     }
 

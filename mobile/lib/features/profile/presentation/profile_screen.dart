@@ -1,11 +1,9 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
+import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/models/common_models.dart';
-import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
-import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,7 +51,8 @@ class _ProfileContent extends ConsumerWidget {
         ),
       ),
       AnimalAvatar(
-        emoji: AnimalAssetResolver.emoji(data.profile.leadAnimal),
+        avatar: data.profile.avatar,
+        leadAnimal: data.profile.leadAnimal,
         size: 130,
       ),
       const SizedBox(height: 14),
@@ -83,8 +82,8 @@ class _ProfileContent extends ConsumerWidget {
         children: [
           Expanded(
             child: _Stat(
-              value: '${data.owned.length} / ${data.catalog.length}',
-              label: 'Con vật',
+              value: '${data.avatars.length}',
+              label: 'Avatar sở hữu',
             ),
           ),
         ],
@@ -97,47 +96,28 @@ class _ProfileContent extends ConsumerWidget {
           style: Theme.of(context).textTheme.headlineMedium,
         ),
       ),
+      const SizedBox(height: 6),
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.',
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      ),
       const SizedBox(height: 12),
       Wrap(
         spacing: 13,
         runSpacing: 13,
         children: [
-          for (final animal in data.owned)
-            GestureDetector(
-              onTap: () => ref
-                  .read(profileControllerProvider.notifier)
-                  .setLeadAnimal(animal.code),
-              child: Tooltip(
-                message: '${animal.name} · ${animal.rarityLabel}',
-                child: AnimalAvatar(
-                  emoji: AnimalAssetResolver.emoji(animal.code),
-                  size: 72,
-                ),
-              ),
+          for (final owned in data.avatars)
+            Tooltip(
+              message:
+                  AvatarLibraries.instance.animalName(owned.avatar) ??
+                  owned.avatar,
+              child: AnimalAvatar(avatar: owned.avatar, size: 72),
             ),
-          for (
-            var index = data.owned.length;
-            index < data.catalog.length;
-            index++
-          )
-            const AnimalAvatar(emoji: '', size: 72, locked: true),
         ],
       ),
-      const SizedBox(height: 24),
-      GradientButton(
-        label: 'Quay con vật mới',
-        green: true,
-        icon: Icons.casino_outlined,
-        onPressed: () => _spin(context, ref),
-      ),
-      if (data.lastSpin?.nextSpinAt != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            'Lượt tiếp theo: ${data.lastSpin!.nextSpinAt!.toLocal()}',
-            style: const TextStyle(color: AppColors.muted, fontSize: 11),
-          ),
-        ),
       const SizedBox(height: 12),
       if (data.profile.ageGroup == AgeGroup.adult &&
           data.profile.plan != AccountPlan.pro)
@@ -147,33 +127,6 @@ class _ProfileContent extends ConsumerWidget {
         ),
     ],
   );
-
-  Future<void> _spin(BuildContext context, WidgetRef ref) async {
-    try {
-      final result = await ref.read(profileControllerProvider.notifier).spin();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Bạn nhận được ${result.animal.name} · ${result.animal.rarityLabel}!',
-            ),
-          ),
-        );
-      }
-    } on ApiProblem catch (problem) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              problem.code == 'SPIN_COOLDOWN'
-                  ? 'Chưa đến lượt quay tiếp theo.'
-                  : 'Không thể quay lúc này.',
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _editAlias(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController(text: data.profile.alias);
