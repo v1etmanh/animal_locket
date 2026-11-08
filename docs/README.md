@@ -25,6 +25,10 @@ Animal Locket là ứng dụng chia sẻ ảnh nhanh giữa bạn bè (kiểu Lo
 | 14 | [14-roadmap-risks.md](14-roadmap-risks.md) | Lộ trình theo giai đoạn, rủi ro, câu hỏi còn mở | PM, chủ dự án |
 | 15 | [15-adr.md](15-adr.md) | Nhật ký quyết định kiến trúc (ADR) | Dev, kiến trúc sư |
 | 16 | [16-glossary.md](16-glossary.md) | Thuật ngữ | Mọi người |
+| 17 | [17-flutter-app-requirements.md](17-flutter-app-requirements.md) | Yêu cầu Flutter mobile | Mobile dev, QA |
+| 18 | [18-mobile-integration-brief.md](18-mobile-integration-brief.md) | Biên tích hợp mobile/backend | Mobile dev, backend dev |
+| 19 | [19-avatar-mechanism.md](19-avatar-mechanism.md) | Cơ chế avatar duy nhất | Dev, QA |
+| 20 | [20-digitalocean-demo-deployment-runbook.md](20-digitalocean-demo-deployment-runbook.md) | Tái tạo demo DigitalOcean, HTTPS và Postman smoke tests | DevOps, Agent, QA |
 
 `architecture.html` trong thư mục này là bản trình bày trực quan của kế hoạch kiến trúc.
 
