@@ -37,3 +37,6 @@ Thumbs.db
 # Dữ liệu chạy cục bộ
 *.log
 /tmp/
+
+# Mockup tạm của brainstorming (superpowers visual companion)
+.superpowers/
