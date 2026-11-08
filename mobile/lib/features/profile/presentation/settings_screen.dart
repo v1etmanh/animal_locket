@@ -8,6 +8,7 @@ import 'package:animal_locket/features/discovery/data/discovery_repository_impl.
 import 'package:animal_locket/features/friends/data/friends_repository_impl.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
+import 'package:animal_locket/features/profile/presentation/theme_picker.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +36,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const ThemePicker(),
+          const SizedBox(height: 24),
           GlassContainer(
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
