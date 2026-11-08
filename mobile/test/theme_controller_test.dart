@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  _startupThemeTests();
   ProviderContainer containerWith(ThemeStore store) {
     final c = ProviderContainer(
       overrides: [themeStoreProvider.overrideWithValue(store)],
@@ -101,4 +102,17 @@ class _MemoryTokenStore implements TokenStore {
   Future<TokenBundle?> read() async => value;
   @override
   Future<void> save(TokenBundle bundle) async => value = bundle;
+}
+
+void _startupThemeTests() {
+  test('a theme read before runApp is used from the very first frame', () {
+    final c = ProviderContainer(
+      overrides: [
+        themeStoreProvider.overrideWithValue(MemoryThemeStore()),
+        initialAlbumThemeProvider.overrideWithValue(AlbumThemeId.sora),
+      ],
+    );
+    addTearDown(c.dispose);
+    expect(c.read(albumThemeProvider), AlbumThemeId.sora);
+  });
 }

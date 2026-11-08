@@ -44,12 +44,18 @@ final themeStoreProvider = Provider<ThemeStore>(
   (ref) => const SecureThemeStore(FlutterSecureStorage()),
 );
 
-/// Theme đang chọn. Bắt đầu bằng Shu, rồi thay bằng lựa chọn đã lưu (nếu đọc được).
+/// Theme đọc sẵn trong main() trước runApp; null = chưa đọc được.
+final initialAlbumThemeProvider = Provider<AlbumThemeId?>((ref) => null);
+
+/// Theme đang chọn. Dùng theme đọc sẵn lúc khởi động nếu có (tránh nháy Shu);
+/// nếu không, bắt đầu bằng Shu rồi thay bằng lựa chọn đã lưu.
 class ThemeController extends Notifier<AlbumThemeId> {
   bool _userPicked = false;
 
   @override
   AlbumThemeId build() {
+    final initial = ref.read(initialAlbumThemeProvider);
+    if (initial != null) return initial;
     _restore();
     return AlbumThemeId.shu;
   }
