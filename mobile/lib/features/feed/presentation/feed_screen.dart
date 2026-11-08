@@ -37,10 +37,10 @@ class FeedScreen extends ConsumerWidget {
       ],
       child: Stack(
         children: [
-          // Chữ Nhật dọc trang trí ở lề phải, nằm dưới các thẻ ảnh.
+          // Chữ Nhật dọc trang trí trong rãnh lề phải (thẻ ảnh chừa 26 điểm).
           Positioned(
-            right: -16,
-            top: 4,
+            right: 0,
+            top: 30,
             child: DecoSvg(
               KanjiDeco.vertical(ref.watch(albumThemeProvider)),
               height: 140,
@@ -84,11 +84,11 @@ class FeedScreen extends ConsumerWidget {
                                 const _DegradedBanner(),
                               if (newDay) _DayLabel(day),
                               Padding(
-                                // Chừa lề cho góc nghiêng và băng washi.
+                                // Chừa lề cho góc nghiêng, băng washi và chữ dọc.
                                 padding: const EdgeInsets.fromLTRB(
                                   4,
                                   12,
-                                  10,
+                                  26,
                                   0,
                                 ),
                                 child: _PostCard(

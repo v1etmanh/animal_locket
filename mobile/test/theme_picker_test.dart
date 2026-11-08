@@ -5,6 +5,7 @@ import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/features/profile/presentation/settings_screen.dart';
 import 'package:animal_locket/features/profile/presentation/theme_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -94,5 +95,15 @@ void main() {
       tester.getTopLeft(find.byType(ThemePicker)).dy,
       lessThan(tester.getTopLeft(find.text('Cho phép khám phá')).dy),
     );
+  });
+
+  testWidgets('theme names are never cut off on a 400pt phone', (tester) async {
+    await _pump(tester, const SettingsScreen());
+    for (final name in _names) {
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(name));
+      expect(paragraph.didExceedMaxLines, isFalse, reason: name);
+    }
+    // Tiles grow with the text instead of clipping it.
+    expect(tester.takeException(), isNull);
   });
 }

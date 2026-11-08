@@ -20,27 +20,28 @@ class ThemePicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(albumThemeProvider);
+    Widget tile(AlbumThemeId id) => Expanded(
+      child: _ThemeTile(
+        id: id,
+        selected: id == current,
+        onTap: () => ref.read(albumThemeProvider.notifier).select(id),
+      ),
+    );
+    // Lưới 2×2 tự cao theo nội dung để tên theme không bị cắt khi chữ to.
+    Widget row(AlbumThemeId a, AlbumThemeId b) => IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [tile(a), const SizedBox(width: 12), tile(b)],
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SectionLabel('Màu giao diện'),
         const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 2.2,
-          children: [
-            for (final id in AlbumThemeId.values)
-              _ThemeTile(
-                id: id,
-                selected: id == current,
-                onTap: () => ref.read(albumThemeProvider.notifier).select(id),
-              ),
-          ],
-        ),
+        row(AlbumThemeId.shu, AlbumThemeId.yuzu),
+        const SizedBox(height: 12),
+        row(AlbumThemeId.sakura, AlbumThemeId.sora),
       ],
     );
   }
@@ -109,8 +110,6 @@ class _ThemeTile extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       _themeNames[id]!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

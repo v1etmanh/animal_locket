@@ -127,6 +127,20 @@ void main() {
     );
   });
 
+  testWidgets('vertical kanji sits fully on screen, beside the cards', (
+    tester,
+  ) async {
+    await _pump(tester, three);
+    // First DecoSvg in the tree is the vertical kanji (hanko stamps follow).
+    final deco = tester.getRect(find.byType(DecoSvg).first);
+    expect(deco.left, greaterThanOrEqualTo(0));
+    expect(deco.right, lessThanOrEqualTo(400));
+    // Not clipped by the page content box (20pt padding each side).
+    expect(deco.right, lessThanOrEqualTo(400 - 20));
+    final firstCard = tester.getRect(find.byType(WashiPhotoCard).first);
+    expect(deco.left, greaterThanOrEqualTo(firstCard.right));
+  });
+
   testWidgets('tilts cards alternately', (tester) async {
     await _pump(tester, three);
     final cards = tester.widgetList<WashiPhotoCard>(
