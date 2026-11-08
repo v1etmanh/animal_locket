@@ -54,6 +54,11 @@ resilience4j:
     configs:
       default:
         timeout-duration: 2s
+    instances:
+      # Quẹt phải gọi user-service tạo lời mời: ~8 truy vấn nối tiếp, với DB cloud mất 3–4 giây (đo 3,5 s).
+      # 2 giây làm quẹt báo USER_SERVICE_UNAVAILABLE dù lời mời đã được tạo. Gọi lại an toàn (ALREADY_REQUESTED).
+      user-service:
+        timeout-duration: 6s
 
 eureka:
   client:

@@ -1,3 +1,4 @@
+import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
@@ -5,63 +6,149 @@ import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Ảnh tôi đã đăng (gồm cả bài đang xử lý / bị từ chối), mới nhất trước.
-final myPostsProvider = FutureProvider<List<Post>>(
-  (ref) => ref.watch(postRepositoryProvider).mine(limit: 50),
-);
+class UserPostsState {
+  const UserPostsState({
+    this.items = const [],
+    this.nextBefore,
+    this.loadingMore = false,
+  });
+  final List<Post> items;
+  final String? nextBefore;
+  final bool loadingMore;
+}
 
-/// Lưới 3 cột các ảnh tôi đã đăng; chạm vào một ảnh để xem lớn và xoá.
-class MyPostsGrid extends ConsumerWidget {
-  const MyPostsGrid({super.key});
+/// Bài của một người, phân trang theo `before`. Tham số family là publicId.
+class UserPostsController extends AsyncNotifier<UserPostsState> {
+  UserPostsController(this.publicId);
+  final String publicId;
+
+  @override
+  Future<UserPostsState> build() async {
+    final page = await ref.read(postRepositoryProvider).postsOf(publicId);
+    return UserPostsState(items: page.items, nextBefore: page.nextBefore);
+  }
+
+  Future<void> loadMore() async {
+    final current = state.value;
+    if (current == null || current.nextBefore == null || current.loadingMore) {
+      return;
+    }
+    state = AsyncData(
+      UserPostsState(
+        items: current.items,
+        nextBefore: current.nextBefore,
+        loadingMore: true,
+      ),
+    );
+    try {
+      final page = await ref
+          .read(postRepositoryProvider)
+          .postsOf(publicId, before: current.nextBefore);
+      state = AsyncData(
+        UserPostsState(
+          items: [...current.items, ...page.items],
+          nextBefore: page.nextBefore,
+        ),
+      );
+    } catch (_) {
+      state = AsyncData(current);
+    }
+  }
+}
+
+/// `ref.invalidate(userPostsProvider)` làm mới lưới ảnh của mọi người (sau khi đăng/xoá).
+final userPostsProvider =
+    AsyncNotifierProvider.family<UserPostsController, UserPostsState, String>(
+      UserPostsController.new,
+    );
+
+/// Lưới 3 cột ảnh của một người. [mine]: hiện cả bài đang xử lý/bị từ chối và cho xoá.
+class PostsGrid extends ConsumerWidget {
+  const PostsGrid({
+    super.key,
+    required this.publicId,
+    this.mine = false,
+    this.emptyText = 'Chưa có ảnh nào.',
+  });
+  final String publicId;
+  final bool mine;
+  final String emptyText;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(myPostsProvider);
+    final posts = ref.watch(userPostsProvider(publicId));
     return posts.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),
       ),
-      error: (_, _) => TextButton(
-        onPressed: () => ref.invalidate(myPostsProvider),
-        child: const Text('Không tải được ảnh · Thử lại'),
-      ),
-      data: (items) {
-        final visible = items
+      error: (error, _) => error is ApiProblem && error.status == 404
+          ? const _Note('Kết bạn để xem ảnh của người này.')
+          : TextButton(
+              onPressed: () => ref.invalidate(userPostsProvider(publicId)),
+              child: const Text('Không tải được ảnh · Thử lại'),
+            ),
+      data: (data) {
+        final visible = data.items
             .where((post) => post.status != PostStatus.deleted)
             .toList();
-        if (visible.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Text(
-              'Bạn chưa đăng ảnh nào.',
-              style: TextStyle(color: AppColors.muted),
+        if (visible.isEmpty) return _Note(emptyText);
+        return Column(
+          children: [
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemCount: visible.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+              ),
+              itemBuilder: (context, index) =>
+                  _Thumbnail(post: visible[index], mine: mine),
             ),
-          );
-        }
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          itemCount: visible.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-          ),
-          itemBuilder: (context, index) => _Thumbnail(post: visible[index]),
+            if (data.nextBefore != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: data.loadingMore
+                    ? const CircularProgressIndicator()
+                    : TextButton(
+                        onPressed: ref
+                            .read(userPostsProvider(publicId).notifier)
+                            .loadMore,
+                        child: const Text('Xem thêm ảnh'),
+                      ),
+              ),
+          ],
         );
       },
     );
   }
 }
 
-class _Thumbnail extends ConsumerWidget {
-  const _Thumbnail({required this.post});
-  final Post post;
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+  final String text;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 20),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: AppColors.muted),
+    ),
+  );
+}
+
+class _Thumbnail extends StatelessWidget {
+  const _Thumbnail({required this.post, required this.mine});
+  final Post post;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
     final overlay = switch (post.status) {
       PostStatus.pendingMedia => (Icons.hourglass_top, 'Đang xử lý'),
       PostStatus.rejected => (Icons.block, 'Bị từ chối'),
@@ -72,7 +159,7 @@ class _Thumbnail extends ConsumerWidget {
       child: InkWell(
         onTap: () => showDialog<void>(
           context: context,
-          builder: (_) => _PostDialog(post: post),
+          builder: (_) => _PostDialog(post: post, mine: mine),
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -139,12 +226,23 @@ class _PostImage extends ConsumerWidget {
   }
 }
 
-class _PostDialog extends ConsumerWidget {
-  const _PostDialog({required this.post});
+class _PostDialog extends ConsumerStatefulWidget {
+  const _PostDialog({required this.post, required this.mine});
   final Post post;
+  final bool mine;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PostDialog> createState() => _PostDialogState();
+}
+
+class _PostDialogState extends ConsumerState<_PostDialog> {
+  late bool _liked = widget.post.likedByMe;
+  late int _likes = widget.post.likeCount;
+
+  Post get post => widget.post;
+
+  @override
+  Widget build(BuildContext context) {
     final time = (post.publishedAt ?? post.createdAt).toLocal();
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -174,14 +272,22 @@ class _PostDialog extends ConsumerWidget {
               child: Text(post.caption!),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
             child: Row(
               children: [
-                const Icon(Icons.favorite, size: 16, color: AppColors.danger),
-                const SizedBox(width: 4),
-                Text('${post.likeCount}'),
+                IconButton(
+                  tooltip: _liked ? 'Bỏ thích' : 'Thích',
+                  onPressed: post.status == PostStatus.published
+                      ? _toggleLike
+                      : null,
+                  icon: Icon(
+                    _liked ? Icons.favorite : Icons.favorite_border,
+                    color: _liked ? AppColors.danger : null,
+                  ),
+                ),
+                Text('$_likes'),
                 const SizedBox(width: 12),
-                const Icon(Icons.chat_bubble_outline, size: 16),
+                const Icon(Icons.chat_bubble_outline, size: 18),
                 const SizedBox(width: 4),
                 Text('${post.commentCount}'),
                 const SizedBox(width: 12),
@@ -194,14 +300,15 @@ class _PostDialog extends ConsumerWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Xoá ảnh',
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: AppColors.danger,
+                if (widget.mine)
+                  IconButton(
+                    tooltip: 'Xoá ảnh',
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.danger,
+                    ),
+                    onPressed: _delete,
                   ),
-                  onPressed: () => _delete(context, ref),
-                ),
               ],
             ),
           ),
@@ -210,7 +317,27 @@ class _PostDialog extends ConsumerWidget {
     );
   }
 
-  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+  Future<void> _toggleLike() async {
+    final liked = !_liked;
+    setState(() {
+      _liked = liked;
+      _likes += liked ? 1 : -1;
+    });
+    try {
+      await ref.read(postRepositoryProvider).setLiked(post.id, liked);
+      ref
+        ..invalidate(userPostsProvider(post.author.publicId))
+        ..invalidate(feedControllerProvider);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _liked = !liked;
+        _likes += liked ? -1 : 1;
+      });
+    }
+  }
+
+  Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -232,11 +359,11 @@ class _PostDialog extends ConsumerWidget {
     try {
       await ref.read(postRepositoryProvider).deletePost(post.id);
       ref
-        ..invalidate(myPostsProvider)
+        ..invalidate(userPostsProvider)
         ..invalidate(feedControllerProvider);
-      if (context.mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (_) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Không xoá được ảnh. Thử lại sau.')),
         );

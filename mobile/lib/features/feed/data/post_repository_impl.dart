@@ -37,6 +37,25 @@ class LivePostRepository implements PostRepository {
           .map(Post.fromJson)
           .toList();
   @override
+  Future<PagedResult<Post>> postsOf(
+    String publicId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final data = (await _api.get<Map<String, dynamic>>(
+      '/posts/by/$publicId',
+      queryParameters: {'before': ?before, 'limit': limit},
+    )).data!;
+    return PagedResult(
+      items: ((data['items'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(Post.fromJson)
+          .toList(),
+      nextBefore: data['nextBefore'] as String?,
+    );
+  }
+
+  @override
   Future<PagedResult<Post>> feed({String? before, int limit = 20}) async {
     try {
       final data = (await _api.get<Map<String, dynamic>>(
@@ -165,6 +184,17 @@ class DemoPostRepository implements PostRepository {
   @override
   Future<List<Post>> mine({int limit = 50}) async =>
       _posts.take(limit).toList();
+  @override
+  Future<PagedResult<Post>> postsOf(
+    String publicId, {
+    String? before,
+    int limit = 30,
+  }) async => PagedResult(
+    items: _posts
+        .where((post) => post.author.publicId == publicId)
+        .take(limit)
+        .toList(),
+  );
   @override
   Future<PagedResult<Post>> feed({String? before, int limit = 20}) async =>
       PagedResult(items: _posts.take(limit).toList());

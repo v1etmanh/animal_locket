@@ -7,7 +7,8 @@ import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
-import 'package:animal_locket/features/feed/presentation/my_posts_grid.dart';
+import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
+import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -93,6 +94,8 @@ class _ProfileContent extends ConsumerWidget {
         ],
       ),
       const SizedBox(height: 24),
+      const _FriendsStrip(),
+      const SizedBox(height: 24),
       Align(
         alignment: Alignment.centerLeft,
         child: Text(
@@ -101,7 +104,11 @@ class _ProfileContent extends ConsumerWidget {
         ),
       ),
       const SizedBox(height: 12),
-      const MyPostsGrid(),
+      PostsGrid(
+        publicId: data.profile.publicId,
+        mine: true,
+        emptyText: 'Bạn chưa đăng ảnh nào.',
+      ),
       const SizedBox(height: 24),
       Align(
         alignment: Alignment.centerLeft,
@@ -171,6 +178,125 @@ class _ProfileContent extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+/// Hàng avatar bạn bè cuộn ngang; chạm một người để mở trang của họ.
+class _FriendsStrip extends ConsumerWidget {
+  const _FriendsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final friends = ref.watch(friendsControllerProvider);
+    final count = friends.value?.friends.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                count == null ? 'Bạn bè' : 'Bạn bè ($count)',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.push('/friends'),
+              child: const Text('Xem tất cả'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        friends.when(
+          loading: () => const SizedBox(
+            height: 96,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, _) => TextButton(
+            onPressed: () => ref.invalidate(friendsControllerProvider),
+            child: const Text('Không tải được bạn bè · Thử lại'),
+          ),
+          data: (data) => data.friends.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Chưa có bạn bè nào.',
+                          style: TextStyle(color: AppColors.muted),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/discover'),
+                        child: const Text('Tìm bạn'),
+                      ),
+                    ],
+                  ),
+                )
+              : SizedBox(
+                  height: 104,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: data.friends.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final person = data.friends[index];
+                      return Semantics(
+                        button: true,
+                        label: 'Mở trang của ${person.displayAlias}',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => context.push('/user/${person.publicId}'),
+                          child: SizedBox(
+                            width: 76,
+                            child: Column(
+                              children: [
+                                Stack(
+                                  children: [
+                                    AnimalAvatar(
+                                      avatar: person.avatar,
+                                      leadAnimal: person.leadAnimal,
+                                      size: 64,
+                                    ),
+                                    if (data.online[person.publicId] == true)
+                                      Positioned(
+                                        right: 2,
+                                        bottom: 2,
+                                        child: Container(
+                                          width: 14,
+                                          height: 14,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.green,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  person.displayAlias,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
   }
 }
 

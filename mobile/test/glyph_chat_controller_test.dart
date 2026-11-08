@@ -242,6 +242,40 @@ void main() {
     },
   );
 
+  test('reconnect and resume fetch messages missed while offline', () async {
+    realtime.state = ChatConnectionState.connected;
+    final provider = conversationControllerProvider('conversation-1');
+    await container.read(provider.future);
+    expect(container.read(provider).requireValue.messages, isEmpty);
+
+    // Tin đến lúc WebSocket đứt: server không đẩy lại, chỉ có qua REST.
+    ChatMessage missed(String id, int minute) => ChatMessage(
+      id: id,
+      conversationId: 'conversation-1',
+      senderId: 'account-b',
+      type: ChatMessageType.text,
+      text: 'xin chào $id',
+      createdAt: DateTime.utc(2026, 1, 1, 0, minute),
+    );
+    chat.serverMessages = [missed('m1', 1)];
+    realtime.emit({
+      'type': 'connection',
+      'data': {'state': 'connected'},
+    });
+    await pumpEventQueue();
+    expect(container.read(provider).requireValue.messages.map((m) => m.id), [
+      'm1',
+    ]);
+
+    chat.serverMessages = [missed('m1', 1), missed('m2', 2)];
+    realtime.emit({'type': 'resumed'});
+    await pumpEventQueue();
+    expect(container.read(provider).requireValue.messages.map((m) => m.id), [
+      'm1',
+      'm2',
+    ], reason: 'không nhân đôi tin đã có');
+  });
+
   test('uses REST while disconnected and locks composer when closed', () async {
     realtime.state = ChatConnectionState.disconnected;
     final provider = conversationControllerProvider('conversation-1');
@@ -303,12 +337,15 @@ class _ReadyAuthController extends AuthController {
 class _FakeChatRepository implements ChatRepository {
   var glyphSendCount = 0;
 
+  /// Tin trên server; mặc định rỗng.
+  var serverMessages = <ChatMessage>[];
+
   @override
   Future<List<ChatMessage>> messages(
     String conversationId, {
     String? before,
     int limit = 30,
-  }) async => <ChatMessage>[];
+  }) async => [...serverMessages];
 
   @override
   Future<ChatMessage> sendGlyphs(

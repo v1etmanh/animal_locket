@@ -269,6 +269,42 @@ class PostFlowIntegrationTest {
         mvc.perform(as(get("/api/v1/feed?limit=2&before=" + next), ALICE)).andExpect(jsonPath("$.items.length()").value(1));
     }
 
+    @Test
+    void friendSeesOnlyPublishedPostsOfOnePersonWithPaging() throws Exception {
+        String pending = createPost(BOB, media()); // chưa có PHOTO_READY
+        for (int i = 0; i < 3; i++) {
+            String m = media();
+            createPostWithQuotaReset(m);
+            ready(m, BOB);
+            Thread.sleep(5);
+        }
+        MvcResult p1 = mvc.perform(as(get("/api/v1/posts/by/" + BOB + "?limit=2"), ALICE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].status").value("PUBLISHED")).andReturn();
+        String next = body(p1).get("nextBefore").asText();
+        mvc.perform(as(get("/api/v1/posts/by/" + BOB + "?limit=2&before=" + next), ALICE))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.nextBefore").doesNotExist());
+
+        // Chính chủ thấy cả bài đang chờ xử lý.
+        mvc.perform(as(get("/api/v1/posts/by/" + BOB), BOB))
+                .andExpect(jsonPath("$.items.length()").value(4))
+                .andExpect(jsonPath("$.items[3].id").value(pending));
+    }
+
+    @Test
+    void strangerAndUnverifiableRelationshipCannotListPosts() throws Exception {
+        String m = media();
+        createPost(ALICE, m);
+        ready(m, ALICE);
+        mvc.perform(as(get("/api/v1/posts/by/" + ALICE), CAROL)).andExpect(status().isNotFound());
+
+        when(users.areFriends(BOB, ALICE))
+                .thenThrow(new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "FRIENDS_UNAVAILABLE", "x"));
+        mvc.perform(as(get("/api/v1/posts/by/" + ALICE), BOB)).andExpect(status().isNotFound());
+    }
+
     private void createPostWithQuotaReset(String mediaId) throws Exception {
         mvc.perform(as(post("/api/v1/posts"), BOB).content("{\"mediaId\":\"" + mediaId + "\"}"))
                 .andExpect(status().isCreated());

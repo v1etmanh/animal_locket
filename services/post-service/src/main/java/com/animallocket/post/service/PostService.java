@@ -125,6 +125,36 @@ public class PostService {
         return new PostDtos.FeedPage(items, next, false);
     }
 
+    /**
+     * Bài của một người, mới nhất trước. Chính mình: mọi bài trừ DELETED (phân trang theo createdAt).
+     * Bạn bè: chỉ PUBLISHED (phân trang theo publishedAt). Người khác, hoặc không xác minh được quan hệ:
+     * 404 để không lộ người đó có bài, cùng luật với {@link #get}.
+     */
+    @Transactional(readOnly = true)
+    public PostDtos.FeedPage userPosts(String me, String author, Instant before, int limit) {
+        int size = Math.max(1, Math.min(limit, MAX_PAGE));
+        Instant cursor = before == null ? Instant.now().plusSeconds(60) : before;
+        if (author.equals(me)) {
+            List<Post> page = posts.findByAuthorIdAndStatusNotAndCreatedAtLessThanOrderByCreatedAtDesc(
+                    me, Post.Status.DELETED, cursor, PageRequest.of(0, size));
+            Instant next = page.size() == size ? page.get(page.size() - 1).getCreatedAt() : null;
+            return new PostDtos.FeedPage(views(me, page), next, false);
+        }
+        boolean friend;
+        try {
+            friend = users.areFriends(me, author);
+        } catch (ApiException e) {
+            friend = false; // không xác minh được thì ẩn
+        }
+        if (!friend) {
+            throw ApiException.notFound("Người dùng");
+        }
+        List<Post> page = posts.findByAuthorIdInAndStatusAndPublishedAtLessThanOrderByPublishedAtDesc(
+                Set.of(author), Post.Status.PUBLISHED, cursor, PageRequest.of(0, size));
+        Instant next = page.size() == size ? page.get(page.size() - 1).getPublishedAt() : null;
+        return new PostDtos.FeedPage(views(me, page), next, false);
+    }
+
     @Transactional(readOnly = true)
     public List<PostDtos.PostView> mine(String me, int limit) {
         List<Post> page = posts.findByAuthorIdAndStatusNotOrderByCreatedAtDesc(me, Post.Status.DELETED,

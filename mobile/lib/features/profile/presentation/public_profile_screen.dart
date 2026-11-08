@@ -4,6 +4,8 @@ import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
+import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
+import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:animal_locket/features/friends/data/friends_repository_impl.dart';
 import 'package:animal_locket/features/friends/domain/friends_repository.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
@@ -15,76 +17,112 @@ final publicProfileProvider = FutureProvider.family<PublicProfile, String>(
   (ref, id) => ref.watch(userRepositoryProvider).publicProfile(id),
 );
 
+/// Có đang là bạn không; lỗi mạng coi như không (ẩn nút huỷ kết bạn).
+final isFriendProvider = FutureProvider.family<bool, String>((ref, id) async {
+  try {
+    final friends = await ref.watch(friendsRepositoryProvider).friends();
+    return friends.any((friend) => friend.publicId == id);
+  } catch (_) {
+    return false;
+  }
+});
+
 class PublicProfileScreen extends ConsumerWidget {
   const PublicProfileScreen({super.key, required this.publicId});
   final String publicId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(publicProfileProvider(publicId));
+    final isFriend = ref.watch(isFriendProvider(publicId)).value ?? false;
     return AppPage(
       title: 'Hồ sơ',
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => const Center(child: Text('Không thể tải hồ sơ.')),
-        data: (profile) => GlassContainer(
-          borderRadius: 34,
-          child: Column(
-            children: [
-              AnimalAvatar(
-                avatar: profile.avatar,
-                leadAnimal: profile.leadAnimal,
-                size: 130,
-              ),
-              const SizedBox(height: 18),
-              Text(
-                profile.displayAlias,
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Hồ sơ ẩn danh',
-                style: TextStyle(color: AppColors.muted),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => _chat(context, ref),
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: const Text('Nhắn tin'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: () async {
-                  await ref.read(friendsRepositoryProvider).remove(publicId);
-                  if (context.mounted) context.pop();
-                },
-                child: const Text('Huỷ kết bạn'),
-              ),
-              const Divider(height: 34),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton.icon(
-                    onPressed: () => _report(context, ref),
-                    icon: const Icon(Icons.flag_outlined),
-                    label: const Text('Báo cáo'),
-                  ),
-                  const SizedBox(width: 10),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.danger,
-                    ),
-                    onPressed: () => _block(context, ref),
-                    icon: const Icon(Icons.block),
-                    label: const Text('Chặn'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+        data: (profile) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _header(context, ref, profile, isFriend),
+            const SizedBox(height: 24),
+            Text(
+              'Ảnh của ${profile.displayAlias}',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 12),
+            PostsGrid(
+              publicId: publicId,
+              emptyText: '${profile.displayAlias} chưa đăng ảnh nào.',
+            ),
+            // Chừa chỗ cho thanh điều hướng.
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
   }
+
+  Widget _header(
+    BuildContext context,
+    WidgetRef ref,
+    PublicProfile profile,
+    bool isFriend,
+  ) => GlassContainer(
+    borderRadius: 34,
+    child: Column(
+      children: [
+        AnimalAvatar(
+          avatar: profile.avatar,
+          leadAnimal: profile.leadAnimal,
+          size: 130,
+        ),
+        const SizedBox(height: 18),
+        Text(
+          profile.displayAlias,
+          style: Theme.of(context).textTheme.headlineLarge,
+        ),
+        const SizedBox(height: 8),
+        const Text('Hồ sơ ẩn danh', style: TextStyle(color: AppColors.muted)),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: () => _chat(context, ref),
+          icon: const Icon(Icons.chat_bubble_outline),
+          label: const Text('Nhắn tin'),
+        ),
+        if (isFriend) ...[
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: () async {
+              await ref.read(friendsRepositoryProvider).remove(publicId);
+              ref
+                ..invalidate(isFriendProvider(publicId))
+                ..invalidate(userPostsProvider(publicId))
+                ..invalidate(feedControllerProvider);
+              if (context.mounted) context.pop();
+            },
+            child: const Text('Huỷ kết bạn'),
+          ),
+        ],
+        const Divider(height: 34),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton.icon(
+              onPressed: () => _report(context, ref),
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('Báo cáo'),
+            ),
+            const SizedBox(width: 10),
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              onPressed: () => _block(context, ref),
+              icon: const Icon(Icons.block),
+              label: const Text('Chặn'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 
   Future<void> _chat(BuildContext context, WidgetRef ref) async {
     final conversation = await ref

@@ -6,7 +6,7 @@ import 'package:animal_locket/features/camera/domain/media_repository.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
-import 'package:animal_locket/features/feed/presentation/my_posts_grid.dart';
+import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -101,7 +101,7 @@ class UploadController extends Notifier<UploadFlowState> {
           .read(postRepositoryProvider)
           .create(mediaId: ticket.mediaId, caption: caption);
       ref
-        ..invalidate(myPostsProvider)
+        ..invalidate(userPostsProvider)
         ..invalidate(feedControllerProvider);
       state = UploadFlowState(stage: UploadStage.sent, post: post);
       _autoHide = Timer(const Duration(seconds: 4), dismiss);

@@ -6,6 +6,7 @@ import 'package:animal_locket/core/auth/session_manager.dart';
 import 'package:animal_locket/core/config/app_config.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/features/chat/data/chat_socket_adapter.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -73,9 +74,31 @@ class ChatRealtimeService {
   }
 
   void _onClosed() {
+    final wasConnected = state == ChatConnectionState.connected;
     state = ChatConnectionState.disconnected;
     _ping?.cancel();
+    if (wasConnected && !_events.isClosed) {
+      _events.add(const {
+        'type': 'connection',
+        'data': {'state': 'disconnected'},
+      });
+    }
     _scheduleReconnect();
+  }
+
+  /// App quay lại màn hình chính: bỏ thời gian chờ, nối lại ngay, và báo cho màn hình chat
+  /// tải bù tin (tin đến lúc mất kết nối không được server đẩy lại).
+  void reconnectNow() {
+    if (_stopped) return;
+    _reconnect?.cancel();
+    _attempt = 0;
+    if (state == ChatConnectionState.disconnected) {
+      unawaited(connect());
+    } else if (state == ChatConnectionState.connected) {
+      // Kết nối có thể đã chết khi app ở nền; ping để phát hiện sớm.
+      send({'type': 'ping'});
+    }
+    if (!_events.isClosed) _events.add(const {'type': 'resumed'});
   }
 
   void _scheduleReconnect() {
@@ -111,6 +134,8 @@ final chatRealtimeProvider = Provider<ChatRealtimeService>((ref) {
   ref.onDispose(service.dispose);
   if (ref.watch(backendModeProvider) == BackendMode.live) {
     unawaited(service.connect());
+    final lifecycle = AppLifecycleListener(onResume: service.reconnectNow);
+    ref.onDispose(lifecycle.dispose);
   }
   return service;
 });

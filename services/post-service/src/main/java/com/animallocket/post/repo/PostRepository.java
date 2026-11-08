@@ -35,6 +35,9 @@ public interface PostRepository extends JpaRepository<Post, String> {
 
     List<Post> findByAuthorIdAndStatusNotOrderByCreatedAtDesc(String authorId, Post.Status status, Pageable page);
 
+    List<Post> findByAuthorIdAndStatusNotAndCreatedAtLessThanOrderByCreatedAtDesc(
+            String authorId, Post.Status status, Instant before, Pageable page);
+
     List<Post> findByAuthorId(String authorId);
 
     @Modifying

@@ -69,12 +69,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   final Map<String, _PendingMessage> _pending = {};
   final Map<String, Timer> _timers = {};
   StreamSubscription<Map<String, dynamic>>? _events;
+  static const _pollEvery = Duration(seconds: 5);
+  Timer? _poll;
+  bool _catchingUp = false;
 
   @override
   Future<ConversationState> build() async {
     final realtime = ref.watch(chatRealtimeProvider);
     _events = realtime.events.listen(_onEvent);
     ref.onDispose(() {
+      _stopPolling();
       _events?.cancel();
       for (final timer in _timers.values) {
         timer.cancel();
@@ -115,6 +119,10 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     if (queued.isNotEmpty) {
       scheduleMicrotask(() => _resumeQueued(queued));
+    }
+    if (realtime.state != ChatConnectionState.connected &&
+        ref.read(backendModeProvider) == BackendMode.live) {
+      _startPolling();
     }
     return ConversationState(messages: messages);
   }
@@ -406,6 +414,23 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   void _onEvent(Map<String, dynamic> frame) {
     final type = frame['type'];
     final data = (frame['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    if (type == 'connection') {
+      if (data['state'] == 'connected') {
+        _stopPolling();
+        unawaited(_catchUp());
+      } else {
+        _startPolling();
+      }
+      return;
+    }
+    if (type == 'resumed') {
+      unawaited(_catchUp());
+      if (ref.read(chatRealtimeProvider).state !=
+          ChatConnectionState.connected) {
+        _startPolling();
+      }
+      return;
+    }
     if (type == 'message' &&
         data['conversationId'].toString() == conversationId) {
       final message = ChatMessage.fromJson(data);
@@ -500,6 +525,61 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     } else if (type == 'dictionary_changed' &&
         data['conversationId'].toString() == conversationId) {
       ref.invalidate(conversationGlyphsProvider(conversationId));
+    }
+  }
+
+  /// Mất WebSocket: hỏi server mỗi 5 giây để vẫn thấy tin mới cho tới khi nối lại được.
+  void _startPolling() {
+    if (_poll?.isActive == true) return;
+    _poll = Timer.periodic(_pollEvery, (_) => unawaited(_catchUp()));
+  }
+
+  void _stopPolling() {
+    _poll?.cancel();
+    _poll = null;
+  }
+
+  /// Tải trang tin mới nhất và trộn vào danh sách đang có: thêm tin chưa có, thay bong bóng tạm
+  /// bằng bản thật (khớp clientId). Không xoá gì, nên tin đang chờ gửi vẫn giữ nguyên.
+  Future<void> _catchUp() async {
+    if (_catchingUp) return;
+    _catchingUp = true;
+    try {
+      final fresh = await ref
+          .read(chatRepositoryProvider)
+          .messages(conversationId);
+      final current = state.value;
+      if (current == null || fresh.isEmpty) return;
+      final messages = [...current.messages];
+      var changed = false;
+      for (final message in fresh) {
+        final index = messages.indexWhere(
+          (item) =>
+              item.id == message.id ||
+              (message.clientId != null && item.clientId == message.clientId),
+        );
+        if (index < 0) {
+          messages.add(message);
+          changed = true;
+        } else if (messages[index].pending ||
+            messages[index].id != message.id) {
+          messages[index] = message;
+          changed = true;
+        }
+        final echoed = message.clientId;
+        if (echoed != null && _pending.remove(echoed) != null) {
+          _timers.remove(echoed)?.cancel();
+          unawaited(_completeOutbox(echoed));
+        }
+      }
+      if (!changed) return;
+      messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      state = AsyncData(current.copyWith(messages: messages));
+      unawaited(ref.read(chatRepositoryProvider).markRead(conversationId));
+    } catch (_) {
+      // Mạng lỗi: lần hỏi sau thử lại.
+    } finally {
+      _catchingUp = false;
     }
   }
 
