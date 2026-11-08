@@ -172,7 +172,11 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
 }
 
 extension AlbumContext on BuildContext {
-  AlbumPalette get album => Theme.of(this).extension<AlbumPalette>()!;
+  /// Bảng màu đang dùng; ngoài cây theme của app (ví dụ test dựng MaterialApp
+  /// trần) thì rơi về Shu thay vì crash.
+  AlbumPalette get album =>
+      Theme.of(this).extension<AlbumPalette>() ??
+      AlbumPalette.of(AlbumThemeId.shu);
 }
 
 /// Tỉ lệ tương phản WCAG 2.x giữa hai màu (1.0 … 21.0).
