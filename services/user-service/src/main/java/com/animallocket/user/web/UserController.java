@@ -3,6 +3,11 @@ package com.animallocket.user.web;
 import com.animallocket.common.Headers;
 import com.animallocket.user.dto.Dtos;
 import com.animallocket.user.service.AccountService;
+import com.animallocket.user.service.AvatarLibrary;
+import com.animallocket.user.service.AvatarService;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,9 +30,13 @@ import java.util.List;
 @RequestMapping("/api/v1")
 public class UserController {
     private final AccountService accounts;
+    private final AvatarService avatars;
+    private final AvatarLibrary avatarLibrary;
 
-    public UserController(AccountService accounts) {
+    public UserController(AccountService accounts, AvatarService avatars, AvatarLibrary avatarLibrary) {
         this.accounts = accounts;
+        this.avatars = avatars;
+        this.avatarLibrary = avatarLibrary;
     }
 
     /** Không cần X-Public-Id vì người dùng chưa có hồ sơ; định danh lấy từ sub trong JWT. */
@@ -79,6 +88,24 @@ public class UserController {
     @PostMapping("/users/me/spin")
     public Dtos.SpinResult spin(@RequestHeader(Headers.PUBLIC_ID) String me) {
         return accounts.spin(me);
+    }
+
+    /** Bộ sưu tập avatar của tôi (avatar đang dùng nằm ở /users/me). */
+    @GetMapping("/users/me/avatars")
+    public List<Dtos.AvatarView> myAvatars(@RequestHeader(Headers.PUBLIC_ID) String me) {
+        accounts.requireActive(me);
+        return avatars.collection(me);
+    }
+
+    /** Thư viện avatar theo phiên bản; bất biến nên cache dài. App đã đóng gói sẵn v1. */
+    @GetMapping("/animals/avatar-lib/{version}")
+    public ResponseEntity<byte[]> avatarLib(@PathVariable int version) {
+        return avatarLibrary.rawJson(version)
+                .map(b -> ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                        .cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(365)).cachePublic().immutable())
+                        .eTag("\"avatar-lib-v" + version + "\"")
+                        .body(b))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/animals")

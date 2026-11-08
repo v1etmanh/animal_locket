@@ -1,3 +1,4 @@
+import 'package:animal_locket/core/avatar/my_avatar_store.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/network/api_client.dart';
@@ -5,13 +6,22 @@ import 'package:animal_locket/features/profile/domain/user_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class LiveUserRepository implements UserRepository {
-  const LiveUserRepository(this._api);
+  const LiveUserRepository(this._api, [this._store = const MyAvatarStore()]);
   final ApiClient _api;
+  final MyAvatarStore _store;
 
   @override
-  Future<MeProfile> me() async => MeProfile.fromJson(
-    (await _api.get<Map<String, dynamic>>('/users/me')).data!,
+  Future<MeProfile> me() async => _remember(
+    MeProfile.fromJson(
+      (await _api.get<Map<String, dynamic>>('/users/me')).data!,
+    ),
   );
+
+  /// Lưu avatar của tôi vào máy (bản đệm; server vẫn là nguồn sự thật).
+  MeProfile _remember(MeProfile p) {
+    _store.save(publicId: p.publicId, avatar: p.avatar);
+    return p;
+  }
 
   @override
   Future<MeProfile> register({required String birthDate, String? alias}) async {
@@ -23,7 +33,7 @@ class LiveUserRepository implements UserRepository {
         'alias': ?(normalizedAlias?.isEmpty == false ? normalizedAlias : null),
       },
     );
-    return MeProfile.fromJson(response.data!);
+    return _remember(MeProfile.fromJson(response.data!));
   }
 
   @override
@@ -36,7 +46,10 @@ class LiveUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> deleteAccount() async => _api.delete<void>('/users/me');
+  Future<void> deleteAccount() async {
+    await _api.delete<void>('/users/me');
+    await _store.clear();
+  }
 
   @override
   Future<PublicProfile> publicProfile(String publicId) async =>
@@ -45,37 +58,15 @@ class LiveUserRepository implements UserRepository {
       );
 
   @override
-  Future<List<Animal>> animals() async {
-    final data = (await _api.get<List<dynamic>>('/animals')).data ?? const [];
-    return data.cast<Map<String, dynamic>>().map(Animal.fromJson).toList();
-  }
-
-  @override
-  Future<List<Animal>> ownedAnimals() async {
+  Future<List<OwnedAvatar>> myAvatars() async {
     final data =
-        (await _api.get<List<dynamic>>('/users/me/animals')).data ?? const [];
-    return data.cast<Map<String, dynamic>>().map(Animal.fromJson).toList();
+        (await _api.get<List<dynamic>>('/users/me/avatars')).data ?? const [];
+    final list = data
+        .cast<Map<String, dynamic>>()
+        .map(OwnedAvatar.fromJson)
+        .toList();
+    return list;
   }
-
-  @override
-  Future<SpinResult> spin() async {
-    final data = (await _api.post<Map<String, dynamic>>('/users/me/spin'))
-        .data!;
-    return SpinResult(
-      animal: Animal.fromJson(data['animal'] as Map<String, dynamic>),
-      nextSpinAt: DateTime.tryParse(data['nextSpinAt'] as String? ?? '')
-          ?.toUtc(),
-    );
-  }
-
-  @override
-  Future<MeProfile> setLeadAnimal(String animalCode) async =>
-      MeProfile.fromJson(
-        (await _api.put<Map<String, dynamic>>(
-          '/users/me/lead-animal',
-          data: {'animalCode': animalCode},
-        )).data!,
-      );
 }
 
 class DemoUserRepository implements UserRepository {
@@ -83,19 +74,12 @@ class DemoUserRepository implements UserRepository {
     publicId: 'demodemodemodemodemo',
     alias: 'Nắng Lấp Lánh',
     leadAnimal: 'fox',
+    avatar: '1:fox:0:glasses',
     ageGroup: AgeGroup.adult,
     discoverable: true,
     plan: AccountPlan.free,
     createdAt: DateTime.utc(2026, 1, 1),
   );
-
-  static const _animals = [
-    Animal(code: 'fox', name: 'Cáo Mặt Trời', rarity: AnimalRarity.common),
-    Animal(code: 'panda', name: 'Gấu trúc', rarity: AnimalRarity.rare),
-    Animal(code: 'tiger', name: 'Hổ Mơ Màng', rarity: AnimalRarity.epic),
-    Animal(code: 'rabbit', name: 'Thỏ Tháng Tư', rarity: AnimalRarity.common),
-    Animal(code: 'otter', name: 'Rái cá', rarity: AnimalRarity.rare),
-  ];
 
   @override
   Future<MeProfile> me() async => _profile;
@@ -122,36 +106,28 @@ class DemoUserRepository implements UserRepository {
     publicId: publicId,
     alias: 'Mây Bồng Bềnh',
     leadAnimal: 'panda',
+    avatar: '1:panda:6:bow',
   );
 
   @override
-  Future<List<Animal>> animals() async => _animals;
+  Future<List<OwnedAvatar>> myAvatars() async => [
+    OwnedAvatar(
+      avatar: _profile.avatar!,
+      source: 'REGISTER',
+      acquiredAt: _profile.createdAt,
+    ),
+  ];
 
-  @override
-  Future<List<Animal>> ownedAnimals() async => _animals;
-
-  @override
-  Future<SpinResult> spin() async => SpinResult(
-    animal: _animals.last,
-    nextSpinAt: DateTime.now().toUtc().add(const Duration(hours: 24)),
+  MeProfile _copy({String? alias, bool? discoverable}) => MeProfile(
+    publicId: _profile.publicId,
+    alias: alias ?? _profile.alias,
+    leadAnimal: _profile.leadAnimal,
+    avatar: _profile.avatar,
+    ageGroup: _profile.ageGroup,
+    discoverable: discoverable ?? _profile.discoverable,
+    plan: _profile.plan,
+    createdAt: _profile.createdAt,
   );
-
-  @override
-  Future<MeProfile> setLeadAnimal(String animalCode) async {
-    _profile = _copy(leadAnimal: animalCode);
-    return _profile;
-  }
-
-  MeProfile _copy({String? alias, String? leadAnimal, bool? discoverable}) =>
-      MeProfile(
-        publicId: _profile.publicId,
-        alias: alias ?? _profile.alias,
-        leadAnimal: leadAnimal ?? _profile.leadAnimal,
-        ageGroup: _profile.ageGroup,
-        discoverable: discoverable ?? _profile.discoverable,
-        plan: _profile.plan,
-        createdAt: _profile.createdAt,
-      );
 }
 
 final liveUserRepositoryProvider = Provider<UserRepository>((ref) {

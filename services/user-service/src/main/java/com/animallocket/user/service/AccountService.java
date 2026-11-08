@@ -7,9 +7,9 @@ import com.animallocket.common.event.Events;
 import com.animallocket.common.web.ApiException;
 import com.animallocket.outbox.OutboxService;
 import com.animallocket.user.domain.Animal;
-import com.animallocket.user.domain.SpinLog;
 import com.animallocket.user.domain.UserAccount;
 import com.animallocket.user.domain.UserAnimal;
+import com.animallocket.user.domain.UserAvatar;
 import com.animallocket.user.dto.Dtos;
 import com.animallocket.user.repo.AnimalRepository;
 import com.animallocket.user.repo.BlockRepository;
@@ -50,13 +50,16 @@ public class AccountService {
     private final OutboxService outbox;
     private final IdentityProviderClient identityProvider;
     private final DevBuddy devBuddy;
+    private final AvatarAllocator avatarAllocator;
+    private final AvatarLibrary avatarLibrary;
 
     public AccountService(UserRepository users, AnimalRepository animals, UserAnimalRepository userAnimals,
                           SpinLogRepository spinLogs, FriendshipRepository friendships,
                           FriendRequestRepository requests, BlockRepository blocks,
                           DeviceTokenRepository devices, EntitlementRepository entitlementRepo,
                           AnimalCatalog catalog, EntitlementService entitlements, OutboxService outbox,
-                          IdentityProviderClient identityProvider, DevBuddy devBuddy) {
+                          IdentityProviderClient identityProvider, DevBuddy devBuddy,
+                          AvatarAllocator avatarAllocator, AvatarLibrary avatarLibrary) {
         this.users = users;
         this.animals = animals;
         this.userAnimals = userAnimals;
@@ -71,6 +74,8 @@ public class AccountService {
         this.outbox = outbox;
         this.identityProvider = identityProvider;
         this.devBuddy = devBuddy;
+        this.avatarAllocator = avatarAllocator;
+        this.avatarLibrary = avatarLibrary;
     }
 
     /** Đăng ký lần đầu sau khi đăng nhập Keycloak. Idempotent theo sub. */
@@ -88,22 +93,25 @@ public class AccountService {
         if (age > 120) {
             throw ApiException.badRequest("INVALID_BIRTHDATE", "Ngày sinh không hợp lệ");
         }
-        Animal starter = catalog.randomStarter();
+        String alias = req.alias() != null ? AliasPolicy.validate(req.alias()) : null;
 
         UserAccount u = new UserAccount();
         u.setPublicId(PublicIds.generate());
+        // Quay đúng một lần: avatar chưa ai sở hữu, cấp trong cùng transaction (lỗi phía sau → avatar về kho).
+        AvatarLibrary.Avatar avatar = avatarAllocator.allocate(u.getPublicId(), UserAvatar.Source.REGISTER);
         u.setKeycloakSub(sub);
-        u.setAlias(req.alias() != null ? AliasPolicy.validate(req.alias()) : AliasPolicy.generate(starter.getName()));
-        u.setLeadAnimal(starter.getCode());
+        u.setAlias(alias != null ? alias : AliasPolicy.generate(avatarLibrary.animalName(avatar.animal())));
+        u.setLeadAnimal(avatar.animal());
+        u.setAvatarKey(avatar.key());
+        u.setAvatarVersion(avatar.version());
         u.setBirthDate(req.birthDate());
         u.setAgeGroup(age < 18 ? UserAccount.AgeGroup.MINOR : UserAccount.AgeGroup.ADULT);
         // Tài khoản dưới 18 mặc định KHÔNG bật khám phá; người lớn cũng tắt cho đến khi chủ động bật.
         u.setDiscoverable(false);
         users.save(u);
-        userAnimals.save(new UserAnimal(u.getPublicId(), starter.getCode()));
 
         outbox.publish(Topics.USER, EventTypes.USER_REGISTERED, u.getPublicId(),
-                new Events.UserRegistered(u.getPublicId(), u.getAgeGroup().name(), u.getLeadAnimal()));
+                new Events.UserRegistered(u.getPublicId(), u.getAgeGroup().name(), u.getLeadAnimal(), u.avatarCode()));
         devBuddy.befriend(u.getPublicId()); // chỉ khi dev bật animal.dev-buddy.public-id
         return toMe(u);
     }
@@ -141,26 +149,15 @@ public class AccountService {
         if (blocks.existsEitherWay(viewer, target)) {
             throw ApiException.notFound("Người dùng"); // không tiết lộ việc bị chặn
         }
-        return new Dtos.PublicProfile(t.getPublicId(), t.getAlias(), t.getLeadAnimal());
+        return Dtos.PublicProfile.of(t);
     }
 
-    /** Chỉ Pro được đổi con vật chủ đạo, và chỉ sang con vật đã sở hữu. */
-    @Transactional
+    /**
+     * Đã ngừng: con vật hiển thị giờ là avatar duy nhất cấp khi đăng ký (docs/19-avatar-mechanism.md).
+     * Đổi avatar trong bộ sưu tập sẽ làm cùng phần nạp tiền.
+     */
     public Dtos.MeProfile setLeadAnimal(String publicId, String animalCode) {
-        UserAccount u = requireActive(publicId);
-        if (!entitlements.isPro(publicId)) {
-            throw new ApiException(org.springframework.http.HttpStatus.PAYMENT_REQUIRED, "PRO_REQUIRED",
-                    "Cần gói Pro để chọn con vật chủ đạo");
-        }
-        if (!userAnimals.existsByPublicIdAndAnimalCode(publicId, animalCode)) {
-            throw ApiException.badRequest("ANIMAL_NOT_OWNED", "Bạn chưa sở hữu con vật này");
-        }
-        if (!animalCode.equals(u.getLeadAnimal())) {
-            u.setLeadAnimal(animalCode);
-            outbox.publish(Topics.USER, EventTypes.LEAD_ANIMAL_CHANGED, publicId,
-                    new Events.LeadAnimalChanged(publicId, animalCode));
-        }
-        return toMe(u);
+        throw retired("Không còn đổi con vật chủ đạo; con vật hiển thị là avatar của bạn");
     }
 
     @Transactional(readOnly = true)
@@ -175,22 +172,13 @@ public class AccountService {
         return animals.findAll().stream().map(Dtos.AnimalView::of).toList();
     }
 
-    @Transactional
+    /** Đã ngừng: mỗi người chỉ quay một lần lúc đăng ký; quay thêm sẽ gắn với nạp tiền. */
     public Dtos.SpinResult spin(String publicId) {
-        requireActive(publicId);
-        Duration interval = entitlements.spinInterval(publicId);
-        Optional<SpinLog> last = spinLogs.findFirstByPublicIdOrderBySpunAtDesc(publicId);
-        if (last.isPresent() && last.get().getSpunAt().plus(interval).isAfter(Instant.now())) {
-            Instant next = last.get().getSpunAt().plus(interval);
-            throw ApiException.tooMany("SPIN_COOLDOWN", "Lượt quay tiếp theo vào " + next);
-        }
-        Set<String> owned = userAnimals.findByPublicId(publicId).stream()
-                .map(UserAnimal::getAnimalCode).collect(Collectors.toSet());
-        Animal won = catalog.spin(owned).orElseThrow(() ->
-                ApiException.conflict("COLLECTION_COMPLETE", "Bạn đã sưu tầm đủ bộ cơ bản"));
-        userAnimals.save(new UserAnimal(publicId, won.getCode()));
-        SpinLog log = spinLogs.save(new SpinLog(publicId, won.getCode()));
-        return new Dtos.SpinResult(Dtos.AnimalView.of(won), log.getSpunAt().plus(interval));
+        throw retired("Quay con vật miễn phí đã ngừng; avatar được quay một lần khi đăng ký");
+    }
+
+    private static ApiException retired(String message) {
+        return new ApiException(org.springframework.http.HttpStatus.GONE, "FEATURE_RETIRED", message);
     }
 
     /** Thêm các con vật của một gói vào bộ sưu tập (từ event CONSUMABLE_GRANTED). Idempotent. */
@@ -239,7 +227,8 @@ public class AccountService {
     }
 
     private Dtos.MeProfile toMe(UserAccount u) {
-        return new Dtos.MeProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.getAgeGroup().name(),
+        return new Dtos.MeProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.avatarCode(),
+                u.getAgeGroup().name(),
                 u.isDiscoverable(), entitlements.plan(u.getPublicId()), u.getCreatedAt());
     }
 }

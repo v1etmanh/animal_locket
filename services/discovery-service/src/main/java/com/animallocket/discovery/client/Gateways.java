@@ -8,7 +8,7 @@ public final class Gateways {
     private Gateways() {
     }
 
-    public record Profile(String publicId, String alias, String leadAnimal, String ageGroup,
+    public record Profile(String publicId, String alias, String leadAnimal, String avatar, String ageGroup,
                           boolean discoverable, boolean active, boolean pro) {
     }
 

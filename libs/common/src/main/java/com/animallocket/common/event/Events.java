@@ -7,7 +7,8 @@ public final class Events {
     private Events() {
     }
 
-    public record UserRegistered(String publicId, String ageGroup, String leadAnimal) {
+    /** {@code avatar} = mã avatar "v:animal:palette:accessory" (xem docs/19-avatar-mechanism.md). */
+    public record UserRegistered(String publicId, String ageGroup, String leadAnimal, String avatar) {
     }
 
     public record UserDeleted(String publicId) {
@@ -17,6 +18,10 @@ public final class Events {
     }
 
     public record LeadAnimalChanged(String publicId, String leadAnimal) {
+    }
+
+    /** Avatar đang dùng thay đổi (cấp cho tài khoản cũ, sau này đổi trong bộ sưu tập). */
+    public record AvatarChanged(String publicId, String avatar, String leadAnimal) {
     }
 
     public record FriendRequestReceived(String fromPublicId, String toPublicId) {

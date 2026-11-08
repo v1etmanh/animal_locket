@@ -37,7 +37,7 @@ public class UserDirectory {
     private static final Duration FRESH = Duration.ofSeconds(45);
     private static final Duration STALE = Duration.ofHours(1);
 
-    public record Profile(String publicId, String alias, String leadAnimal) {
+    public record Profile(String publicId, String alias, String leadAnimal, String avatar) {
     }
 
     @Configuration

@@ -1,4 +1,3 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
@@ -182,7 +181,8 @@ class _PersonTile extends StatelessWidget {
     child: Row(
       children: [
         AnimalAvatar(
-          emoji: AnimalAssetResolver.emoji(person.leadAnimal),
+          avatar: person.avatar,
+          leadAnimal: person.leadAnimal,
           size: 52,
         ),
         const SizedBox(width: 12),

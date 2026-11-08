@@ -410,20 +410,41 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         data['conversationId'].toString() == conversationId) {
       final message = ChatMessage.fromJson(data);
       final current = state.value;
-      if (current != null &&
-          !current.messages.any((item) => item.id == message.id)) {
-        state = AsyncData(
-          current.copyWith(
-            messages: [...current.messages, message]
-              ..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
-          ),
+      if (current != null) {
+        // Server phát tin cho cả chính người gửi TRƯỚC khi trả 'ack': khớp cả theo clientId
+        // để thay bong bóng tạm (id 'local-...') thay vì thêm bong bóng thứ hai.
+        final index = current.messages.indexWhere(
+          (item) =>
+              item.id == message.id ||
+              (message.clientId != null && item.clientId == message.clientId),
         );
+        if (index < 0) {
+          state = AsyncData(
+            current.copyWith(
+              messages: [...current.messages, message]
+                ..sort((a, b) => a.createdAt.compareTo(b.createdAt)),
+            ),
+          );
+        } else if (current.messages[index].pending ||
+            current.messages[index].id != message.id) {
+          final messages = [...current.messages];
+          messages[index] = message;
+          state = AsyncData(current.copyWith(messages: messages));
+        }
+      }
+      // Tin của mình đã về: coi như ack (không gửi lại khi hết 10 giây).
+      final echoed = message.clientId;
+      if (echoed != null && _pending.remove(echoed) != null) {
+        _timers.remove(echoed)?.cancel();
+        unawaited(_completeOutbox(echoed));
       }
       if (message.type == ChatMessageType.glyph) {
+        // Làm mới từ điển chạy nền; lỗi mạng thì giữ bản cache, không ném lỗi ra ngoài.
         unawaited(
           ref
               .read(conversationGlyphsProvider(conversationId).notifier)
-              .refresh(),
+              .refresh()
+              .catchError((Object _) {}),
         );
       }
     } else if (type == 'ack') {
@@ -434,7 +455,20 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       if (pending != null) {
         unawaited(_completeOutbox(clientId));
         final optimistic = _find(pending.tempId);
-        if (optimistic != null) {
+        final messageId = data['messageId'].toString();
+        final current = state.value;
+        if (optimistic != null &&
+            current != null &&
+            current.messages.any((item) => item.id == messageId)) {
+          // Bản thật đã có (về qua khung 'message'): bỏ bản tạm.
+          state = AsyncData(
+            current.copyWith(
+              messages: current.messages
+                  .where((item) => item.id != pending.tempId)
+                  .toList(),
+            ),
+          );
+        } else if (optimistic != null) {
           _replace(
             pending.tempId,
             optimistic.copyWith(

@@ -1,4 +1,3 @@
-import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
@@ -9,6 +8,7 @@ import 'package:animal_locket/features/discovery/data/discovery_repository_impl.
 import 'package:animal_locket/features/friends/data/friends_repository_impl.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
+import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -72,9 +72,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Row(
                               children: [
                                 AnimalAvatar(
-                                  emoji: AnimalAssetResolver.emoji(
-                                    person.leadAnimal,
-                                  ),
+                                  avatar: person.avatar,
+                                  leadAnimal: person.leadAnimal,
                                   size: 46,
                                 ),
                                 const SizedBox(width: 12),
@@ -155,32 +154,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
     if (first != true || !mounted) return;
-    final controller = TextEditingController();
-    final second = await showDialog<bool>(
+    final typed = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Xác nhận lần cuối'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Nhập XOÁ để xác nhận'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Huỷ'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              controller.text.trim().toUpperCase() == 'XOÁ',
-            ),
-            child: const Text('Xoá vĩnh viễn'),
-          ),
-        ],
+      builder: (_) => const TextInputDialog(
+        title: 'Xác nhận lần cuối',
+        label: 'Nhập XOÁ để xác nhận',
+        confirmLabel: 'Xoá vĩnh viễn',
       ),
     );
-    controller.dispose();
-    if (second != true || !mounted) return;
+    final second = typed?.trim().toUpperCase() == 'XOÁ';
+    if (!second || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(userRepositoryProvider).deleteAccount();

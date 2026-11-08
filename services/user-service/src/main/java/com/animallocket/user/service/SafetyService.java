@@ -81,7 +81,7 @@ public class SafetyService {
             return List.of();
         }
         return users.findByPublicIdIn(ids).stream().filter(UserAccount::isActive)
-                .map(u -> new Dtos.PublicProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal())).toList();
+                .map(Dtos.PublicProfile::of).toList();
     }
 
     @Transactional

@@ -40,6 +40,10 @@ public class UserAccount {
     private String alias;
     @Column(nullable = false, length = 40)
     private String leadAnimal;
+    /** Avatar đang dùng "animal:palette:accessory"; duy nhất toàn hệ thống. Null chỉ với tài khoản đã xoá trước khi có avatar. */
+    @Column(unique = true, length = 80)
+    private String avatarKey;
+    private Integer avatarVersion;
     private LocalDate birthDate;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -52,6 +56,11 @@ public class UserAccount {
     private Instant aliasChangedAt;
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
+
+    /** Mã avatar đầy đủ "v:animal:palette:accessory" gửi cho client/service khác, null nếu chưa có. */
+    public String avatarCode() {
+        return avatarKey == null ? null : avatarVersion + ":" + avatarKey;
+    }
 
     public boolean isActive() {
         return status == Status.ACTIVE;

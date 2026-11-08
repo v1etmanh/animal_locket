@@ -11,6 +11,13 @@ spring:
       username: ${CONFIG_USER:config}
       password: ${CONFIG_PASSWORD:config-dev-password}
       fail-fast: false
+  web:
+    resources:
+      # Phông của trang /pay (static/pay/assets) ~540 KB: cho trình duyệt giữ 7 ngày. Chỉ áp cho file tĩnh, không đụng trang có mã.
+      cache:
+        cachecontrol:
+          max-age: 7d
+          cache-public: true
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/billing_db}
     username: ${DB_USER:animal}

@@ -19,6 +19,7 @@ Monorepo microservice (Java 17 / Spring Boot 3.3 / Spring Cloud 2023.0) + một 
 - Service không dùng JPA (discovery, chat, notification) phát/nhận Kafka trực tiếp, thao tác phải idempotent.
 - Migration Flyway ở `src/main/resources/db/migration`; test dùng H2 `create-drop` nên **entity khớp SQL không được test bắt** — đổi entity thì sửa SQL.
 - Mọi cấu hình bí mật qua biến môi trường; không commit `.env`.
+- Avatar (docs/19): mỗi avatar thuộc tối đa một người, cấp qua `AvatarAllocator` (UPDATE có điều kiện trên `avatar_pool`). Thư viện chỉ sửa ở `libs/avatar-lib/build-lib.mjs` rồi `node libs/avatar-lib/build-lib.mjs`; phiên bản đã phát hành không được đổi nghĩa, chỉ thêm phiên bản mới.
 
 ## Cạm bẫy đã gặp
 

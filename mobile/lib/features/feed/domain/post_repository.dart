@@ -57,6 +57,7 @@ class Post {
       'publicId': author.publicId,
       'alias': ?author.alias,
       'leadAnimal': ?author.leadAnimal,
+      'avatar': ?author.avatar,
     },
     'caption': ?caption,
     'mediaId': mediaId,

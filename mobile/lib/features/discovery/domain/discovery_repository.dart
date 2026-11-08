@@ -3,6 +3,7 @@ class DiscoveryCard {
     required this.publicId,
     required this.alias,
     this.leadAnimal,
+    this.avatar,
     this.distanceBand,
     required this.online,
     required this.boosted,
@@ -11,6 +12,7 @@ class DiscoveryCard {
     publicId: json['publicId'] as String? ?? '',
     alias: json['alias'] as String? ?? 'Người bạn ẩn danh',
     leadAnimal: json['leadAnimal'] as String?,
+    avatar: json['avatar'] as String?,
     distanceBand: json['distanceBand'] as String?,
     online: json['online'] as bool? ?? false,
     boosted: json['boosted'] as bool? ?? false,
@@ -18,6 +20,7 @@ class DiscoveryCard {
   final String publicId;
   final String alias;
   final String? leadAnimal;
+  final String? avatar;
   final String? distanceBand;
   final bool online;
   final bool boosted;

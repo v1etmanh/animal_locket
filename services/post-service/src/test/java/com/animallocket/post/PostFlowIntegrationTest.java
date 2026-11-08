@@ -80,7 +80,7 @@ class PostFlowIntegrationTest {
         when(users.areFriends(BOB, ALICE)).thenReturn(true);
         when(users.areFriends(CAROL, ALICE)).thenReturn(false);
         when(users.profiles(org.mockito.ArgumentMatchers.anySet())).thenReturn(Map.of(
-                ALICE, new UserDirectory.Profile(ALICE, "Cáo Vui", "fox")));
+                ALICE, new UserDirectory.Profile(ALICE, "Cáo Vui", "fox", "1:fox:0:none")));
     }
 
     private MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder b, String me) {
@@ -128,7 +128,8 @@ class PostFlowIntegrationTest {
         mvc.perform(as(get("/api/v1/feed"), BOB)).andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].id").value(id))
                 .andExpect(jsonPath("$.items[0].status").value("PUBLISHED"))
-                .andExpect(jsonPath("$.items[0].author.alias").value("Cáo Vui"));
+                .andExpect(jsonPath("$.items[0].author.alias").value("Cáo Vui"))
+                .andExpect(jsonPath("$.items[0].author.avatar").value("1:fox:0:none"));
         assertEquals(1, events(EventTypes.POST_PUBLISHED).size());
         // DTO không chứa đường dẫn kho ảnh.
         String raw = mvc.perform(as(get("/api/v1/posts/" + id), BOB)).andReturn().getResponse().getContentAsString();

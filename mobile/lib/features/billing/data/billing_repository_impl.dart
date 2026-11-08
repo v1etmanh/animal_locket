@@ -13,6 +13,18 @@ class LiveBillingRepository implements BillingRepository {
           .map(BillingProduct.fromJson)
           .toList();
   @override
+  Future<BillingMe> me() async => BillingMe.fromJson(
+    (await _api.get<Map<String, dynamic>>('/billing/me')).data ?? const {},
+  );
+  @override
+  Future<CheckoutLink> createCheckout(String sku) async =>
+      CheckoutLink.fromJson(
+        (await _api.post<Map<String, dynamic>>(
+          '/billing/checkout-sessions',
+          data: {'sku': sku},
+        )).data!,
+      );
+  @override
   Future<MeProfile> verify({
     required String store,
     required String sku,

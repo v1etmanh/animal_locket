@@ -199,7 +199,7 @@ public class FriendService {
         }
         return users.findByPublicIdIn(ids).stream().filter(UserAccount::isActive)
                 .collect(Collectors.toMap(UserAccount::getPublicId,
-                        u -> new Dtos.PublicProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal()),
+                        Dtos.PublicProfile::of,
                         (x, y) -> x, java.util.LinkedHashMap::new));
     }
 

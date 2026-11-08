@@ -1,3 +1,4 @@
+import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
@@ -143,8 +144,10 @@ class _PostCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ListTile(
-            leading: CircleAvatar(
-              child: Text(post.author.displayAlias.characters.first),
+            leading: AnimalAvatar(
+              avatar: post.author.avatar,
+              leadAnimal: post.author.leadAnimal,
+              size: 40,
             ),
             title: Text(post.author.displayAlias),
             subtitle: Text(_relativeTime(post.createdAt)),

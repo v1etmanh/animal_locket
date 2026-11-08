@@ -14,13 +14,15 @@ Nguồn: các file Flyway `src/main/resources/db/migration/V1__init.sql` và ent
 
 | Bảng | Cột chính | Ràng buộc / chỉ mục |
 |---|---|---|
-| `users` | `id` PK, `public_id` (20), `keycloak_sub` (100), `alias` (30), `lead_animal` (40), `birth_date` (null sau khi xoá), `age_group` (`MINOR`/`ADULT`), `discoverable` (bit), `status` (`ACTIVE`/`SUSPENDED`/`DELETED`), `alias_changed_at`, `created_at` | UNIQUE `public_id`, UNIQUE `keycloak_sub` |
+| `users` | `id` PK, `public_id` (20), `keycloak_sub` (100), `alias` (30), `lead_animal` (40), `avatar_key` (80, null chỉ với tài khoản xoá trước khi có avatar), `avatar_version`, `birth_date` (null sau khi xoá), `age_group` (`MINOR`/`ADULT`), `discoverable` (bit), `status` (`ACTIVE`/`SUSPENDED`/`DELETED`), `alias_changed_at`, `created_at` | UNIQUE `public_id`, UNIQUE `keycloak_sub`, UNIQUE `avatar_key` |
 | `friendships` | `user_low`, `user_high`, `created_at` | UNIQUE `(user_low, user_high)`; luôn lưu `low < high` (so sánh chuỗi) |
 | `friend_requests` | `from_id`, `to_id`, `source` (`SWIPE`/`INVITE`), `status` (`PENDING`/`ACCEPTED`/`DECLINED`/`CANCELED`), `created_at` | UNIQUE `(from_id, to_id)` — bản ghi cũ được tái dùng khi mời lại; INDEX `(to_id,status)`, `(from_id,created_at)` |
 | `blocks` | `blocker_id`, `blocked_id`, `created_at` | UNIQUE `(blocker_id, blocked_id)`; INDEX `blocked_id` |
 | `reports` | `reporter_id`, `target_public_id`, `target_type` (`USER`/`POST`/`COMMENT`/`MESSAGE`), `target_ref`, `reason`, `details` (500), `status` (`OPEN`/`ACTIONED`/`DISMISSED`) | INDEX `(status,created_at)`, `(reporter_id,created_at)` |
 | `animals` | `code` PK, `name`, `rarity` (`COMMON`/`RARE`/`EPIC`), `pack_code` (null = bộ cơ bản) | Nạp idempotent khi khởi động (`AnimalCatalog`): 17 con cơ bản + gói `SAFARI` (4) + `OCEAN` (4) |
-| `user_animals` | `public_id`, `animal_code`, `acquired_at` | UNIQUE `(public_id, animal_code)` |
+| `user_animals` | `public_id`, `animal_code`, `acquired_at` (legacy, không còn ghi khi đăng ký) | UNIQUE `(public_id, animal_code)` |
+| `avatar_pool` | `avatar_key` PK ("fox:0:none"), `lib_version`, `owner_public_id` (đã gán thì không về null), `assigned_at` | INDEX `owner_public_id`. Seed lúc khởi động từ avatar-lib (docs/19) |
+| `user_avatars` | `public_id`, `avatar_key`, `lib_version`, `source` (`REGISTER`/`BACKFILL`/`PURCHASE`/`ADMIN`), `source_ref`, `created_at` | UNIQUE `avatar_key` toàn bảng |
 | `spin_log` | `public_id`, `animal_code`, `spun_at` | INDEX `(public_id, spun_at)` |
 | `device_tokens` | `public_id`, `token` (255), `platform`, `updated_at` | UNIQUE `token` |
 | `entitlements` | `public_id` PK, `plan`, `expires_at` | Bản sao quyền lợi Pro từ event billing |

@@ -154,6 +154,24 @@ class ChatServiceTest {
     }
 
     @Test
+    void glyphOnlyModeRejectsTextAndImageAndKeepsHistoryReadable() {
+        String cid = openAliceBob();
+        chat.send(ALICE, cid, new ChatService.SendCommand(Message.Type.TEXT, "tin cũ", null)); // trước khi bật
+        ChatService glyphOnly = new ChatService(convRepo, msgRepo, mock(GlyphRepository.class), GlyphSettings.defaults(),
+                (x, y) -> relations.getOrDefault(rel(x, y), new Gateways.Relationship(false, false)),
+                mediaMap::get, (c, from, to) -> pushes.add(new String[]{c, from, to}), bus, kv, 20, "GLYPH");
+        for (Message.Type t : new Message.Type[]{Message.Type.TEXT, Message.Type.IMAGE, null}) {
+            ApiException e = assertThrows(ApiException.class, () ->
+                    glyphOnly.send(ALICE, cid, new ChatService.SendCommand(t, "xin chào", "m1")));
+            assertEquals(403, e.status().value());
+            assertEquals("MESSAGE_TYPE_DISABLED", e.code());
+        }
+        assertEquals(1, msgStore.size(), "không lưu tin bị chặn");
+        assertEquals(java.util.EnumSet.of(Message.Type.GLYPH), ChatService.parseTypes(" glyph "));
+        assertEquals(java.util.EnumSet.of(Message.Type.TEXT, Message.Type.GLYPH), ChatService.parseTypes("TEXT,,GLYPH"));
+    }
+
+    @Test
     void blockedPairCannotOpen() {
         relations.put(rel(ALICE, BOB), new Gateways.Relationship(true, true));
         assertThrows(ApiException.class, () -> chat.open(ALICE, BOB));

@@ -2,73 +2,162 @@ import 'dart:async';
 
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/config/app_config.dart';
+import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/features/billing/data/billing_repository_impl.dart';
 import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class BillingState {
   const BillingState({
     required this.enabled,
+    this.storeEnabled = false,
     this.products = const [],
     this.details = const {},
+    this.me,
     this.busy = false,
     this.message,
   });
+
+  /// Có bán hàng không (tắt với tài khoản dưới 18 tuổi và chế độ demo).
   final bool enabled;
+
+  /// In-App Purchase của Google Play / App Store (chỉ khi build với ENABLE_BILLING=true).
+  final bool storeEnabled;
   final List<BillingProduct> products;
   final Map<String, ProductDetails> details;
+  final BillingMe? me;
   final bool busy;
   final String? message;
-  BillingState copyWith({bool? busy, String? message}) => BillingState(
-    enabled: enabled,
-    products: products,
-    details: details,
-    busy: busy ?? this.busy,
-    message: message,
-  );
+
+  /// Sản phẩm mua được qua trang thanh toán web của chúng ta (/pay).
+  /// Ẩn gói con vật (PACK): thuộc cơ chế con vật cũ, mua xong không hiện ở đâu (docs/19).
+  List<BillingProduct> get webProducts => products
+      .where((p) => p.purchasableOnline && p.type != 'PACK')
+      .toList();
+
+  BillingState copyWith({bool? busy, String? message, BillingMe? me}) =>
+      BillingState(
+        enabled: enabled,
+        storeEnabled: storeEnabled,
+        products: products,
+        details: details,
+        me: me ?? this.me,
+        busy: busy ?? this.busy,
+        message: message,
+      );
 }
 
 class BillingController extends AsyncNotifier<BillingState> {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
+
   @override
   Future<BillingState> build() async {
     final config = ref.watch(appConfigProvider);
     final profile = ref.watch(authControllerProvider).profile;
-    if (!config.enableBilling || profile?.ageGroup == AgeGroup.minor) {
+    if (profile?.ageGroup == AgeGroup.minor) {
       return const BillingState(enabled: false);
     }
-    final store = InAppPurchase.instance;
-    if (!await store.isAvailable()) {
+    if (ref.watch(backendModeProvider) == BackendMode.demo) {
       return const BillingState(
         enabled: false,
-        message: 'Cửa hàng chưa sẵn sàng.',
+        message: 'Chế độ demo không mua hàng được.',
       );
     }
-    _subscription = store.purchaseStream.listen(
-      _onPurchases,
-      onError: (Object error) {
-        final current = state.value;
-        if (current != null) {
-          state = AsyncData(
-            current.copyWith(busy: false, message: 'Giao dịch gặp lỗi.'),
-          );
-        }
-      },
-    );
-    ref.onDispose(() => _subscription?.cancel());
-    final products = await ref.read(billingRepositoryProvider).products();
-    final response = await store.queryProductDetails(
-      products.map((item) => item.sku).toSet(),
-    );
+    final repository = ref.read(billingRepositoryProvider);
+    final products = await repository.products();
+    BillingMe? me;
+    try {
+      me = await repository.me();
+    } catch (_) {}
+
+    // Luồng chính: thanh toán web. In-App Purchase chỉ khi build bật ENABLE_BILLING.
+    var details = <String, ProductDetails>{};
+    var storeEnabled = false;
+    String? message;
+    if (config.enableBilling) {
+      final store = InAppPurchase.instance;
+      if (await store.isAvailable()) {
+        storeEnabled = true;
+        _subscription = store.purchaseStream.listen(
+          _onPurchases,
+          onError: (Object error) => _setMessage('Giao dịch gặp lỗi.'),
+        );
+        ref.onDispose(() => _subscription?.cancel());
+        final response = await store.queryProductDetails(
+          products.map((item) => item.sku).toSet(),
+        );
+        details = {for (final item in response.productDetails) item.id: item};
+        message = response.error?.message;
+      }
+    }
     return BillingState(
       enabled: true,
+      storeEnabled: storeEnabled,
       products: products,
-      details: {for (final item in response.productDetails) item.id: item},
-      message: response.error?.message,
+      details: details,
+      me: me,
+      message: message,
     );
+  }
+
+  /// Mở trang thanh toán web (/pay/{token}) bằng trình duyệt; xong sẽ quay lại app qua animallocket://checkout.
+  Future<void> buyOnWeb(String sku) async {
+    final current = state.value;
+    if (current == null || current.busy) return;
+    state = AsyncData(current.copyWith(busy: true));
+    try {
+      final link = await ref
+          .read(billingRepositoryProvider)
+          .createCheckout(sku);
+      final opened = await launchUrl(
+        Uri.parse(link.url),
+        mode: LaunchMode.externalApplication,
+      );
+      _setMessage(
+        opened
+            ? 'Đã mở trang thanh toán. Thanh toán xong quay lại app để cập nhật.'
+            : 'Không mở được trình duyệt.',
+      );
+    } on ApiProblem catch (problem) {
+      _setMessage(switch (problem.code) {
+        'PAYMENT_UNAVAILABLE' => 'Thanh toán web chưa được bật trên máy chủ.',
+        'NOT_PURCHASABLE_ONLINE' => 'Sản phẩm này chưa bán qua web.',
+        _ => 'Không tạo được phiên thanh toán.',
+      });
+    } catch (_) {
+      _setMessage('Không tạo được phiên thanh toán.');
+    }
+  }
+
+  /// Gọi khi app quay lại foreground: tải lại gói/ví (webhook có thể đã ghi nhận thanh toán).
+  Future<void> refreshAfterCheckout() async {
+    final current = state.value;
+    if (current == null || !current.enabled) return;
+    try {
+      final me = await ref.read(billingRepositoryProvider).me();
+      final changed =
+          me.plan != current.me?.plan ||
+          !mapEquals(me.wallet, current.me?.wallet);
+      state = AsyncData(
+        current.copyWith(
+          busy: false,
+          me: me,
+          message: changed ? 'Đã cập nhật giao dịch của bạn.' : current.message,
+        ),
+      );
+      if (changed) {
+        await ref.read(authControllerProvider.notifier).refreshProfile();
+      }
+    } catch (_) {
+      state = AsyncData(
+        current.copyWith(busy: false, message: current.message),
+      );
+    }
   }
 
   Future<void> buy(String sku) async {
@@ -85,6 +174,13 @@ class BillingController extends AsyncNotifier<BillingState> {
     final current = state.value;
     if (current != null) state = AsyncData(current.copyWith(busy: true));
     await InAppPurchase.instance.restorePurchases();
+  }
+
+  void _setMessage(String message) {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData(current.copyWith(busy: false, message: message));
+    }
   }
 
   Future<void> _onPurchases(List<PurchaseDetails> purchases) async {
@@ -104,37 +200,15 @@ class BillingController extends AsyncNotifier<BillingState> {
           if (purchase.pendingCompletePurchase) {
             await InAppPurchase.instance.completePurchase(purchase);
           }
-          final current = state.value;
-          if (current != null) {
-            state = AsyncData(
-              current.copyWith(
-                busy: false,
-                message: 'Giao dịch đã được xác minh.',
-              ),
-            );
-          }
+          _setMessage('Giao dịch đã được xác minh.');
         } catch (error) {
-          final current = state.value;
-          if (current != null) {
-            state = AsyncData(
-              current.copyWith(
-                busy: false,
-                message: 'Backend chưa xác minh giao dịch. Giao dịch chưa được hoàn tất.',
-              ),
-            );
-          }
+          _setMessage(
+            'Backend chưa xác minh giao dịch. Giao dịch chưa được hoàn tất.',
+          );
         }
       } else if (purchase.status == PurchaseStatus.error ||
           purchase.status == PurchaseStatus.canceled) {
-        final current = state.value;
-        if (current != null) {
-          state = AsyncData(
-            current.copyWith(
-              busy: false,
-              message: purchase.error?.message ?? 'Đã huỷ giao dịch.',
-            ),
-          );
-        }
+        _setMessage(purchase.error?.message ?? 'Đã huỷ giao dịch.');
       }
     }
   }

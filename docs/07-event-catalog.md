@@ -47,10 +47,11 @@ Thứ tự được đảm bảo **theo từng khoá** trong một topic; **khô
 
 | `type` | Payload (`Events.*`) | Consumer |
 |---|---|---|
-| `USER_REGISTERED` | `{publicId, ageGroup, leadAnimal}` | media (`owner_animals`) |
+| `USER_REGISTERED` | `{publicId, ageGroup, leadAnimal, avatar}` | media (`owner_animals`) |
 | `USER_DELETED` | `{publicId}` | media, post, chat, discovery, billing |
 | `USER_BLOCKED` | `{blockerPublicId, blockedPublicId}` | chat (đóng hội thoại), post (xoá cache bạn bè) |
 | `LEAD_ANIMAL_CHANGED` | `{publicId, leadAnimal}` | media (`owner_animals`) |
+| `AVATAR_CHANGED` | `{publicId, avatar, leadAnimal}` | (chưa có consumer; phát khi cấp avatar cho tài khoản cũ) |
 
 ### Bạn bè (`friend.events`)
 

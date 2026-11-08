@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:animal_locket/core/auth/auth_controller.dart';
-import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/app_background.dart';
 import 'package:animal_locket/features/chat/data/glyph_repository_impl.dart';
@@ -24,13 +23,9 @@ class ConversationScreen extends ConsumerStatefulWidget {
 
 class _ConversationScreenState extends ConsumerState<ConversationScreen>
     with WidgetsBindingObserver {
-  final _controller = TextEditingController();
-  var _glyphMode = false;
-
   @override
   void initState() {
     super.initState();
-    _glyphMode = ref.read(backendModeProvider) == BackendMode.demo;
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -48,16 +43,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _controller.text;
-    _controller.clear();
-    await ref
-        .read(conversationControllerProvider(widget.conversationId).notifier)
-        .sendText(text);
   }
 
   @override
@@ -83,124 +69,60 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
           child: value.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (_, _) => Center(child: Text(l10n.messagesLoadError)),
-            data: (data) => Column(
-              children: [
-                if (data.closedReason != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    color: AppColors.danger.withValues(alpha: .12),
-                    child: Text(
-                      '${l10n.conversationClosed}: ${data.closedReason}',
-                      textAlign: TextAlign.center,
+            data: (data) {
+              // Chat chỉ bằng ký hiệu: ẩn tin chữ/ảnh cũ (dữ liệu vẫn còn trên server).
+              final messages = data.messages
+                  .where((m) => m.type == ChatMessageType.glyph)
+                  .toList();
+              return Column(
+                children: [
+                  if (data.closedReason != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      color: AppColors.danger.withValues(alpha: .12),
+                      child: Text(
+                        '${l10n.conversationClosed}: ${data.closedReason}',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
-                Expanded(
-                  child: data.messages.isEmpty
-                      ? Center(child: Text(l10n.glyphComposerEmpty))
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: data.messages.length,
-                          itemBuilder: (_, index) => _MessageBubble(
-                            message: data.messages[index],
-                            mine: data.messages[index].senderId == myId,
-                            dictionary: glyphs,
-                            onRetry: () => ref
-                                .read(
-                                  conversationControllerProvider(
-                                    widget.conversationId,
-                                  ).notifier,
-                                )
-                                .retryMessage(data.messages[index]),
+                  Expanded(
+                    child: messages.isEmpty
+                        ? Center(child: Text(l10n.glyphComposerEmpty))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: messages.length,
+                            itemBuilder: (_, index) => _MessageBubble(
+                              message: messages[index],
+                              mine: messages[index].senderId == myId,
+                              dictionary: glyphs,
+                              onRetry: () => ref
+                                  .read(
+                                    conversationControllerProvider(
+                                      widget.conversationId,
+                                    ).notifier,
+                                  )
+                                  .retryMessage(messages[index]),
+                            ),
                           ),
-                        ),
-                ),
-                if (data.actionError != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      data.actionError is GlyphFeatureUnavailable
-                          ? l10n.glyphFeatureWaitingBackend
-                          : l10n.messageSendFailed,
-                      style: TextStyle(color: AppColors.danger),
-                    ),
                   ),
-                if (_glyphMode)
+                  if (data.actionError != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        data.actionError is GlyphFeatureUnavailable
+                            ? l10n.glyphFeatureWaitingBackend
+                            : l10n.messageSendFailed,
+                        style: TextStyle(color: AppColors.danger),
+                      ),
+                    ),
                   GlyphComposerPanel(
                     conversationId: widget.conversationId,
                     enabled: data.closedReason == null,
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Semantics(
-                          button: true,
-                          label: l10n.sendPhoto,
-                          child: IconButton(
-                            constraints: const BoxConstraints.tightFor(
-                              width: 44,
-                              height: 44,
-                            ),
-                            onPressed: data.closedReason == null ? () {} : null,
-                            icon: const Icon(Icons.photo_outlined),
-                            tooltip: l10n.sendPhoto,
-                          ),
-                        ),
-                        Semantics(
-                          button: true,
-                          label: l10n.glyphModeOpen,
-                          child: IconButton(
-                            constraints: const BoxConstraints.tightFor(
-                              width: 44,
-                              height: 44,
-                            ),
-                            onPressed: data.closedReason == null
-                                ? () => setState(() => _glyphMode = true)
-                                : null,
-                            icon: const Icon(Icons.gesture_rounded),
-                            tooltip: l10n.glyphModeOpen,
-                          ),
-                        ),
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            enabled: data.closedReason == null,
-                            maxLength: 2000,
-                            decoration: InputDecoration(
-                              hintText: l10n.messageHint,
-                              counterText: '',
-                            ),
-                          ),
-                        ),
-                        Semantics(
-                          button: true,
-                          label: l10n.sendMessage,
-                          child: IconButton.filled(
-                            constraints: const BoxConstraints.tightFor(
-                              width: 44,
-                              height: 44,
-                            ),
-                            onPressed: data.closedReason == null ? _send : null,
-                            icon: const Icon(Icons.send_rounded),
-                            tooltip: l10n.sendMessage,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                if (_glyphMode)
-                  SizedBox(
-                    height: 48,
-                    child: TextButton.icon(
-                      onPressed: () => setState(() => _glyphMode = false),
-                      icon: const Icon(Icons.keyboard_rounded),
-                      label: Text(l10n.glyphModeClose),
-                    ),
-                  ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         ),
       ),

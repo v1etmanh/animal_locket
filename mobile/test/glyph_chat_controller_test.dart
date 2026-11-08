@@ -35,6 +35,7 @@ const _config = AppConfig(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
 
   late Directory directory;
@@ -61,6 +62,7 @@ void main() {
         chatRepositoryProvider.overrideWithValue(chat),
         chatRealtimeProvider.overrideWithValue(realtime),
         glyphLocalDataSourceProvider.overrideWith((_) async => local),
+        cacheDatabaseProvider.overrideWith((_) async => cache),
         glyphFeatureFlagsProvider.overrideWithValue(
           const GlyphFeatureFlags(
             readEnabled: true,
@@ -189,6 +191,56 @@ void main() {
     expect(acknowledged.pending, isFalse);
     expect(await local.pendingChat('account-a', 'conversation-1'), isEmpty);
   });
+
+  test(
+    'server echo arriving before ack does not duplicate the bubble',
+    () async {
+      // chat-service phát 'message' cho chính người gửi TRƯỚC khi trả 'ack'.
+      realtime.state = ChatConnectionState.connected;
+      final provider = conversationControllerProvider('conversation-1');
+      await container.read(provider.future);
+      final controller = container.read(provider.notifier);
+
+      expect(
+        await controller.sendGlyphs([_conversationGlyph('glyph-1')]),
+        isTrue,
+      );
+      final optimistic = container.read(provider).requireValue.messages.single;
+
+      realtime.emit({
+        'type': 'message',
+        'data': {
+          'id': 'message-1',
+          'conversationId': 'conversation-1',
+          'senderId': 'account-a',
+          'type': 'GLYPH',
+          'text': 'xin chào',
+          'glyphIds': ['glyph-1'],
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'clientId': optimistic.clientId,
+        },
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      var messages = container.read(provider).requireValue.messages;
+      expect(messages, hasLength(1));
+      expect(messages.single.id, 'message-1');
+      expect(messages.single.pending, isFalse);
+
+      realtime.emit({
+        'type': 'ack',
+        'data': {'clientId': optimistic.clientId, 'messageId': 'message-1'},
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      messages = container.read(provider).requireValue.messages;
+      expect(messages, hasLength(1), reason: 'ack không được tạo bản thứ hai');
+      expect(await local.pendingChat('account-a', 'conversation-1'), isEmpty);
+      expect(
+        realtime.sent.where((f) => f['type'] == 'send'),
+        hasLength(1),
+        reason: 'chỉ gửi một lần',
+      );
+    },
+  );
 
   test('uses REST while disconnected and locks composer when closed', () async {
     realtime.state = ChatConnectionState.disconnected;

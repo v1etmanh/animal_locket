@@ -5,6 +5,7 @@ public final class EventTypes {
     public static final String USER_DELETED = "USER_DELETED";
     public static final String USER_BLOCKED = "USER_BLOCKED";
     public static final String LEAD_ANIMAL_CHANGED = "LEAD_ANIMAL_CHANGED";
+    public static final String AVATAR_CHANGED = "AVATAR_CHANGED";
     public static final String FRIEND_REQUEST_RECEIVED = "FRIEND_REQUEST_RECEIVED";
     public static final String FRIEND_ACCEPTED = "FRIEND_ACCEPTED";
     public static final String FRIEND_REMOVED = "FRIEND_REMOVED";

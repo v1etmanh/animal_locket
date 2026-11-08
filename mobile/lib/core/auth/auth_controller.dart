@@ -80,6 +80,14 @@ class AuthController extends Notifier<AuthState> {
   void finishRegistration(MeProfile profile) =>
       state = AuthState.ready(profile);
 
+  /// Tải lại hồ sơ (ví dụ quay về từ trang thanh toán web). Lỗi mạng thì giữ nguyên trạng thái.
+  Future<void> refreshProfile() async {
+    if (state.status != AuthStatus.ready) return;
+    try {
+      state = AuthState.ready(await ref.read(userRepositoryProvider).me());
+    } catch (_) {}
+  }
+
   Future<void> signOut() async {
     await ref.read(pushServiceProvider)?.unregister();
     await ref.read(sessionManagerProvider).signOut();
