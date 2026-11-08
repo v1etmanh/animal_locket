@@ -53,6 +53,14 @@ public class PostController {
         posts.delete(me, id);
     }
 
+    /** Dưới /posts/** để gateway chuyển về post-service (/users/** thuộc user-service). */
+    @GetMapping("/posts/by/{publicId}")
+    public PostDtos.FeedPage userPosts(@RequestHeader(Headers.PUBLIC_ID) String me, @PathVariable String publicId,
+                                       @RequestParam(required = false) Instant before,
+                                       @RequestParam(defaultValue = "30") int limit) {
+        return posts.userPosts(me, publicId, before, limit);
+    }
+
     @GetMapping("/feed")
     public PostDtos.FeedPage feed(@RequestHeader(Headers.PUBLIC_ID) String me,
                                   @RequestParam(required = false) Instant before,

@@ -78,6 +78,32 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                   style: const TextStyle(color: AppColors.muted),
                 ),
               ),
+              if (data.locationOff)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_off_outlined,
+                        size: 18,
+                        color: AppColors.orange,
+                      ),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          'Bật vị trí để tìm người ở gần. Hiện chỉ thấy người đang online.',
+                          style: TextStyle(color: AppColors.orange),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: ref
+                            .read(discoveryControllerProvider.notifier)
+                            .requestLocation,
+                        child: const Text('Bật vị trí'),
+                      ),
+                    ],
+                  ),
+                ),
               if (data.degraded)
                 const Padding(
                   padding: EdgeInsets.only(top: 10),

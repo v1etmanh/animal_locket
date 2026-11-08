@@ -125,6 +125,36 @@ public class PostService {
         return new PostDtos.FeedPage(items, next, false);
     }
 
+    /**
+     * Bài của một người, mới nhất trước. Chính mình: mọi bài trừ DELETED (phân trang theo createdAt).
+     * Bạn bè: chỉ PUBLISHED (phân trang theo publishedAt). Người khác, hoặc không xác minh được quan hệ:
+     * 404 để không lộ người đó có bài, cùng luật với {@link #get}.
+     */
+    @Transactional(readOnly = true)
+    public PostDtos.FeedPage userPosts(String me, String author, Instant before, int limit) {
+        int size = Math.max(1, Math.min(limit, MAX_PAGE));
+        Instant cursor = before == null ? Instant.now().plusSeconds(60) : before;
+        if (author.equals(me)) {
+            List<Post> page = posts.findByAuthorIdAndStatusNotAndCreatedAtLessThanOrderByCreatedAtDesc(
+                    me, Post.Status.DELETED, cursor, PageRequest.of(0, size));
+            Instant next = page.size() == size ? page.get(page.size() - 1).getCreatedAt() : null;
+            return new PostDtos.FeedPage(views(me, page), next, false);
+        }
+        boolean friend;
+        try {
+            friend = users.areFriends(me, author);
+        } catch (ApiException e) {
+            friend = false; // không xác minh được thì ẩn
+        }
+        if (!friend) {
+            throw ApiException.notFound("Người dùng");
+        }
+        List<Post> page = posts.findByAuthorIdInAndStatusAndPublishedAtLessThanOrderByPublishedAtDesc(
+                Set.of(author), Post.Status.PUBLISHED, cursor, PageRequest.of(0, size));
+        Instant next = page.size() == size ? page.get(page.size() - 1).getPublishedAt() : null;
+        return new PostDtos.FeedPage(views(me, page), next, false);
+    }
+
     @Transactional(readOnly = true)
     public List<PostDtos.PostView> mine(String me, int limit) {
         List<Post> page = posts.findByAuthorIdAndStatusNotOrderByCreatedAtDesc(me, Post.Status.DELETED,
@@ -202,22 +232,38 @@ public class PostService {
     @Transactional
     public void onPhotoReady(Events.PhotoReady e) {
         MediaState state = mediaStates.save(new MediaState(e.mediaId(), e.ownerPublicId(), "READY", e.publicKey(), null));
-        posts.findByMediaId(e.mediaId()).filter(p -> p.getStatus() == Post.Status.PENDING_MEDIA).ifPresent(p -> {
-            applyMedia(p, state);
-            if (p.getStatus() == Post.Status.PUBLISHED) {
-                outbox.publish(Topics.POST, EventTypes.POST_PUBLISHED, p.getId(),
-                        new Events.PostPublished(p.getId(), p.getAuthorId()));
-            }
-        });
+        posts.findForUpdateByMediaId(e.mediaId()).ifPresent(p -> settle(p, state));
     }
 
     @Transactional
     public void onPhotoRejected(Events.PhotoRejected e) {
         MediaState state = mediaStates.save(new MediaState(e.mediaId(), e.ownerPublicId(), "REJECTED", null, e.reason()));
-        posts.findByMediaId(e.mediaId()).filter(p -> p.getStatus() == Post.Status.PENDING_MEDIA).ifPresent(p -> {
-            applyMedia(p, state);
+        posts.findForUpdateByMediaId(e.mediaId()).ifPresent(p -> settle(p, state));
+    }
+
+    /**
+     * Gỡ một bài kẹt ở PENDING_MEDIA dù đã có kết quả ảnh. Xảy ra khi {@link #create} và {@link #onPhotoReady}
+     * chạy song song: mỗi transaction không thấy dòng của bên kia nên không bên nào chuyển trạng thái.
+     * Gọi từ {@link PendingPostReconciler}, mỗi bài một transaction.
+     */
+    @Transactional
+    public void settlePending(String postId) {
+        posts.findForUpdateById(postId).ifPresent(p ->
+                mediaStates.findById(p.getMediaId()).ifPresent(state -> settle(p, state)));
+    }
+
+    /** Chỉ đổi bài đang PENDING_MEDIA; bài đã được gọi phải đang giữ khoá dòng để không phát event hai lần. */
+    private void settle(Post p, MediaState state) {
+        if (p.getStatus() != Post.Status.PENDING_MEDIA) {
+            return;
+        }
+        applyMedia(p, state);
+        if (p.getStatus() == Post.Status.PUBLISHED) {
+            outbox.publish(Topics.POST, EventTypes.POST_PUBLISHED, p.getId(),
+                    new Events.PostPublished(p.getId(), p.getAuthorId()));
+        } else if (!state.ready()) {
             quota.refund(p.getAuthorId(), p.getCreatedAt());
-        });
+        }
     }
 
     /** Xoá toàn bộ dữ liệu của người dùng đã xoá tài khoản (bài, like, bình luận của họ). */

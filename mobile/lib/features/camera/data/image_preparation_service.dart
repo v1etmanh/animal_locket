@@ -26,19 +26,22 @@ class PreparedImage {
 class ImagePreparationService {
   const ImagePreparationService();
   static const maxBytes = 10 * 1024 * 1024;
+  static const maxEdge = 1440;
 
   Future<PreparedImage> prepare(XFile input) async {
     // Ảnh đã đúng loại/cỡ vẫn nén lại một lần (keepExif: false) để bỏ EXIF, nhất là toạ độ GPS.
     // Server không còn xoá EXIF, nên bước này là chỗ duy nhất làm việc đó.
+    // 1440 px / q85: nhìn trên điện thoại gần như không khác 2048/q94 nhưng nhẹ ~3 lần,
+    // nên nén và tải lên nhanh hơn rõ.
     final tempDir = await getTemporaryDirectory();
-    for (final quality in const [94, 88, 82, 74]) {
+    for (final quality in const [85, 78, 70]) {
       final target =
           '${tempDir.path}/animal-locket-${DateTime.now().microsecondsSinceEpoch}-$quality.jpg';
       final compressed = await FlutterImageCompress.compressAndGetFile(
         input.path,
         target,
-        minWidth: 2048,
-        minHeight: 2048,
+        minWidth: maxEdge,
+        minHeight: maxEdge,
         quality: quality,
         format: CompressFormat.jpeg,
         keepExif: false,

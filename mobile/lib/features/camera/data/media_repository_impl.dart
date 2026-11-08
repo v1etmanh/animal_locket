@@ -54,10 +54,7 @@ class LiveMediaRepository implements MediaRepository {
         onSendProgress: onProgress,
         options: Options(
           followRedirects: false,
-          headers: {
-            ...ticket.headers,
-            Headers.contentLengthHeader: length,
-          },
+          headers: {...ticket.headers, Headers.contentLengthHeader: length},
           validateStatus: (status) =>
               status != null && status >= 200 && status < 300,
         ),

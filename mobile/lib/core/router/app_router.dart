@@ -84,6 +84,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(path: '/camera', builder: (_, _) => const CameraScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
               GoRoute(path: '/feed', builder: (_, _) => const FeedScreen()),
             ],
           ),

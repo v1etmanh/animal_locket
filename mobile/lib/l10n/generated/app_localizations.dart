@@ -106,6 +106,12 @@ abstract class AppLocalizations {
   /// **'Ảnh'**
   String get photosTab;
 
+  /// No description provided for @feedTab.
+  ///
+  /// In vi, this message translates to:
+  /// **'Bảng tin'**
+  String get feedTab;
+
   /// No description provided for @discoverTab.
   ///
   /// In vi, this message translates to:

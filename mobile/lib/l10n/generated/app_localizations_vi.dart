@@ -16,6 +16,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get photosTab => 'Ảnh';
 
   @override
+  String get feedTab => 'Bảng tin';
+
+  @override
   String get discoverTab => 'Khám phá';
 
   @override

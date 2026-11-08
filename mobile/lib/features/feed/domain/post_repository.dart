@@ -115,6 +115,13 @@ class Comment {
 abstract interface class PostRepository {
   Future<Post> create({required String mediaId, String? caption});
   Future<List<Post>> mine({int limit = 50});
+
+  /// Bài của một người (chính mình: mọi trạng thái; bạn bè: chỉ đã đăng). Người lạ: ApiProblem 404.
+  Future<PagedResult<Post>> postsOf(
+    String publicId, {
+    String? before,
+    int limit = 30,
+  });
   Future<PagedResult<Post>> feed({String? before, int limit = 20});
   Future<void> deletePost(String postId);
   Future<void> setLiked(String postId, bool liked);

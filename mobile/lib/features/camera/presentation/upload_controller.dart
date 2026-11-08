@@ -1,51 +1,76 @@
+import 'dart:async';
+
 import 'package:animal_locket/features/camera/data/image_preparation_service.dart';
 import 'package:animal_locket/features/camera/data/media_repository_impl.dart';
 import 'package:animal_locket/features/camera/domain/media_repository.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
+import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
+import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum UploadStage {
-  idle,
-  preparing,
-  uploading,
-  processing,
-  ready,
-  rejected,
-  failed,
-}
+/// idle → sending → sent | rejected | failed. Gửi chạy nền: người dùng quay về camera ngay sau khi bấm gửi.
+enum UploadStage { idle, sending, sent, rejected, failed }
 
 class UploadFlowState {
   const UploadFlowState({
     this.stage = UploadStage.idle,
-    this.progress = 0,
-    this.label = '',
     this.post,
     this.rejectReason,
     this.error,
+    this.input,
+    this.caption,
   });
 
   final UploadStage stage;
-  final double progress;
-  final String label;
   final Post? post;
   final String? rejectReason;
   final Object? error;
+
+  /// Giữ lại để "Thử lại" khi gửi lỗi.
+  final XFile? input;
+  final String? caption;
+
+  bool get sending => stage == UploadStage.sending;
 }
 
 class UploadController extends Notifier<UploadFlowState> {
-  @override
-  UploadFlowState build() => const UploadFlowState();
+  Timer? _autoHide;
 
-  Future<void> publish({required XFile input, String? caption}) async {
+  @override
+  UploadFlowState build() {
+    ref.onDispose(() => _autoHide?.cancel());
+    return const UploadFlowState();
+  }
+
+  /// Bắt đầu gửi; trả về false nếu đang có ảnh khác đang gửi.
+  bool publish({required XFile input, String? caption}) {
+    if (state.sending) return false;
+    _autoHide?.cancel();
+    state = UploadFlowState(
+      stage: UploadStage.sending,
+      input: input,
+      caption: caption,
+    );
+    unawaited(_send(input, caption));
+    return true;
+  }
+
+  Future<void> retry() async {
+    final input = state.input;
+    if (input == null || state.sending) return;
+    publish(input: input, caption: state.caption);
+  }
+
+  void dismiss() {
+    _autoHide?.cancel();
+    if (!state.sending) state = const UploadFlowState();
+  }
+
+  Future<void> _send(XFile input, String? caption) async {
     PreparedImage? prepared;
     try {
-      state = const UploadFlowState(
-        stage: UploadStage.preparing,
-        progress: .05,
-        label: 'Đang chuẩn bị ảnh',
-      );
       prepared = await const ImagePreparationService().prepare(input);
       final media = ref.read(mediaRepositoryProvider);
       final ticket = await media.createUpload(
@@ -53,64 +78,44 @@ class UploadController extends Notifier<UploadFlowState> {
         contentType: prepared.contentType,
         sizeBytes: prepared.sizeBytes,
       );
-      state = const UploadFlowState(
-        stage: UploadStage.uploading,
-        progress: .12,
-        label: 'Đang tải ảnh lên',
-      );
       await media.uploadFile(
         ticket: ticket,
         file: prepared.file,
         contentType: prepared.contentType,
-        onProgress: (sent, total) {
-          if (total <= 0) return;
-          state = UploadFlowState(
-            stage: UploadStage.uploading,
-            progress: .12 + (sent / total * .33),
-            label: 'Đang tải ảnh lên',
-          );
-        },
       );
-      await media.complete(ticket.mediaId);
-      final post = await ref
-          .read(postRepositoryProvider)
-          .create(mediaId: ticket.mediaId, caption: caption);
-      state = UploadFlowState(
-        stage: UploadStage.processing,
-        progress: .68,
-        label: 'Đang đổi mặt thành con vật',
-        post: post,
-      );
-      final result = await media.waitUntilProcessed(ticket.mediaId);
+      // Server kiểm tra xong là READY ngay trong lời gọi này; chỉ hỏi lại khi
+      // backend cũ còn trả trạng thái trung gian.
+      var result = await media.complete(ticket.mediaId);
+      if (result.status != MediaStatus.ready &&
+          result.status != MediaStatus.rejected) {
+        result = await media.waitUntilProcessed(ticket.mediaId);
+      }
       if (result.status == MediaStatus.rejected) {
         state = UploadFlowState(
           stage: UploadStage.rejected,
-          progress: 1,
-          label: 'Ảnh không được chấp nhận',
-          post: post,
           rejectReason: result.rejectReason,
         );
-      } else {
-        state = UploadFlowState(
-          stage: UploadStage.ready,
-          progress: 1,
-          label: 'Ảnh đã sẵn sàng',
-          post: post,
-        );
+        return;
       }
+      final post = await ref
+          .read(postRepositoryProvider)
+          .create(mediaId: ticket.mediaId, caption: caption);
+      ref
+        ..invalidate(userPostsProvider)
+        ..invalidate(feedControllerProvider);
+      state = UploadFlowState(stage: UploadStage.sent, post: post);
+      _autoHide = Timer(const Duration(seconds: 4), dismiss);
     } catch (error) {
       state = UploadFlowState(
         stage: UploadStage.failed,
-        progress: state.progress,
-        label: 'Không thể đăng ảnh',
         error: error,
+        input: input,
+        caption: caption,
       );
     } finally {
       await prepared?.cleanup();
     }
   }
-
-  void reset() => state = const UploadFlowState();
 }
 
 final uploadControllerProvider =

@@ -6,6 +6,7 @@ import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
+import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +19,9 @@ class FeedScreen extends ConsumerWidget {
     final feed = ref.watch(feedControllerProvider);
     return AppPage(
       title: 'Khoảnh khắc',
+      // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
+      scrollable: false,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       actions: [
         IconButton(
           tooltip: 'Bạn bè',
@@ -41,17 +45,34 @@ class FeedScreen extends ConsumerWidget {
                   },
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    shrinkWrap: true,
+                    // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
+                    padding: const EdgeInsets.only(bottom: 110),
                     itemCount: data.items.length + (data.loadingMore ? 1 : 0),
                     separatorBuilder: (_, _) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       if (index == data.items.length) {
                         return const Center(child: CircularProgressIndicator());
                       }
+                      final day = _dayLabel(data.items[index]);
+                      final newDay =
+                          index == 0 || day != _dayLabel(data.items[index - 1]);
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (index == 0 && data.degraded)
                             const _DegradedBanner(),
+                          if (newDay)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: 10,
+                                left: 4,
+                              ),
+                              child: Text(
+                                day,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
                           _PostCard(post: data.items[index]),
                         ],
                       );
@@ -210,6 +231,9 @@ class _PostCard extends ConsumerWidget {
     );
   }
 }
+
+String _dayLabel(Post post) =>
+    formatPostDay((post.publishedAt ?? post.createdAt).toLocal());
 
 String _relativeTime(DateTime value) {
   final difference = DateTime.now().toUtc().difference(value.toUtc());

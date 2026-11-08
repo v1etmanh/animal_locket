@@ -56,6 +56,7 @@ class PostFlowIntegrationTest {
     @Autowired OutboxRepository outbox;
     @Autowired PostRepository posts;
     @Autowired PostEventsListener listener;
+    @Autowired com.animallocket.post.service.PendingPostReconciler reconciler;
     @MockBean UserDirectory users;
     @MockBean JwtDecoder jwtDecoder;
 
@@ -143,6 +144,24 @@ class PostFlowIntegrationTest {
         MvcResult r = mvc.perform(as(post("/api/v1/posts"), ALICE).content("{\"mediaId\":\"" + m + "\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("PUBLISHED")).andReturn();
         assertTrue(body(r).get("publishedAt").asText().length() > 5);
+    }
+
+    @Test
+    void reconcilerPublishesPostThatLostTheRaceWithPhotoReady() throws Exception {
+        String m = media();
+        String id = createPost(ALICE, m);
+        // Mô phỏng cuộc đua: listener đã lưu kết quả ảnh nhưng không thấy bài (chưa commit) nên không cập nhật.
+        mediaStateRepo.save(new com.animallocket.post.domain.MediaState(m, ALICE, "READY", "pub/" + m + ".jpg", null));
+        assertEquals(Post.Status.PENDING_MEDIA, posts.findById(id).orElseThrow().getStatus());
+
+        reconciler.reconcile();
+        reconciler.reconcile(); // chạy lại không phát event lần hai
+
+        Post p = posts.findById(id).orElseThrow();
+        assertEquals(Post.Status.PUBLISHED, p.getStatus());
+        assertEquals("pub/" + m + ".jpg", p.getPublicKey());
+        assertEquals(1, events(EventTypes.POST_PUBLISHED).size());
+        mvc.perform(as(get("/api/v1/feed"), BOB)).andExpect(jsonPath("$.items[0].id").value(id));
     }
 
     @Test
@@ -248,6 +267,42 @@ class PostFlowIntegrationTest {
         MvcResult p1 = mvc.perform(as(get("/api/v1/feed?limit=2"), ALICE)).andExpect(jsonPath("$.items.length()").value(2)).andReturn();
         String next = body(p1).get("nextBefore").asText();
         mvc.perform(as(get("/api/v1/feed?limit=2&before=" + next), ALICE)).andExpect(jsonPath("$.items.length()").value(1));
+    }
+
+    @Test
+    void friendSeesOnlyPublishedPostsOfOnePersonWithPaging() throws Exception {
+        String pending = createPost(BOB, media()); // chưa có PHOTO_READY
+        for (int i = 0; i < 3; i++) {
+            String m = media();
+            createPostWithQuotaReset(m);
+            ready(m, BOB);
+            Thread.sleep(5);
+        }
+        MvcResult p1 = mvc.perform(as(get("/api/v1/posts/by/" + BOB + "?limit=2"), ALICE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].status").value("PUBLISHED")).andReturn();
+        String next = body(p1).get("nextBefore").asText();
+        mvc.perform(as(get("/api/v1/posts/by/" + BOB + "?limit=2&before=" + next), ALICE))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.nextBefore").doesNotExist());
+
+        // Chính chủ thấy cả bài đang chờ xử lý.
+        mvc.perform(as(get("/api/v1/posts/by/" + BOB), BOB))
+                .andExpect(jsonPath("$.items.length()").value(4))
+                .andExpect(jsonPath("$.items[3].id").value(pending));
+    }
+
+    @Test
+    void strangerAndUnverifiableRelationshipCannotListPosts() throws Exception {
+        String m = media();
+        createPost(ALICE, m);
+        ready(m, ALICE);
+        mvc.perform(as(get("/api/v1/posts/by/" + ALICE), CAROL)).andExpect(status().isNotFound());
+
+        when(users.areFriends(BOB, ALICE))
+                .thenThrow(new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "FRIENDS_UNAVAILABLE", "x"));
+        mvc.perform(as(get("/api/v1/posts/by/" + ALICE), BOB)).andExpect(status().isNotFound());
     }
 
     private void createPostWithQuotaReset(String mediaId) throws Exception {
