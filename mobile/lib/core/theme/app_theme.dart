@@ -36,8 +36,8 @@ abstract final class AppTheme {
       colorScheme: scheme,
       fontFamily: AppFonts.body,
     );
-    TextStyle title(TextStyle? s, double size) => (s ?? const TextStyle())
-        .copyWith(
+    TextStyle title(TextStyle? s, double size) =>
+        (s ?? const TextStyle()).copyWith(
           fontFamily: AppFonts.title,
           fontSize: size,
           fontWeight: FontWeight.w700,
@@ -48,7 +48,9 @@ abstract final class AppTheme {
       bodyColor: p.ink,
       displayColor: p.ink,
     );
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
     const buttonPadding = EdgeInsets.symmetric(horizontal: 22, vertical: 14);
     final buttonText = const TextStyle(
       fontFamily: AppFonts.body,

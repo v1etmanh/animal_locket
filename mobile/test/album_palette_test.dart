@@ -12,9 +12,18 @@ void main() {
     });
 
     test('each theme has its own accent and kanji', () {
-      expect(AlbumPalette.of(AlbumThemeId.yuzu).accent, const Color(0xFFA35C00));
-      expect(AlbumPalette.of(AlbumThemeId.sakura).accent, const Color(0xFFB23A5B));
-      expect(AlbumPalette.of(AlbumThemeId.sora).accent, const Color(0xFF2F5F8A));
+      expect(
+        AlbumPalette.of(AlbumThemeId.yuzu).accent,
+        const Color(0xFFA35C00),
+      );
+      expect(
+        AlbumPalette.of(AlbumThemeId.sakura).accent,
+        const Color(0xFFB23A5B),
+      );
+      expect(
+        AlbumPalette.of(AlbumThemeId.sora).accent,
+        const Color(0xFF2F5F8A),
+      );
       expect(AlbumPalette.of(AlbumThemeId.yuzu).kanji, '柚');
       expect(AlbumPalette.of(AlbumThemeId.sakura).kanji, '桜');
       expect(AlbumPalette.of(AlbumThemeId.sora).kanji, '空');

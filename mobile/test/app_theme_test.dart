@@ -38,7 +38,10 @@ void main() {
           MaterialApp(
             theme: theme,
             home: Scaffold(
-              body: FilledButton(onPressed: () {}, child: const Text('Thử lại')),
+              body: FilledButton(
+                onPressed: () {},
+                child: const Text('Thử lại'),
+              ),
             ),
           ),
         );

@@ -2,7 +2,9 @@ import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/network/api_client.dart';
 import 'package:animal_locket/core/router/app_router.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/features/devices/data/push_service.dart';
 import 'package:animal_locket/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +20,9 @@ class AnimalLocketApp extends ConsumerWidget {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
-      theme: AppTheme.light,
+      theme: AppTheme.forPalette(
+        AlbumPalette.of(ref.watch(albumThemeProvider)),
+      ),
       locale: const Locale('vi'),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
