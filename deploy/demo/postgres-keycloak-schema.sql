@@ -1,0 +1,4 @@
+\connect keycloak_db
+
+CREATE SCHEMA IF NOT EXISTS keycloak AUTHORIZATION animal;
+REVOKE ALL ON SCHEMA keycloak FROM PUBLIC;

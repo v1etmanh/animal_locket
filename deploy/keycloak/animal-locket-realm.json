@@ -65,6 +65,25 @@
       }
     },
     {
+      "clientId": "postman",
+      "name": "Animal Locket API smoke tests",
+      "description": "Public client for Postman Authorization Code + PKCE smoke tests.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["https://oauth.pstmn.io/v1/callback"],
+      "webOrigins": ["https://oauth.pstmn.io"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://oauth.pstmn.io/v1/callback"
+      }
+    },
+    {
       "clientId": "user-service-admin",
       "name": "user-service (xoá tài khoản)",
       "description": "Service account của user-service, chỉ để xoá user trong Keycloak khi người dùng xoá tài khoản.",
