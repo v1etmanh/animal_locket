@@ -1,0 +1,387 @@
+{
+  "info": {
+    "_postman_id": "d8871bc5-1965-4d03-bc6a-4ab447170755",
+    "name": "Animal Locket Demo Smoke",
+    "description": "Smoke tests for the public Animal Locket deployment boundary. Obtain an Authorization Code + PKCE token with client_id=postman, then save it in the access_token environment variable. Run folders in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('access_token') && !pm.request.url.toString().includes('/.well-known/') && !pm.request.url.toString().includes('/minio/health/') && !pm.info.requestName.includes('Unauthorized') && !pm.info.requestName.includes('redirect') && !pm.info.requestName.includes('admin')) {",
+          "  console.warn('access_token is empty. Follow docs/20-digitalocean-demo-deployment-runbook.md section 20.13.');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Public edge and TLS",
+      "item": [
+        {
+          "name": "HTTP redirects to HTTPS",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://auth.{{public_domain}}/realms/{{realm}}/.well-known/openid-configuration",
+              "protocol": "http",
+              "host": ["auth", "{{public_domain}}"],
+              "path": ["realms", "{{realm}}", ".well-known", "openid-configuration"]
+            }
+          },
+          "protocolProfileBehavior": { "followRedirects": false },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP is permanently redirected', () => pm.expect(pm.response.code).to.be.oneOf([301, 308]));",
+                  "pm.test('Redirect target is HTTPS', () => pm.expect(pm.response.headers.get('Location')).to.match(/^https:\\/\\//));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Keycloak OIDC discovery",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{auth_base_url}}/realms/{{realm}}/.well-known/openid-configuration"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OIDC discovery returns 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Issuer is the configured HTTPS realm', () => pm.expect(body.issuer).to.eql(pm.environment.get('auth_base_url') + '/realms/' + pm.environment.get('realm')));",
+                  "pm.test('Authorization and token endpoints use HTTPS', () => { pm.expect(body.authorization_endpoint).to.match(/^https:\\/\\//); pm.expect(body.token_endpoint).to.match(/^https:\\/\\//); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Keycloak admin is not public",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{auth_base_url}}/admin/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public admin access is forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MinIO public health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{files_base_url}}/minio/health/live"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('MinIO is live', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API rejects an Unauthorized request",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/users/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Gateway requires a bearer token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - User bootstrap",
+      "item": [
+        {
+          "name": "Register profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alias\": \"{{test_alias}}\",\n  \"birthDate\": \"{{test_birth_date}}\"\n}"
+            },
+            "url": "{{api_base_url}}/api/v1/users/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Profile registration succeeds', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Profile has a publicId', () => pm.expect(body.publicId).to.be.a('string').and.not.empty);",
+                  "if (body.publicId) pm.environment.set('public_id', body.publicId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get my profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/users/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('user-service returns the profile', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is JSON', () => pm.response.to.be.json);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List animals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/animals"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Animal catalog is available', () => pm.response.to.have.status(200));",
+                  "pm.test('Catalog is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List friends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/friends"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Social API responds', () => pm.response.to.have.status(200));",
+                  "pm.test('Friends is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Business service smoke",
+      "item": [
+        {
+          "name": "post-service - Feed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/feed?limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('post-service feed responds', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Feed has items and degraded fields', () => { pm.expect(body).to.have.property('items'); pm.expect(body).to.have.property('degraded'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "post-service - My posts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/posts/mine?limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('post-service list responds', () => pm.response.to.have.status(200));",
+                  "pm.test('Posts is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "media-service - Missing media returns 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/00000000-0000-0000-0000-000000000000"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request reached media-service', () => pm.response.to.have.status(404));",
+                  "pm.test('No server error', () => pm.expect(pm.response.code).to.be.below(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "discovery-service - Heartbeat",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/heartbeat"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('discovery-service accepts heartbeat', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat-service - Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('chat-service responds', () => pm.response.to.have.status(200));",
+                  "pm.test('Conversations is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "billing-service - Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/billing/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('billing product catalog responds', () => pm.response.to.have.status(200));",
+                  "pm.test('Products is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "billing-service - My plan",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/billing/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('billing-service returns account billing state', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Billing state has plan and wallet', () => { pm.expect(body).to.have.property('plan'); pm.expect(body).to.have.property('wallet'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
