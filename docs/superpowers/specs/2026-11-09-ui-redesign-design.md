@@ -72,7 +72,7 @@ Mỗi theme là một bảng màu; mọi thành phần chỉ đọc màu qua tok
 | `tape1/2` (sọc washi) | `#F4B9A3` `#F9D3C3` | `#F7CF6B` `#FBE3A3` | `#F6B8C8` `#FBD7E1` | `#9CC7E3` `#C8E1F1` |
 | `accent` (con dấu, tab chọn, nút chính) | `#B8402A` | `#A35C00` | `#B23A5B` | `#2F5F8A` |
 | `accentDeep` (bóng nút) | `#8A2C1B` | `#7A4400` | `#842640` | `#204465` |
-| `accentSoft` (nền nhấn nhạt) | `#FBE1D6` | `#FFEFC2` | `#FBDDE6` | `#DCEAF5` |
+| `accentSoft` (nền nhấn nhạt) | `#FDEAE2` | `#FFF4D6` | `#FBDDE6` | `#DCEAF5` |
 | `muted` (chữ phụ) | `#6A5B4E` | `#6B5D45` | `#6C5A58` | `#56616B` |
 | `ink` (chữ chính) | `#2B2420` (chung) | ← | ← | ← |
 
