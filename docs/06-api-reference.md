@@ -166,7 +166,7 @@ distanceBand: người lớn  UNDER_1KM | 1_TO_3KM | 3_TO_10KM | OVER_10KM
 | `POST /chat/conversations` | `{withPublicId}` | `ConversationView` | `403` (không phải bạn / có chặn), `400 SELF_CHAT`, `503` |
 | `GET /chat/conversations` | — | `[ConversationView]` (chỉ `ACTIVE`, mới nhất trước) | |
 | `GET /chat/conversations/{id}/messages` | `?before=&limit=30` | `[MessageView]` (mới nhất trước) | 404 |
-| `POST /chat/conversations/{id}/messages` | `{type?: TEXT\|IMAGE, text?(≤2000), mediaId?}` | `201 MessageView` | `400 INVALID_MESSAGE`, `400 INVALID_MEDIA`, `409 MEDIA_NOT_READY`, `403`, `429 CHAT_RATE_LIMIT` |
+| `POST /chat/conversations/{id}/messages` | `{type?: TEXT\|IMAGE\|GLYPH, text?(≤2000), mediaId?, glyphIds?, clientId?}` | `201 MessageView` | `403 MESSAGE_TYPE_DISABLED` (mặc định chỉ nhận `GLYPH`, cấu hình `CHAT_ALLOWED_TYPES`), `400 INVALID_MESSAGE`, `400 INVALID_MEDIA`, `409 MEDIA_NOT_READY`, `403`, `429 CHAT_RATE_LIMIT` |
 | `POST /chat/conversations/{id}/read` | — | `204` | 404 |
 
 ```
@@ -191,7 +191,9 @@ Bắt tay: HTTP Upgrade kèm `Authorization: Bearer <JWT>` (gateway gắn `X-Pub
 | server → client | `{"type":"error","data":{"code":"..","message":"..","clientId":".."}}` | Lỗi nghiệp vụ (không ngắt kết nối): `NOT_FOUND`, `FORBIDDEN`, `CHAT_RATE_LIMIT`, `INVALID_MESSAGE`, `BAD_FRAME`, `UNKNOWN_TYPE`, `INTERNAL_ERROR` |
 | server → client | `{"type":"pong","data":{}}` | |
 
-Tin ảnh: client tạo upload với `context=CHAT`, `refId=<conversationId>`, đợi `READY`, rồi gửi khung `send` kiểu `IMAGE`; người nhận lấy URL bằng `GET /media/{mediaId}/url`.
+**Chat chỉ bằng ký hiệu (2026-11-08):** chat-service mặc định chỉ nhận tin `GLYPH` (`animal.chat.allowed-types`, biến `CHAT_ALLOWED_TYPES`, ví dụ `TEXT,IMAGE,GLYPH` để mở lại). Gửi `TEXT`/`IMAGE` (REST hoặc WebSocket) trả `403 MESSAGE_TYPE_DISABLED`. Lịch sử TEXT/IMAGE vẫn trả về qua API; app hiện tại ẩn chúng.
+
+Tin ảnh (khi được bật): client tạo upload với `context=CHAT`, `refId=<conversationId>`, đợi `READY`, rồi gửi khung `send` kiểu `IMAGE`; người nhận lấy URL bằng `GET /media/{mediaId}/url`.
 
 ---
 

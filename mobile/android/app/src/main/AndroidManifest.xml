@@ -33,6 +33,16 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Trang thanh toán web (/pay) có nút "Quay lại app" trỏ về animallocket://checkout:
+                 chỉ cần đưa app lên trước, màn Pro tự tải lại gói/ví khi resume. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="animallocket" android:host="checkout"/>
+            </intent-filter>
+            <!-- Không để Flutter biến link trên thành route của go_router (sẽ ra trang lỗi). -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

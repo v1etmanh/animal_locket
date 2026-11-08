@@ -34,3 +34,5 @@ animal:
     enabled: false
   chat:
     max-messages-per-10s: 1000
+    # Test cũ kiểm tra logic TEXT/IMAGE; chế độ chỉ-ký-hiệu có test riêng (ChatServiceTest.glyphOnly...).
+    allowed-types: TEXT,IMAGE,GLYPH

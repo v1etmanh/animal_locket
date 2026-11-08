@@ -1,9 +1,12 @@
 import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/network/api_problem.dart';
+import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/core/widgets/glass_container.dart';
+import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,31 +132,33 @@ class _ProfileContent extends ConsumerWidget {
   );
 
   Future<void> _editAlias(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController(text: data.profile.alias);
     final alias = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Đổi biệt danh'),
-        content: TextField(
-          controller: controller,
-          maxLength: 40,
-          decoration: const InputDecoration(labelText: 'Biệt danh'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Huỷ'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Lưu'),
-          ),
-        ],
+      builder: (_) => TextInputDialog(
+        title: 'Đổi biệt danh',
+        label: 'Biệt danh',
+        confirmLabel: 'Lưu',
+        initialText: data.profile.alias ?? '',
+        maxLength: 20, // server: 3–20 ký tự
       ),
     );
-    controller.dispose();
-    if (alias?.trim().isNotEmpty == true) {
-      await ref.read(profileControllerProvider.notifier).updateAlias(alias!);
+    if (alias == null ||
+        alias.trim().isEmpty ||
+        alias.trim() == data.profile.alias) {
+      return;
+    }
+    try {
+      await ref.read(profileControllerProvider.notifier).updateAlias(alias);
+    } on ApiProblem catch (problem) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              messageForApiCode(problem.code, status: problem.status),
+            ),
+          ),
+        );
+      }
     }
   }
 }

@@ -12,6 +12,7 @@ import com.animallocket.common.event.EventJson;
 import com.animallocket.common.kv.KeyValueStore;
 import com.animallocket.common.web.ApiException;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
@@ -19,9 +20,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -66,11 +70,25 @@ public class ChatService {
     private final MessageBus bus;
     private final KeyValueStore kv;
     private final int maxPerWindow;
+    /** Loại tin được GỬI MỚI. Mặc định chỉ GLYPH: chat chỉ bằng ký hiệu; lịch sử TEXT/IMAGE vẫn đọc được. */
+    private final Set<Message.Type> allowedTypes;
 
+    /** Dùng trong test dựng tay: cho phép mọi loại tin. */
     public ChatService(ConversationRepository conversations, MessageRepository messages, GlyphRepository glyphs,
                        GlyphSettings glyphSettings, Gateways.UserGateway users,
                        Gateways.MediaGateway media, Gateways.EventPublisher events, MessageBus bus, KeyValueStore kv,
-                       @Value("${animal.chat.max-messages-per-10s:20}") int maxPerWindow) {
+                       int maxPerWindow) {
+        this(conversations, messages, glyphs, glyphSettings, users, media, events, bus, kv, maxPerWindow,
+                "TEXT,IMAGE,GLYPH");
+    }
+
+    @Autowired
+    public ChatService(ConversationRepository conversations, MessageRepository messages, GlyphRepository glyphs,
+                       GlyphSettings glyphSettings, Gateways.UserGateway users,
+                       Gateways.MediaGateway media, Gateways.EventPublisher events, MessageBus bus, KeyValueStore kv,
+                       @Value("${animal.chat.max-messages-per-10s:20}") int maxPerWindow,
+                       @Value("${animal.chat.allowed-types:GLYPH}") String allowedTypes) {
+        this.allowedTypes = parseTypes(allowedTypes);
         this.conversations = conversations;
         this.messages = messages;
         this.glyphs = glyphs;
@@ -81,6 +99,16 @@ public class ChatService {
         this.bus = bus;
         this.kv = kv;
         this.maxPerWindow = maxPerWindow;
+    }
+
+    public static Set<Message.Type> parseTypes(String csv) {
+        EnumSet<Message.Type> set = EnumSet.noneOf(Message.Type.class);
+        for (String t : (csv == null ? "" : csv).split(",")) {
+            if (!t.isBlank()) {
+                set.add(Message.Type.valueOf(t.strip().toUpperCase(java.util.Locale.ROOT)));
+            }
+        }
+        return Collections.unmodifiableSet(set);
     }
 
     /** Mở (hoặc lấy lại) hội thoại với một người bạn. Người lạ chưa kết bạn không thể chat. */
@@ -116,6 +144,10 @@ public class ChatService {
 
     public MessageView send(String me, String conversationId, SendCommand cmd) {
         Message.Type type = cmd.type() == null ? Message.Type.TEXT : cmd.type();
+        if (!allowedTypes.contains(type)) {
+            throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN, "MESSAGE_TYPE_DISABLED",
+                    "Chỉ được nhắn bằng ký hiệu");
+        }
         if (type == Message.Type.GLYPH && !glyphSettings.writeEnabled()) {
             throw GlyphErrors.disabled();
         }

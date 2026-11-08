@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Chat chỉ bằng ký hiệu nên gửi/tạo ký hiệu bật mặc định; tắt bằng --dart-define=...=false khi cần rollback.
 class GlyphFeatureFlags {
   const GlyphFeatureFlags({
     required this.readEnabled,
@@ -16,11 +17,11 @@ class GlyphFeatureFlags {
     ),
     publishEnabled: bool.fromEnvironment(
       'GLYPH_PUBLISH_ENABLED',
-      defaultValue: false,
+      defaultValue: true,
     ),
     sendEnabled: bool.fromEnvironment(
       'GLYPH_SEND_ENABLED',
-      defaultValue: false,
+      defaultValue: true,
     ),
   );
 

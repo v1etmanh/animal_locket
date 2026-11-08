@@ -38,6 +38,8 @@ animal:
     enabled: true
   chat:
     max-messages-per-10s: 20
+    # Loại tin được gửi mới, ngăn cách bằng dấu phẩy (TEXT, IMAGE, GLYPH). Mặc định chỉ ký hiệu.
+    allowed-types: ${CHAT_ALLOWED_TYPES:GLYPH}
     glyph:
       # false = rollback: tắt tạo/archive/gửi glyph, vẫn đọc được lịch sử và từ điển.
       write-enabled: ${GLYPH_WRITE_ENABLED:true}
