@@ -17,7 +17,7 @@ Chú giải trạng thái:
 | 5 | notification-service | ✅ | 10 test. 🟡 FCM thật chưa thử; ⬜ tuỳ chọn tắt từng loại thông báo |
 | 6 | discovery-service | ✅ | 32 test + hợp đồng store. 🟡 Redis GEO thật chưa chạy (test Redis đã viết, gated `REDIS_TEST_HOST`) |
 | 7 | chat-service | ✅ | 17 test (repository giả lập, WebSocket đầu-cuối). 🟡 MongoDB/Redis pub/sub thật chưa chạy (1 test Testcontainers chờ Docker) |
-| 8 | billing-service | 🟡 | Danh mục, ví, sổ cái, thuê bao, xác thực biên lai qua `StoreGateway` (+ `DevStoreGateway`), hoàn tiền, ân hạn, xoá tài khoản; 18 test. Có `AppleJwsVerifier` (PKIX + ES256). ⬜ Cổng Apple/Google gọi API store thật và **endpoint webhook** chưa có trong code lúc viết; ⬜ chưa thử với sandbox |
+| 8 | billing-service | 🟡 | Danh mục, ví, sổ cái, thuê bao, xác thực biên lai qua `StoreGateway` (+ `DevStoreGateway`), hoàn tiền, ân hạn, xoá tài khoản. Cổng Apple/Google + webhook ✅ (test bằng chứng chỉ/HTTP giả). Thanh toán web PayPal + VietQR/payOS ✅ (trang `/pay/**`, `checkout_sessions`, webhook; test bằng HTTP giả). ⬜ Chưa chạy với Apple/Google sandbox, PayPal sandbox, payOS thật (payOS không có sandbox) |
 | 9 | Resilience4j tinh chỉnh + Grafana stack | 🟡 | Cấu hình có, `deploy/observability` có; ⬜ chưa kiểm chứng áp dụng cấu hình; ✅ metric `outbox_pending`/`outbox_oldest_pending_age_seconds` + cảnh báo `OutboxStuck`/`OutboxBacklogHigh` (có test); ⬜ chưa có metric nghiệp vụ |
 | — | Docker Compose cả hệ thống | 🟡/⬜ | Do nhánh hạ tầng viết; `docker compose config` hợp lệ với `.env.example`; ✅ **đã `up` thật (6/11/2026)**: `core` + `app` đều healthy (22 container), Flyway tạo bảng trên MySQL, Keycloak import realm, Kafka/MinIO init chạy. Đã sửa: MinIO không còn image công khai, quyền `/data`, cổng 80 bị Windows chặn (dùng `HTTP_PORT=8080`), `billing-service` lỗi bind `resilience4j ... : {}`. ✅ **luồng ảnh đầu-cuối chạy thật** (Keycloak code+PKCE → gateway → register → ticket → POST MinIO → complete → face-worker → URL tải ảnh; ảnh có mặt bị che bằng sticker, ảnh không mặt giữ nguyên). Lỗi tìm ra và đã sửa: gateway 500 với mọi JWT (`ReadOnlyHttpHeaders`), ticket upload thiếu `key`/`Content-Type`. ⬜ chưa thử `obs`, `validate`. **Sau lần chạy đó** kiến trúc đã đổi: bỏ MinIO/face-worker, chuyển ảnh sang R2, DB chuyển sang dịch vụ ngoài (Aiven/Supabase/Atlas) — luồng ảnh mới **chưa chạy đầu-cuối** |
 | — | Admin/moderation | ⬜ | Không có console, không có kiểm duyệt ảnh/chữ tự động |
@@ -41,7 +41,7 @@ Xác suất/ảnh hưởng: T = thấp, TB = trung bình, C = cao.
 | R3 | **Không quét nội dung ảnh** ở server (không magic-bytes, không virus, không NSFW); chỉ kiểm cỡ và `Content-Type` khai báo | TB | Cao | Xem R9; kiểm magic-bytes lúc `complete` |
 | R4 | **Trẻ vị thành niên + tìm người lân cận + chat người lạ** (rủi ro an toàn và pháp lý) | C | Rất cao | Tách nhóm tuổi (đã có), vị trí thô hơn (đã có); rà soát pháp lý; xác minh tuổi tốt hơn; hạn chế tính năng với nhóm dưới 18; kiểm duyệt chat |
 | R5 | **Tự khai ngày sinh** dễ bị khai gian | C | Cao | Xác minh tuổi (nhà cung cấp), giám sát hành vi, báo cáo |
-| R6 | **Xác thực thanh toán chưa thử với store thật**; webhook chưa hoàn chỉnh | TB | Cao | Hoàn tất + sandbox Apple/Google; test chữ ký giả/hết hạn; giám sát `STORE_UNAVAILABLE`; chắc chắn `BILLING_DEV_STORE=false` ở production |
+| R6 | **Xác thực thanh toán chưa thử với bên thật** (Apple, Google, PayPal, payOS); định dạng JSON thật có thể khác giả định trong test; payOS thử là mất tiền thật; thanh toán web trong app store có thể bị từ chối khi duyệt | TB | Cao | Sandbox Apple/Google/PayPal theo checklist trong `STORES.md`/`PAYPAL.md`; thử payOS bằng số tiền nhỏ; giám sát `STORE_UNAVAILABLE`; chắc chắn `BILLING_DEV_STORE=false`, `PAYPAL_MODE` đúng môi trường; sửa giá tạm trong V2/V4 trước khi bán |
 | R7 | **Rò rỉ vị trí** (k-anonymity ở vùng thưa, trilateration bằng nhiều tài khoản, không xoá vị trí khi tắt khám phá) | TB | Cao | Xem 9.2; xoá vị trí khi tắt; k ≥ 5 mỗi ô; giới hạn tài khoản mới theo thiết bị/IP; kiểm thử xâm nhập |
 | R8 | **Mạo danh qua `X-Public-Id`** nếu mạng nội bộ bị lộ | T | Rất cao | Cách ly mạng; ký header ở gateway hoặc service tự đối chiếu `sub` |
 | R9 | **Thiếu kiểm duyệt** (ảnh NSFW, quấy rối, tin nhắn) và công cụ quản trị → bị từ chối ở cửa hàng, hại người dùng | C | Cao | Phân loại ảnh trước khi publish; từ cấm; console xử lý báo cáo; SLA xử lý |
@@ -142,6 +142,7 @@ Thứ tự đề xuất — tick từng mục và ghi kết quả vào PR:
 - [ ] Mongo: chạy `ChatMongoIntegrationTest`.
 - [ ] Xoá tài khoản: dữ liệu biến mất ở mọi service; Keycloak user bị xoá.
 - [ ] Billing: `BILLING_DEV_STORE=true` thử mua Pro/Boost/gói; `consume` Boost từ discovery.
+- [ ] Thanh toán web: PayPal sandbox đi hết `/pay/{token}` → capture → `GET /billing/me` có quyền lợi; webhook `/webhooks/paypal` qua URL công khai; hoàn tiền sandbox thu hồi quyền lợi. payOS thử bằng số tiền nhỏ (tiền thật).
 
 **An toàn và chịu lỗi**
 - [ ] `/internal/**` không vào được qua Traefik; `/actuator/*` không lộ ra Internet.

@@ -55,6 +55,7 @@ Biên lợi nhuận Pro = giá Pro (sau phí store 15–30%) − chi phí hạ t
 - Apple/Google lấy 15–30% phí; giá niêm yết phải tính cả khoản này.
 - Quyền lợi chỉ được mở sau khi billing-service **xác thực chữ ký webhook / hoá đơn**. Không mở quyền chỉ dựa vào tuyên bố của client.
 - Hoàn tiền/huỷ: nhận thông báo từ store, phát `SUBSCRIPTION_EXPIRED` hoặc thu hồi vật phẩm.
+- **Thanh toán web** (đã có code, chưa chạy với tài khoản thật): PayPal (USD) và VietQR qua payOS (VND) trên trang `/pay/**`. Giá web lưu riêng trong `products` (`price_usd_cents`, `price_vnd`) và hiện là **giá tạm** (ví dụ Pro tháng 2,99 USD / 79.000 VND). Thuê bao web trả trước theo kỳ, không tự gia hạn. Phí cổng web thấp hơn store nhưng **app phát hành trên App Store/Google Play vẫn phải dùng thanh toán trong ứng dụng** cho hàng hoá số; dẫn người dùng sang trang web có thể bị từ chối khi duyệt. payOS không có sandbox.
 
 ## 2.6 Chỉ số theo dõi
 

@@ -6,7 +6,7 @@ Mọi đường dẫn dưới đây đi qua gateway (`https://<domain>`) trừ p
 
 | Mục | Quy ước |
 |---|---|
-| Tiền tố | `/api/v1` (billing webhook: `/webhooks/**`; WebSocket: `/ws/chat`) |
+| Tiền tố | `/api/v1` (billing webhook: `/webhooks/**`; trang thanh toán web: `/pay/**`; WebSocket: `/ws/chat`) |
 | Xác thực | `Authorization: Bearer <JWT Keycloak>` trên mọi request (trừ `/webhooks/**`) |
 | Danh tính | Gateway gắn `X-Public-Id`; client **không** được tự gửi (bị gateway xoá). Người dùng chưa đăng ký hồ sơ chỉ gọi được `POST /users/register`; các endpoint khác trả `403 PROFILE_REQUIRED` |
 | Định dạng | JSON UTF-8, thời gian ISO-8601 UTC (`2026-11-06T03:21:45.123Z`) |
@@ -203,10 +203,13 @@ Tin ảnh (khi được bật): client tạo upload với `context=CHAT`, `refId
 
 | Method & đường dẫn | Mô tả | Request | Response | Lỗi |
 |---|---|---|---|---|
-| `GET /billing/products` | Danh mục đang bán | — | `[{sku, type, item, quantity}]` | |
+| `GET /billing/products` | Danh mục đang bán | — | `[{sku, type, item, quantity, priceUsdCents, priceVnd, periodDays}]` (giá web `null` = không bán qua kênh đó) | |
 | `GET /billing/me` | Gói hiện tại và ví | — | `{plan: FREE\|PRO, planExpiresAt, wallet:{BOOST:n,PRIORITY_INVITE:n}}` | |
 | `POST /billing/purchases/verify` | Gửi giao dịch vừa mua/khôi phục; server tự hỏi store | `{store: APPLE\|GOOGLE\|DEV, sku, token}` (`token` = transactionId của Apple hoặc purchaseToken của Google) | `MeResponse` như `/me` | `400 UNKNOWN_PRODUCT`, `400 INVALID_RECEIPT`, `400 SKU_MISMATCH`, `400 RECEIPT_REVOKED`, `409 RECEIPT_ALREADY_USED`, `503 STORE_UNAVAILABLE` |
-| `POST /webhooks/apple`, `POST /webhooks/google` | Thông báo từ store (công khai, **tự xác thực chữ ký**) | theo định dạng của store | `2xx` khi đã xử lý; `5xx` để store gửi lại | *(chưa có trong code tại thời điểm viết; cấu hình đã khai báo `public-paths: /webhooks/**`)* |
+| `POST /billing/checkout-sessions` | Xin link trang thanh toán web (PayPal/VietQR) | `{sku}` | `201 {url, expiresAt}` — `url` = `<PAYPAL_RETURN_BASE_URL>/pay/<mã dùng một lần>`, sống 30 phút | `400 UNKNOWN_PRODUCT`, `400 NOT_PURCHASABLE_ONLINE`, `503 PAYMENT_UNAVAILABLE` |
+| `POST /webhooks/apple`, `/webhooks/google`, `/webhooks/paypal`, `/webhooks/payos` | Thông báo từ store/cổng thanh toán (công khai, **tự xác thực chữ ký**) | theo định dạng của từng bên | `2xx` khi đã xử lý hoặc bỏ qua; `401` chữ ký sai; `5xx` để bên gửi gửi lại | |
+
+**Trang thanh toán web** (`/pay/**`, HTML, không qua `/api/v1`, không cần JWT): app mở `url` bằng trình duyệt; xong trang kết quả mở lại app qua deep link `PAYPAL_APP_RETURN_URL` (mặc định `animallocket://checkout`). App nên gọi lại `GET /billing/me` sau khi quay về. Luồng chi tiết: `services/billing-service/PAYPAL.md`, `PAYOS.md`.
 
 Client chỉ **kết thúc giao dịch với store** sau khi nhận `200` từ `verify`. `store=DEV` chỉ hoạt động khi `animal.billing.dev-store.enabled=true` (token `dev:<transactionId>[:<originalTransactionId>[:<expiresEpochSeconds>]]`) và **không bao giờ bật ở production**.
 

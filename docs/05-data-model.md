@@ -53,12 +53,13 @@ Mã `reject_reason`: `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE` (đặt bởi `c
 
 | Bảng | Cột chính | Ràng buộc |
 |---|---|---|
-| `products` | `sku` PK, `type` (`SUBSCRIPTION`/`CONSUMABLE`/`PACK`), `item`, `quantity`, `active` | Seed trong migration: `animallocket.pro.month`, `.pro.year`, `.boost.1`, `.boost.5`, `.invite.1`, `.invite.5`, `.pack.safari`, `.pack.ocean` (trùng product id đăng ký trên store) |
-| `purchases` | `id` PK, `store` (`APPLE`/`GOOGLE`/`DEV`), `store_transaction_id`, `original_transaction_id`, `public_id`, `sku`, `status` (`GRANTED`/`REFUNDED`), `created_at` | UNIQUE `(store, store_transaction_id)`; INDEX `public_id`. Sau khi xoá tài khoản `public_id` được ẩn danh (giữ bản ghi tài chính) |
+| `products` | `sku` PK, `type` (`SUBSCRIPTION`/`CONSUMABLE`/`PACK`), `item`, `quantity`, `active`, `price_usd_cents` (PayPal), `price_vnd` (payOS), `period_days` (thuê bao web) | Seed trong migration: `animallocket.pro.month`, `.pro.year`, `.boost.1`, `.boost.5`, `.invite.1`, `.invite.5`, `.pack.safari`, `.pack.ocean` (trùng product id đăng ký trên store). Giá web seed ở V2/V4 là **giá tạm**; `NULL` = không bán qua kênh đó |
+| `purchases` | `id` PK, `store` (`APPLE`/`GOOGLE`/`DEV`/`PAYPAL`/`PAYOS`), `store_transaction_id`, `original_transaction_id`, `public_id`, `sku`, `status` (`GRANTED`/`REFUNDED`), `created_at` | UNIQUE `(store, store_transaction_id)`; INDEX `public_id`. Sau khi xoá tài khoản `public_id` được ẩn danh (giữ bản ghi tài chính) |
 | `subscriptions` | `id` PK, `public_id`, `sku`, `store`, `original_transaction_id`, `status` (`ACTIVE`/`EXPIRED`), `expires_at`, `updated_at` | UNIQUE `(store, original_transaction_id)`; INDEX `public_id`, `(status,expires_at)` |
 | `wallet_balances` | PK `(public_id, item)`, `balance` | `CHECK (balance >= 0)` |
 | `wallet_ledger` | `id` PK, `public_id`, `item`, `delta`, `reason` (`PURCHASE`/`CONSUME`/`REFUND`), `ref`, `created_at` | UNIQUE `(reason, ref, item)` — cộng/trừ cùng một sự kiện hai lần là không thể |
-| `webhook_events` | `id` PK (id thông báo của store), `store`, `type`, `received_at` | Khử trùng lặp webhook |
+| `webhook_events` | `id` PK (id thông báo của store), `store`, `type`, `received_at` | Khử trùng lặp webhook (Apple, Google, PayPal, payOS) |
+| `checkout_sessions` | `id` PK, `token_hash` (SHA-256 của mã trên URL), `public_id`, `sku`, `amount_cents`, `currency`, `status` (`PENDING`/`APPROVING`/`COMPLETED`/`PAYMENT_HELD`/`CANCELED`), `paypal_order_id`, `paypal_capture_id`, `payos_amount`, `payos_attempts`, `payos_link_id`, `payos_paid_order_code`, `created_at`, `expires_at` | UNIQUE `token_hash`; INDEX `public_id`, `paypal_order_id`, `paypal_capture_id`. Phiên thanh toán web, sống 30 phút (V2–V4) |
 
 Số dư đổi bằng `UPDATE ... WHERE balance >= n` nguyên tử, kèm một dòng sổ cái. Vật phẩm mua lẻ: `BOOST`, `PRIORITY_INVITE`. `PACK` không có số dư trong billing: quyền sở hữu con vật nằm ở user-service (qua event `CONSUMABLE_GRANTED` `item=ANIMAL_PACK:<mã>`).
 

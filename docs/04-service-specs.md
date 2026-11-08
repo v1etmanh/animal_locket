@@ -169,13 +169,14 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.9 billing-service (8106, PostgreSQL)
 
-**Trách nhiệm**: thuê bao Pro, mua lẻ (Boost, lời mời ưu tiên, gói con vật), ví/sổ cái vật phẩm, xác thực giao dịch với store, thu hồi khi hoàn tiền/hết hạn.
+**Trách nhiệm**: thuê bao Pro, mua lẻ (Boost, lời mời ưu tiên, gói con vật), ví/sổ cái vật phẩm, xác thực giao dịch với store (Apple/Google), **thanh toán web** (PayPal USD, VietQR/payOS VND), thu hồi khi hoàn tiền/hết hạn.
 
-**Dữ liệu**: `products` (seed 8 sản phẩm), `purchases`, `subscriptions`, `wallet_balances`, `wallet_ledger`, `webhook_events`, outbox/processed ([05-data-model.md](05-data-model.md)).
+**Dữ liệu**: `products` (seed 8 sản phẩm, kèm giá web `price_usd_cents`/`price_vnd`/`period_days`), `purchases`, `subscriptions`, `wallet_balances`, `wallet_ledger`, `webhook_events`, `checkout_sessions`, outbox/processed ([05-data-model.md](05-data-model.md)).
 
-**API công khai**: `GET /billing/products`, `GET /billing/me` (`plan`, `planExpiresAt`, `wallet`), `POST /billing/purchases/verify` (`{store, sku, token}`).
+**API công khai**: `GET /billing/products`, `GET /billing/me` (`plan`, `planExpiresAt`, `wallet`), `POST /billing/purchases/verify` (`{store, sku, token}`), `POST /billing/checkout-sessions` (`{sku}` → link trang thanh toán web).
+**Trang web** (không JWT, mã dùng một lần trên URL): `GET /pay/{token}`, `POST /pay/{token}/start` (PayPal), `POST /pay/{token}/payos` (VietQR), các đường `return`/`cancel` tương ứng.
 **API nội bộ**: `POST /internal/wallet/consume` (discovery trừ Boost), `GET /internal/wallet/{publicId}`.
-**Webhook** `POST /webhooks/apple`, `/webhooks/google`: cấu hình công khai (`animal.security.public-paths=/webhooks/**`) và hàm xử lý (`firstTimeWebhook`, `onSubscriptionUpdated/Ended`, `onRefund`) đã có trong `BillingService`, nhưng **controller nhận webhook chưa có trong code lúc viết tài liệu**.
+**Webhook** (công khai qua `animal.security.public-paths=/webhooks/**,/pay/**`, mỗi cái tự xác thực chữ ký, khử trùng lặp qua `webhook_events`): `POST /webhooks/apple` (JWS), `/webhooks/google` (OIDC Pub/Sub), `/webhooks/paypal` (`verify-webhook-signature`), `/webhooks/payos` (HMAC-SHA256). Chi tiết: `services/billing-service/STORES.md`, `PAYPAL.md`, `PAYOS.md`.
 
 **Event phát** (Outbox, topic `billing.events`): `SUBSCRIPTION_ACTIVATED` / `SUBSCRIPTION_EXPIRED` (theo trạng thái Pro hiện tại), `CONSUMABLE_GRANTED` (`BOOST`, `PRIORITY_INVITE`, `ANIMAL_PACK:<mã>`).
 **Event nhận** (group `billing-service`, topic `user.events`): chỉ `USER_DELETED` → xoá ví/sổ cái/thuê bao, ẩn danh `purchases`.
@@ -193,13 +194,22 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 **Cổng store (`StoreGateway`)**
 - `StoreRouter` chọn cổng theo `store`; store không có cổng (chưa cấu hình/tắt) → từ chối, không bao giờ cấp quyền.
 - `DevStoreGateway`: **chỉ khi `animal.billing.dev-store.enabled=true`** (mặc định tắt, biến `BILLING_DEV_STORE`); tin token do client khai (`dev:<tx>[:<orig>[:<expiresEpochSeconds>]]`). Tuyệt đối không bật ở production.
-- `AppleJwsVerifier`: xác thực JWS ES256 của Apple (chỉ chấp nhận `alg=ES256`, chuỗi `x5c` hợp lệ PKIX tới Apple Root CA đã cấu hình, OID đánh dấu của Apple, chữ ký hợp lệ; không có root cấu hình → từ chối). Không kiểm tra thu hồi chứng chỉ (OCSP/CRL). Cùng với `AppleProperties`, `GoogleProperties`, `StoreCaller` (retry/circuit breaker `store-apple`/`store-google`). **Cổng Apple/Google gọi API store thật chưa hoàn chỉnh trong code lúc viết, chưa thử sandbox.**
+- `AppleJwsVerifier`: xác thực JWS ES256 của Apple (chỉ chấp nhận `alg=ES256`, chuỗi `x5c` hợp lệ PKIX tới Apple Root CA đã cấu hình, OID đánh dấu của Apple, chữ ký hợp lệ; không có root cấu hình → từ chối). Không kiểm tra thu hồi chứng chỉ (OCSP/CRL). Cùng với `AppleProperties`, `GoogleProperties`, `StoreCaller` (retry/circuit breaker `store-apple`/`store-google`).
+- `AppleStoreGateway`, `GoogleStoreGateway` (+ `HttpGooglePlayClient`, `GoogleSubscriptionResolver`) chỉ được tạo khi đủ cấu hình (`StoreConfig`). Có code và test với chứng chỉ/HTTP giả; **chưa thử sandbox thật**.
+
+**Thanh toán web (`CheckoutService`)** — dành cho đồ án/bản web; app phát hành trên store vẫn phải dùng thanh toán trong ứng dụng cho hàng hoá số.
+1. App gọi `POST /billing/checkout-sessions {sku}` → `201 {url, expiresAt}`. Server sinh mã ngẫu nhiên 32 byte, chỉ lưu **SHA-256** của mã trong `checkout_sessions`, chốt `publicId` + `sku` + số tiền; phiên sống 30 phút. Không bật PayPal lẫn payOS → `503 PAYMENT_UNAVAILABLE`; sản phẩm không có giá web → `400 NOT_PURCHASABLE_ONLINE`.
+2. Trình duyệt mở `/pay/{token}` (Thymeleaf), chọn PayPal hoặc VietQR, được chuyển sang trang của nhà cung cấp.
+3. Khi quay về (hoặc khi webhook tới), server **hỏi lại trạng thái thật** ở PayPal/payOS, kiểm tra đúng đơn và đúng số tiền, rồi gọi `BillingService.grant` với `store = PAYPAL | PAYOS`. `publicId` luôn lấy từ phiên, không lấy từ URL. Capture và cấp quyền đều idempotent (F5, hai tab, webhook trùng).
+4. Thuê bao web là **trả trước theo kỳ** (`period_days`), không tự gia hạn. Hoàn tiền toàn phần/chargeback PayPal → `onRefund`; hoàn một phần giữ quyền lợi. Trả hai lần cho cùng phiên (PayPal rồi VietQR) → ghi log `ERROR` để hoàn tiền thủ công.
+5. Trạng thái phiên: `PENDING → APPROVING → COMPLETED`, hoặc `PAYMENT_HELD` (PayPal giữ tiền); huỷ trên trang nhà cung cấp đưa `APPROVING` về `PENDING`. Enum có `CANCELED` nhưng code hiện không gán; phiên quá hạn được nhận ra bằng `expires_at`.
+6. **payOS không có sandbox**: mọi giao dịch thử là tiền thật. Cả PayPal và payOS **chưa chạy với tài khoản thật** (test bằng HTTP giả).
 
 **Ví** (`WalletService`): `credit`/`debit` chạy bằng câu `UPDATE` nguyên tử, mỗi thay đổi có dòng sổ cái duy nhất theo `(reason, ref, item)` (`CHECK balance >= 0`). `consume` (nội bộ): `409 INSUFFICIENT_BALANCE` nếu không đủ; `400 UNKNOWN_ITEM`; `ref` là UUID ngẫu nhiên nên **không idempotent** theo yêu cầu gọi.
 
 **Hoàn tiền/hết hạn**: `onRefund` thu hồi tối đa số dư còn lại của vật phẩm mua lẻ, kết thúc thuê bao, giữ nguyên con vật của gói đã mở. `BillingMaintenance` mỗi 5 phút hạ thuê bao `ACTIVE` quá hạn **cộng thêm `animal.billing.expiry-grace` (1 giờ)** (chờ thông báo gia hạn đến muộn).
 
-**Cấu hình**: `animal.billing.expiry-grace` (1h), `expiry-interval-ms` (300000), `animal.billing.dev-store.enabled`, cấu hình Apple/Google (`AppleProperties`/`GoogleProperties`), `resilience4j.circuitbreaker.instances.store-apple|store-google`, `resilience4j.retry` (3 lần, 500 ms, luỹ thừa), `JPA_DDL_AUTO` (mặc định `validate`).
+**Cấu hình**: `animal.billing.expiry-grace` (1h), `expiry-interval-ms` (300000), `animal.billing.dev-store.enabled`, cấu hình Apple/Google (`AppleProperties`/`GoogleProperties`), PayPal (`PAYPAL_MODE` sandbox/live, `PAYPAL_CLIENT_ID/SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_RETURN_BASE_URL`, `PAYPAL_APP_RETURN_URL` mặc định `animallocket://checkout`), payOS (`PAYOS_CLIENT_ID/API_KEY/CHECKSUM_KEY`, `PAYOS_ORDER_CODE_BASE`) — để trống khoá = tắt kênh đó, `resilience4j.circuitbreaker.instances.store-apple|store-google`, `resilience4j.retry` (3 lần, 500 ms, luỹ thừa), `JPA_DDL_AUTO` (mặc định `validate`).
 
 **Khi lỗi**: fail closed — không xác minh được thì không cấp quyền; webhook xử lý lỗi nên trả 5xx để store gửi lại.
 
