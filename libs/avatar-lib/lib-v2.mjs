@@ -51,7 +51,12 @@ const flap = (tip, b1, b2, c1, c2) => {
 const pairFlap = (tip, b1, b2, [l1, l2], [r1, r2]) =>
   flap(tip, b1, b2, l1, l2) + flap(...mirror([tip, b1, b2]), r1, r2);
 const pairPoly = (ps, l, r) => poly(ps, l) + poly(mirror(ps), r);
-const dots = (y, r = 3.6, dx = 10) => `<circle cx="${50 - dx}" cy="${y}" r="${r}" fill="${INK}"/><circle cx="${50 + dx}" cy="${y}" r="${r}" fill="${INK}"/>`;
+/** Mắt chấm mực đặt trên một mảnh giấy màu bụng, để đọc được cả trên lông tối. */
+const eye = (x, y, r, back = "{{belly}}") => {
+  const s = r + 2.6;
+  return poly([[x, y - s], [x + s, y], [x, y + s], [x - s, y]], back) + `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}"/>`;
+};
+const dots = (y, r = 3.6, dx = 10) => eye(50 - dx, y, r) + eye(50 + dx, y, r, "{{bellyD}}");
 const line = (d, color, w) => `<path d="${d}" stroke="${color}" stroke-width="${w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 const hexagon = (cx, cy, r) => [0, 1, 2, 3, 4, 5].map((k) => [cx + r * Math.cos((Math.PI / 3) * k), cy + r * Math.sin((Math.PI / 3) * k)]);
 
@@ -91,8 +96,7 @@ const EY = {
   n: dots(53),
   big: poly(hexagon(38, 51, 10), "{{belly}}") + poly(hexagon(62, 51, 10), "{{bellyD}}") + dots(51, 4.6, 12),
   top:
-    pairFlap([32, 16], [19, 42], [45, 42], FURL, FUR) +
-    `<circle cx="32" cy="33" r="4.4" fill="${INK}"/><circle cx="68" cy="33" r="4.4" fill="${INK}"/>`,
+    pairFlap([32, 16], [19, 42], [45, 42], FURL, FUR) + eye(32, 33, 4.4) + eye(68, 33, 4.4, "{{bellyD}}"),
 };
 const MOUTH = line("M50 66v3M45 71l5-2 5 2", INK, 1.4);
 const NO = {
@@ -144,6 +148,19 @@ const X = {
   rhorn: ["F", flap([50, 42], [42, 66], [58, 66], "#D9D2C5", "#BDB5A6")],
 };
 
+const TOP_FEATURES = new Set(["uhorn", "crest", "comb", "mohawk", "tuft", "knob"].map((x) => X[x]));
+// Mũ đội lệch sang trái, nhỏ lại, chừa đỉnh đầu.
+const TILTED_HATS = {
+  party: "translate(-19 11) rotate(-24 50 30) scale(.8) translate(12.5 7.5)",
+  crown: "translate(-18 12) rotate(-18 50 31) scale(.7) translate(21.4 13.3)",
+};
+// Mắt trên đỉnh: kính dời lên và giãn theo mắt; mũ nhỏ đặt giữa hai mắt.
+const TOP_EYES = {
+  glasses: "translate(0 -20) translate(50 53) scale(1.8 1) translate(-50 -53)",
+  party: "translate(50 44) scale(.55) translate(-50 -30)",
+  crown: "translate(50 42) scale(.55) translate(-50 -31)",
+};
+
 const animals = {};
 for (const row of RAW.split("\n")) {
   const [k, name, e, h, m, no, ey, ex] = row.split("|");
@@ -155,7 +172,14 @@ for (const row of RAW.split("\n")) {
     if (!(part in table)) throw new Error(`Mảnh không tồn tại: ${part} (${k})`);
   }
   const layer = (l) => xs.filter((x) => x[0] === l).map((x) => x[1]).join("");
-  animals[k] = { name, svg: layer("B") + E[e] + H[h] + layer("M") + MU[m] + EY[ey] + NO[no] + layer("F") };
+  const svg = layer("B") + E[e] + H[h] + layer("M") + MU[m] + EY[ey] + NO[no] + layer("F");
+  // Cách đặt phụ kiện riêng (transform SVG), để mũ không che đặc điểm trên đỉnh đầu
+  // và kính/mũ khớp với mắt trên đỉnh (ếch).
+  const fit = {
+    ...(xs.some((x) => TOP_FEATURES.has(x)) ? TILTED_HATS : {}),
+    ...(ey === "top" ? TOP_EYES : {}),
+  };
+  animals[k] = Object.keys(fit).length ? { name, svg, fit } : { name, svg };
 }
 
 const RED = ["#E35D6A", "#B93A47"];

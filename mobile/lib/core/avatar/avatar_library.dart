@@ -51,6 +51,9 @@ class AvatarCode {
   int get hashCode => toString().hashCode;
 }
 
+/// Khung một con vật: SVG có chỗ trống màu, và cách đặt riêng từng phụ kiện (transform SVG).
+typedef AvatarAnimal = ({String name, String svg, Map<String, String> fit});
+
 /// Một phiên bản thư viện: 50 khung con vật (màu là chỗ trống), bảng màu, phụ kiện.
 class AvatarLibraryData {
   AvatarLibraryData._(
@@ -62,12 +65,15 @@ class AvatarLibraryData {
   );
 
   factory AvatarLibraryData.fromJson(Map<String, dynamic> json) {
-    final animals = <String, ({String name, String svg})>{};
+    final animals = <String, AvatarAnimal>{};
     (json['animals'] as Map<String, dynamic>).forEach((k, v) {
       final m = v as Map<String, dynamic>;
       animals[k] = (
         name: m['name'] as String? ?? k,
         svg: m['svg'] as String? ?? '',
+        fit: ((m['fit'] as Map<String, dynamic>?) ?? const {}).map(
+          (k, v) => MapEntry(k, v as String),
+        ),
       );
     });
     final accessories = <String, ({String name, String svg})>{};
@@ -93,7 +99,7 @@ class AvatarLibraryData {
 
   final int version;
   final String viewBox;
-  final Map<String, ({String name, String svg})> animals;
+  final Map<String, AvatarAnimal> animals;
   final List<Map<String, String>> palettes;
   final Map<String, ({String name, String svg})> accessories;
 
@@ -107,15 +113,22 @@ class AvatarLibraryData {
   static final _slot = RegExp(r'\{\{(\w+)\}\}');
 
   /// Hàm vẽ chuẩn — phải ra đúng chuỗi như `render()` trong libs/avatar-lib/build-lib.mjs:
-  /// mọi chỗ trống `{{tên}}` lấy màu cùng tên trong bảng màu.
+  /// mọi chỗ trống `{{tên}}` lấy màu cùng tên trong bảng màu; con vật có
+  /// `fit[phụ kiện]` thì phụ kiện được bọc trong `<g transform="…">`.
   String? render(AvatarCode code) {
     if (!covers(code)) return null;
     final p = palettes[code.palette];
     String fill(String svg) =>
         svg.replaceAllMapped(_slot, (m) => p[m[1]!] ?? m[0]!);
+    final animal = animals[code.animal]!;
+    final accessory = fill(accessories[code.accessory]!.svg);
+    final fit = animal.fit[code.accessory];
+    final placed = fit != null && accessory.isNotEmpty
+        ? '<g transform="$fit">$accessory</g>'
+        : accessory;
     return '<svg viewBox="$viewBox" xmlns="http://www.w3.org/2000/svg">'
         '<rect width="100" height="100" fill="${p['bg']}"/>'
-        '${fill(animals[code.animal]!.svg)}${fill(accessories[code.accessory]!.svg)}</svg>';
+        '${fill(animal.svg)}$placed</svg>';
   }
 }
 

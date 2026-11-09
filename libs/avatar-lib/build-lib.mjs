@@ -11,12 +11,16 @@ import { lib as v2 } from "./lib-v2.mjs";
 export const versions = [v1, v2];
 
 /// Hàm vẽ chuẩn. Client (Dart) phải cho ra đúng chuỗi này; mẫu đối chiếu ghi vào test fixture.
-/// Mọi chỗ trống {{tên}} lấy màu cùng tên trong bảng màu của khoá.
+/// Mọi chỗ trống {{tên}} lấy màu cùng tên trong bảng màu của khoá. Con vật có `fit[phụ kiện]`
+/// thì phụ kiện được bọc trong <g transform="…"> (v2: mũ lệch, kính theo mắt ếch).
 export function render(l, key) {
   const [animal, palette, accessory] = key.split(":");
   const p = l.palettes[Number(palette)];
-  const fill = (svg) => svg.replace(/\{\{(\w+)\}\}/g, (m, name) => p[name] ?? m);
-  return `<svg viewBox="${l.viewBox}" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="${p.bg}"/>${fill(l.animals[animal].svg)}${fill(l.accessories[accessory].svg)}</svg>`;
+  const fill = (svg) => svg.replace(/\{\{(\w+)\}\}/g, (m, name) => (Object.hasOwn(p, name) ? p[name] : m));
+  const a = l.animals[animal];
+  const acc = fill(l.accessories[accessory].svg);
+  const fit = a.fit?.[accessory];
+  return `<svg viewBox="${l.viewBox}" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="${p.bg}"/>${fill(a.svg)}${fit && acc ? `<g transform="${fit}">${acc}</g>` : acc}</svg>`;
 }
 
 export function keySet(l) {
@@ -28,6 +32,8 @@ export function keySet(l) {
 }
 
 const sampleKeys = ["fox:0:none", "cat:3:glasses", "elephant:9:phones", "lion:4:crown", "frog:5:bow", "seal:1:party"];
+// Mẫu thêm từ v2 (v1 giữ danh sách cũ để file mẫu không đổi): phụ kiện có `fit`.
+const fitSampleKeys = ["unicorn:9:party", "chicken:2:crown", "frog:3:glasses"];
 
 function build() {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +47,7 @@ function build() {
   for (const lib of versions) {
     const name = `avatar-lib.v${lib.version}.json`;
     const json = JSON.stringify(lib, null, 1) + "\n";
-    const samples = JSON.stringify(Object.fromEntries(sampleKeys.map((k) => [k, render(lib, k)])), null, 1) + "\n";
+    const samples = JSON.stringify(Object.fromEntries([...sampleKeys, ...(lib.version >= 2 ? fitSampleKeys : [])].map((k) => [k, render(lib, k)])), null, 1) + "\n";
     const samplesName = `avatar-lib.v${lib.version}.samples.json`;
     if (out) {
       write(join(out, name), json);
@@ -72,6 +78,8 @@ function preview(lib) {
     `<!DOCTYPE html><meta charset="utf-8"><title>avatar-lib v${lib.version}</title><body style="background:#FBF3E8;margin:20px">` +
     row(`50 con vật · bảng màu 0`, animals.map(label)) +
     row(`Cỡ 40pt`, animals.map((k) => pic(`${k}:0:none`, 40))) +
+    row(`Bảng màu 9 (tối) · 40pt`, animals.map((k) => pic(`${k}:9:none`, 40))) +
+    row(`Phụ kiện đặt riêng (fit)`, ["unicorn", "horse", "chicken", "parrot", "giraffe", "frog"].flatMap((a) => ["party", "crown", "glasses"].map((x) => pic(`${a}:2:${x}`, 72)))) +
     ["fox", "panda", "owl", "frog", "elephant", "lion"].map((a) => row(`10 bảng màu · ${lib.animals[a].name}`, lib.palettes.map((_, p) => pic(`${a}:${p}:none`, 72)))).join("") +
     ["cat", "rabbit", "duck"].map((a) => row(`6 phụ kiện · ${lib.animals[a].name}`, Object.keys(lib.accessories).map((x) => pic(`${a}:2:${x}`, 88)))).join("") +
     `</body>`
