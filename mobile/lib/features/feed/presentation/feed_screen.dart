@@ -60,45 +60,55 @@ class FeedScreen extends ConsumerWidget {
                         }
                         return false;
                       },
-                      child: ListView.separated(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
-                        padding: const EdgeInsets.only(top: 14, bottom: 110),
-                        itemCount:
-                            data.items.length + (data.loadingMore ? 1 : 0),
-                        separatorBuilder: (_, _) => const SizedBox(height: 26),
-                        itemBuilder: (context, index) {
-                          if (index == data.items.length) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-                          final day = _dayLabel(data.items[index]);
-                          final newDay =
-                              index == 0 ||
-                              day != _dayLabel(data.items[index - 1]);
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (index == 0 && data.degraded)
-                                const _DegradedBanner(),
-                              if (newDay) _DayLabel(day),
-                              Padding(
-                                // Chừa lề cho góc nghiêng, băng washi và chữ dọc.
-                                padding: const EdgeInsets.fromLTRB(
-                                  4,
-                                  12,
-                                  26,
-                                  0,
-                                ),
-                                child: _PostCard(
-                                  post: data.items[index],
-                                  index: index,
-                                ),
+                      // Ẩn thanh cuộn (Flutter tự thêm trên web/desktop).
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context)
+                            .copyWith(scrollbars: false),
+                        // Mỗi lần vuốt chuyển đúng một bài, hiện trọn trong khung.
+                        child: PageView.builder(
+                          scrollDirection: Axis.vertical,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount:
+                              data.items.length + (data.loadingMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == data.items.length) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            return Padding(
+                              // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
+                              padding: const EdgeInsets.only(
+                                top: 14,
+                                bottom: 110,
                               ),
-                            ],
-                          );
-                        },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (index == 0 && data.degraded)
+                                    const _DegradedBanner(),
+                                  // Mỗi trang một bài nên trang nào cũng ghi ngày.
+                                  _DayLabel(_dayLabel(data.items[index])),
+                                  Flexible(
+                                    child: Padding(
+                                      // Chừa lề cho góc nghiêng, băng washi và chữ dọc.
+                                      padding: const EdgeInsets.fromLTRB(
+                                        4,
+                                        12,
+                                        26,
+                                        0,
+                                      ),
+                                      child: _PostCard(
+                                        post: data.items[index],
+                                        index: index,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
             ),

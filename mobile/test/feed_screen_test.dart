@@ -93,6 +93,29 @@ Future<_FakeFeed> _pump(
   return fake;
 }
 
+/// Vuốt lên (hoặc xuống) một lần như ngón tay trên điện thoại.
+Future<void> _swipe(WidgetTester tester, {bool back = false}) async {
+  await tester.fling(find.byType(PageView), Offset(0, back ? 250 : -250), 800);
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+}
+
+WashiPhotoCard _visibleCard(WidgetTester tester) =>
+    tester.widget<WashiPhotoCard>(find.byType(WashiPhotoCard));
+
+/// Trang đang hiện (số thực: 1.0 nghĩa là đã khớp đúng trang thứ hai).
+double _page(WidgetTester tester) {
+  final position = tester
+      .state<ScrollableState>(
+        find.descendant(
+          of: find.byType(PageView),
+          matching: find.byType(Scrollable),
+        ),
+      )
+      .position;
+  return position.pixels / position.viewportDimension;
+}
+
 void main() {
   final yesterday = _now.subtract(const Duration(days: 1));
   final three = FeedState(
@@ -107,10 +130,12 @@ void main() {
     await _pump(tester, three);
     expect(find.text('Khoảnh khắc'), findsOneWidget);
     expect(find.text(formatPostDay(_now.toLocal())), findsOneWidget);
+    expect(find.text('Chiều nay ở Hội An 🏮'), findsOneWidget);
+    expect(find.text('24'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+    await _swipe(tester);
+    await _swipe(tester);
     expect(find.text(formatPostDay(yesterday.toLocal())), findsOneWidget);
-    expect(find.text('Chiều nay ở Hội An 🏮'), findsNWidgets(3));
-    expect(find.text('24'), findsNWidgets(3));
-    expect(find.text('5'), findsNWidgets(3));
   });
 
   testWidgets('uses only album widgets, no glass or Material icons', (
@@ -144,34 +169,41 @@ void main() {
 
   testWidgets('tilts cards alternately', (tester) async {
     await _pump(tester, three);
-    final cards = tester.widgetList<WashiPhotoCard>(
-      find.byType(WashiPhotoCard),
-    );
-    expect(cards.map((c) => c.tiltDegrees).toList(), [-1.4, 1.2, -1.4]);
+    final tilts = [_visibleCard(tester).tiltDegrees];
+    for (var i = 0; i < 2; i++) {
+      await _swipe(tester);
+      tilts.add(_visibleCard(tester).tiltDegrees);
+    }
+    expect(tilts, [-1.4, 1.2, -1.4]);
   });
 
   testWidgets('pressing the hanko likes that post', (tester) async {
     final fake = await _pump(tester, three);
-    final stamps = tester.widgetList<HankoStamp>(find.byType(HankoStamp));
-    expect(stamps.first.stamped, isTrue);
-    expect(stamps.elementAt(1).stamped, isFalse);
-    await tester.tap(find.byType(HankoStamp).first);
+    HankoStamp stamp() => tester.widget<HankoStamp>(find.byType(HankoStamp));
+    expect(stamp().stamped, isTrue);
+    await tester.tap(find.byType(HankoStamp));
     expect(fake.liked, ['1']);
+    await _swipe(tester);
+    expect(stamp().stamped, isFalse);
   });
 
   testWidgets('photo frames keep 4:5 while empty, failed or loading', (
     tester,
   ) async {
     await _pump(tester, three);
-    expect(
-      find.byWidgetPredicate((w) => w is AspectRatio && w.aspectRatio == 0.8),
-      findsNWidgets(3),
+    final frame = find.byWidgetPredicate(
+      (w) => w is AspectRatio && w.aspectRatio == 0.8,
     );
     bool hasIcon(AlbumIcons icon) => tester
         .widgetList<AlbumIcon>(find.byType(AlbumIcon))
         .any((w) => w.icon == icon);
+    expect(frame, findsOneWidget);
     expect(hasIcon(AlbumIcons.image), isTrue);
+    await _swipe(tester);
+    expect(frame, findsOneWidget);
     expect(hasIcon(AlbumIcons.imageBroken), isTrue);
+    await _swipe(tester);
+    expect(frame, findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -237,18 +269,69 @@ void main() {
     final five = FeedState(
       items: [for (var i = 0; i < 5; i++) _post(i.isEven ? '1' : '2')],
     );
-    await _pump(tester, five, height: 700);
-    await tester.pump(const Duration(seconds: 1));
-    await tester.drag(find.byType(ListView), const Offset(0, -3000));
-    await tester.pump(const Duration(seconds: 1));
-    await tester.drag(find.byType(ListView), const Offset(0, 3000));
-    await tester.pump(const Duration(seconds: 1));
-    // Back at the top: one frame later the first card is already at its tilt,
-    // not restarting its slide-and-tilt entrance from 0.
+    await _pump(tester, five, height: 844);
+    await _swipe(tester);
+    await _swipe(tester);
+    // Jump straight back to the first post (rebuilt from scratch) and look at
+    // the very next frame: it is already at its tilt, not restarting its
+    // slide-and-tilt entrance from 0.
+    tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(PageView),
+            matching: find.byType(Scrollable),
+          ),
+        )
+        .position
+        .jumpTo(0);
     await tester.pump();
-    final first = tester.widget<WashiPhotoCard>(
-      find.byType(WashiPhotoCard).first,
-    );
-    expect(first.tiltDegrees, WashiPhotoCard.tiltFor(0));
+    expect(_page(tester), 0);
+    expect(_visibleCard(tester).tiltDegrees, WashiPhotoCard.tiltFor(0));
   });
+
+  testWidgets('one swipe shows exactly one whole post', (tester) async {
+    await _pump(tester, three, width: 390, height: 844);
+    Rect card() => tester.getRect(find.byType(WashiPhotoCard));
+    // The whole card sits above the floating tab bar (~100pt at the bottom).
+    expect(card().top, greaterThanOrEqualTo(0));
+    expect(card().bottom, lessThanOrEqualTo(844 - 100));
+    await _swipe(tester);
+    expect(_page(tester), 1);
+    expect(find.byType(WashiPhotoCard), findsOneWidget);
+    expect(_visibleCard(tester).tiltDegrees, WashiPhotoCard.tiltFor(1));
+    expect(card().top, greaterThanOrEqualTo(0));
+    expect(card().bottom, lessThanOrEqualTo(844 - 100));
+  });
+
+  testWidgets('a whole post with a 3-line caption fits a short phone', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      FeedState(items: [_post('1', caption: 'Một\nHai\nBa')]),
+      width: 360,
+      height: 640,
+    );
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getRect(find.byType(WashiPhotoCard)).bottom,
+      lessThanOrEqualTo(640 - 100),
+    );
+  });
+
+  testWidgets(
+    'hides the scrollbar',
+    (tester) async {
+      await _pump(tester, three, width: 390, height: 844);
+      expect(
+        find.descendant(
+          of: find.byType(FeedScreen),
+          matching: find.byWidgetPredicate((w) => w is RawScrollbar),
+        ),
+        findsNothing,
+      );
+    },
+    // Web and desktop are where Flutter adds a scrollbar on its own.
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
+  );
 }

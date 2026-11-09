@@ -53,7 +53,14 @@ class WashiPhotoCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AspectRatio(aspectRatio: 4 / 5, child: photo),
+                    // Khung ảnh luôn 4:5 nhưng co lại khi chiều cao không đủ,
+                    // để cả thẻ vừa một trang. Thẻ cần chiều cao có giới hạn.
+                    Flexible(
+                      child: Align(
+                        heightFactor: 1,
+                        child: AspectRatio(aspectRatio: 4 / 5, child: photo),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     header,
                     if (caption != null) ...[
