@@ -14,6 +14,7 @@ class HankoStamp extends StatefulWidget {
     required this.tooltip,
     this.size = 34,
     this.mark = AlbumIcons.heart,
+    this.toggle = true,
   });
 
   final bool stamped;
@@ -21,6 +22,9 @@ class HankoStamp extends StatefulWidget {
   final String tooltip;
   final double size;
   final AlbumIcons mark;
+
+  /// false: con dấu là nút hành động (Chấp nhận, Kết bạn), không mang trạng thái bật/tắt.
+  final bool toggle;
 
   @override
   State<HankoStamp> createState() => _HankoStampState();
@@ -62,7 +66,7 @@ class _HankoStampState extends State<HankoStamp>
     final ink = on ? p.accent : p.muted;
     return Semantics(
       button: true,
-      toggled: on,
+      toggled: widget.toggle ? on : null,
       enabled: widget.onPressed != null,
       label: widget.tooltip,
       child: Tooltip(

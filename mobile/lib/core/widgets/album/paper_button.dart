@@ -47,6 +47,8 @@ class PaperButton extends StatelessWidget {
     }
     final content = Row(
       mainAxisAlignment: MainAxisAlignment.center,
+      // Nhãn giấy co theo chữ; nút chính trải hết chiều ngang.
+      mainAxisSize: _tape ? MainAxisSize.min : MainAxisSize.max,
       children: [
         if (icon != null) ...[
           AlbumIcon(icon!, size: 20, color: fore),
