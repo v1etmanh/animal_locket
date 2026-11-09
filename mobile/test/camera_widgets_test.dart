@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
-import 'package:animal_locket/core/widgets/album/photo_corners_frame.dart';
+import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
+import 'package:animal_locket/features/camera/presentation/polaroid_viewfinder.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,33 +15,40 @@ Widget _app(Widget child) => MaterialApp(
 );
 
 void main() {
-  group('PhotoCornersFrame', () {
-    testWidgets('a white print with four album corners around its child', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _app(
-          const SizedBox(
-            width: 300,
-            height: 400,
-            child: PhotoCornersFrame(
-              child: ColoredBox(key: Key('pic'), color: Colors.blue),
+  group('PolaroidViewfinder', () {
+    testWidgets(
+      'a taped polaroid: photo on top, date in the margin and as a film stamp',
+      (tester) async {
+        await tester.pumpWidget(
+          _app(
+            SizedBox(
+              width: 320,
+              height: 440,
+              child: PolaroidViewfinder(
+                date: DateTime(2026, 11, 10),
+                child: const ColoredBox(key: Key('pic'), color: Colors.blue),
+              ),
             ),
           ),
-        ),
-      );
-      expect(
-        find.byWidgetPredicate(
-          (w) => w is CustomPaint && w.foregroundPainter is PhotoCornersPainter,
-        ),
-        findsOneWidget,
-      );
-      final pic = tester.getRect(find.byKey(const Key('pic')));
-      final frame = tester.getRect(find.byType(PhotoCornersFrame));
-      // The print border shows on every side.
-      expect(pic.left - frame.left, greaterThan(4));
-      expect(frame.bottom - pic.bottom, greaterThan(4));
-    });
+        );
+        final pic = tester.getRect(find.byKey(const Key('pic')));
+        final frame = tester.getRect(find.byType(PolaroidViewfinder));
+        // Thick bottom margin like a real polaroid.
+        expect(
+          frame.bottom - pic.bottom,
+          greaterThan(3 * (pic.top - frame.top)),
+        );
+        final margin = tester.widget<Text>(find.text('10 · 11 · 2026'));
+        expect(margin.style?.fontFamily, AppFonts.hand);
+        expect(find.text("'26 11 10"), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is WashiTapePainter,
+          ),
+          findsOneWidget,
+        );
+      },
+    );
   });
 
   group('PaperTileButton', () {

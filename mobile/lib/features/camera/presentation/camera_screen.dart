@@ -1,9 +1,9 @@
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
-import 'package:animal_locket/core/widgets/album/photo_corners_frame.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
+import 'package:animal_locket/features/camera/presentation/polaroid_viewfinder.dart';
 import 'package:animal_locket/features/camera/presentation/send_status_pill.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Camera: khung ngắm là tờ ảnh có góc dán album (spec §7.4).
+/// Camera: khung ngắm là tấm polaroid đang hiện hình (spec §7.4).
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -219,7 +219,8 @@ class _CameraScreenState extends State<CameraScreen>
               clipBehavior: Clip.none,
               children: [
                 Positioned.fill(
-                  child: PhotoCornersFrame(
+                  child: PolaroidViewfinder(
+                    date: DateTime.now(),
                     child: _preview(initialized, controller),
                   ),
                 ),

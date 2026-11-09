@@ -2,9 +2,9 @@ import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
-import 'package:animal_locket/core/widgets/album/photo_corners_frame.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/camera/presentation/camera_screen.dart';
+import 'package:animal_locket/features/camera/presentation/polaroid_viewfinder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,7 +67,7 @@ void main() {
     expect(find.textContaining('khuôn mặt'), findsNothing);
     expect(
       find.descendant(
-        of: find.byType(PhotoCornersFrame),
+        of: find.byType(PolaroidViewfinder),
         matching: find.widgetWithText(PaperButton, 'Cho phép camera'),
       ),
       findsOneWidget,
@@ -118,7 +118,7 @@ void main() {
     tester,
   ) async {
     await _pump(tester);
-    final frame = tester.getRect(find.byType(PhotoCornersFrame));
+    final frame = tester.getRect(find.byType(PolaroidViewfinder));
     final text = tester.getCenter(
       find.text('Cho phép camera để chụp khoảnh khắc.'),
     );
