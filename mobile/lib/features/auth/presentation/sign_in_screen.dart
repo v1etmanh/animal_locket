@@ -47,6 +47,8 @@ class SignInScreen extends ConsumerWidget {
                 width: 260,
                 height: 210,
                 child: Stack(
+                  // Ảnh nghiêng, băng washi và bóng được tràn ra ngoài khung.
+                  clipBehavior: Clip.none,
                   children: [
                     Positioned(left: 8, top: 6, child: polaroid(_fox, 128, -6)),
                     Positioned(

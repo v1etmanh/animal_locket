@@ -6,6 +6,7 @@ import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:animal_locket/features/auth/presentation/birth_consent_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -129,6 +130,21 @@ void main() {
       router.state.uri.queryParameters['birthDate'],
       '${DateTime.now().year - 18}-01-01',
     );
+  });
+
+  testWidgets('screen readers find no unnamed tap target', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester);
+    expect(
+      find.semantics.byPredicate((node) {
+        final d = node.getSemanticsData();
+        return d.hasAction(SemanticsAction.tap) &&
+            d.label.isEmpty &&
+            d.tooltip.isEmpty;
+      }),
+      findsNothing,
+    );
+    handle.dispose();
   });
 
   testWidgets('fits a narrow phone at 1.5x text', (tester) async {

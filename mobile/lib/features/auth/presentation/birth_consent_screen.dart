@@ -113,6 +113,9 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
           // Cả câu cũng bấm được; con dấu mang nhãn cho trình đọc màn hình.
           InkWell(
             onTap: _toggleConsent,
+            // Chỉ con dấu (có nhãn) là điểm dừng của trình đọc màn hình/bàn phím.
+            excludeFromSemantics: true,
+            canRequestFocus: false,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),

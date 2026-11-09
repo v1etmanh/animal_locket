@@ -103,6 +103,23 @@ void main() {
     );
   });
 
+  testWidgets('tilted polaroids are not cut off by their box', (tester) async {
+    await pumpOnboarding(
+      tester,
+      const SignInScreen(),
+      FakeAuth(const AuthState.unauthenticated()),
+    );
+    final box = tester.widget<Stack>(
+      find
+          .ancestor(
+            of: find.byType(Polaroid).first,
+            matching: find.byType(Stack),
+          )
+          .first,
+    );
+    expect(box.clipBehavior, Clip.none);
+  });
+
   testWidgets('fits a narrow phone at 1.5x text', (tester) async {
     await pumpOnboarding(
       tester,
