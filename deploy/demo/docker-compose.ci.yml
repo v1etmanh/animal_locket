@@ -1,0 +1,47 @@
+# Third overlay, after docker-compose.yml and docker-compose.demo.yml.
+# DEPLOY_TAG is the immutable release id; shared configuration stays outside releases.
+x-runtime-build: &runtime-build
+  dockerfile: deploy/docker/Dockerfile.runtime
+
+services:
+  eureka-server:
+    image: animal-locket/eureka-server:${DEPLOY_TAG:?Missing DEPLOY_TAG}
+    build: *runtime-build
+  config-server:
+    image: animal-locket/config-server:${DEPLOY_TAG}
+    build: *runtime-build
+  api-gateway:
+    image: animal-locket/api-gateway:${DEPLOY_TAG}
+    build: *runtime-build
+  user-service:
+    image: animal-locket/user-service:${DEPLOY_TAG}
+    build: *runtime-build
+  media-service:
+    image: animal-locket/media-service:${DEPLOY_TAG}
+    build: *runtime-build
+  post-service:
+    image: animal-locket/post-service:${DEPLOY_TAG}
+    build: *runtime-build
+  notification-service:
+    image: animal-locket/notification-service:${DEPLOY_TAG}
+    build: *runtime-build
+    volumes:
+      - /opt/animal-locket/deploy/secrets:/secrets:ro
+  discovery-service:
+    image: animal-locket/discovery-service:${DEPLOY_TAG}
+    build: *runtime-build
+  chat-service:
+    image: animal-locket/chat-service:${DEPLOY_TAG}
+    build: *runtime-build
+  billing-service:
+    image: animal-locket/billing-service:${DEPLOY_TAG}
+    build: *runtime-build
+    volumes:
+      - /opt/animal-locket/deploy/secrets:/secrets:ro
+  minio:
+    image: animal-locket/minio:${DEPLOY_TAG}
+  minio-init:
+    image: animal-locket/minio:${DEPLOY_TAG}
+  traefik:
+    volumes:
+      - /opt/animal-locket/deploy/demo/traefik.demo.yml:/etc/traefik/traefik.yml:ro

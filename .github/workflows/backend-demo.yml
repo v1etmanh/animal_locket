@@ -1,0 +1,208 @@
+name: Backend CI and demo deploy
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+    paths: ['pom.xml', 'libs/**', 'infra/**', 'services/**', 'deploy/**', '.gitattributes', '.github/workflows/backend-demo.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect backend changes
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA...HEAD" | grep -E '^(pom\.xml$|libs/|infra/|services/|deploy/|\.gitattributes$|\.github/workflows/backend-demo\.yml$)' > /dev/null; then
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'backend=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  dependency-review:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  verify:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      artifact_id: ${{ steps.release_artifact.outputs.artifact-id }}
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd 'redis-cli ping' --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      REDIS_TEST_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Validate deployment configuration and scripts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          bash deploy/demo/validate-ci.sh
+      - name: Test and package all backend modules
+        run: mvn -B -ntp verify
+      - name: Require real Redis and Mongo integration tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          reports = {
+              'discovery-service': ['com.animallocket.discovery.RedisDiscoveryStoreTest'],
+              'chat-service': ['com.animallocket.chat.ChatMongoIntegrationTest',
+                               'com.animallocket.chat.GlyphMongoIntegrationTest'],
+          }
+          for module, classes in reports.items():
+              for name in classes:
+                  report = Path('services') / module / 'target/surefire-reports' / f'TEST-{name}.xml'
+                  suite = ET.parse(report).getroot()
+                  assert int(suite.attrib['tests']) > 0, f'No tests ran: {name}'
+                  for key in ('skipped', 'failures', 'errors'):
+                      assert int(suite.attrib[key]) == 0, f'{name}: {key}={suite.attrib[key]}'
+          PY
+      - name: Verify packaged avatar resources and build runtime images
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar tf services/user-service/target/user-service-0.1.0-SNAPSHOT.jar | grep '^BOOT-INF/classes/avatar/avatar-lib.v1.json$'
+          env_file=$(mktemp)
+          trap 'rm -f "$env_file"' EXIT
+          # generate-env refuses overwrites; mktemp reserves the path first.
+          rm "$env_file"
+          ENV_FILE="$env_file" sh deploy/demo/generate-env.sh ci.example.test
+          export DEPLOY_TAG="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker compose --env-file "$env_file" -f docker-compose.yml \
+            -f deploy/demo/docker-compose.demo.yml -f deploy/demo/docker-compose.ci.yml build
+      - name: Package exact source and verified JARs
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && vars.DEMO_DEPLOY_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          git archive HEAD docker-compose.yml deploy infra/config-repo | tar -x -C release
+          for module in infra/* services/*; do
+            if [[ -d "$module/target" ]]; then
+              mkdir -p "release/$module/target"
+              cp "$module"/target/*-SNAPSHOT.jar "release/$module/target/"
+            fi
+          done
+          tar -czf backend-release.tar.gz -C release .
+          sha256sum backend-release.tar.gz > backend-release.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        id: release_artifact
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && vars.DEMO_DEPLOY_ENABLED == 'true'
+        with:
+          name: backend-release
+          path: |
+            backend-release.tar.gz
+            backend-release.tar.gz.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-test-reports
+          path: '**/target/surefire-reports/*.xml'
+          retention-days: 3
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && vars.DEMO_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    environment: demo
+    concurrency:
+      group: animal-locket-demo-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ secrets.DEMO_SSH_HOST }}
+      DEPLOY_USER: ${{ secrets.DEMO_SSH_USER }}
+      DEPLOY_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEMO_SSH_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-release
+      - name: Skip superseded commits
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq '.object.sha')
+          if [[ "$latest" == "$GITHUB_SHA" ]]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'A newer master commit exists; skipping this deployment.'
+          fi
+      - name: Configure SSH and deploy verified release
+        if: steps.latest.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DEMO_SSH_HOST}"
+          : "${DEPLOY_USER:?Missing DEMO_SSH_USER}"
+          : "${DEPLOY_KEY:?Missing DEMO_SSH_PRIVATE_KEY}"
+          : "${DEPLOY_KNOWN_HOSTS:?Missing DEMO_SSH_KNOWN_HOSTS}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/demo_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/demo_key' EXIT
+          opts=(-i ~/.ssh/demo_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          release="/opt/animal-locket/releases/$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          sha256sum -c backend-release.tar.gz.sha256
+          # release contains only GitHub's hex SHA and numeric run identifiers; expand locally.
+          # shellcheck disable=SC2029
+          ssh "${opts[@]}" "$target" "umask 077; mkdir -p '$release'"
+          scp "${opts[@]}" backend-release.tar.gz backend-release.tar.gz.sha256 "$target:$release/"
+          # shellcheck disable=SC2029
+          ssh "${opts[@]}" "$target" "set -eu; cd '$release'; sha256sum -c backend-release.tar.gz.sha256; tar -xzf backend-release.tar.gz; rm backend-release.tar.gz backend-release.tar.gz.sha256; bash deploy/demo/deploy-release.sh '$release'"
+      - name: Remove transferred artifact to reduce storage usage
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.verify.outputs.artifact_id }}
+        run: gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"

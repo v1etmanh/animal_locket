@@ -1,0 +1,2 @@
+# This Dockerfile copies only from upstream stages, never from the repository.
+**

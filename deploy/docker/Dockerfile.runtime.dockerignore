@@ -1,0 +1,10 @@
+# Send only verified JARs to the Docker daemon, never .env or credentials.
+**
+!infra/
+!infra/*/
+!infra/*/target/
+!infra/*/target/*-SNAPSHOT.jar
+!services/
+!services/*/
+!services/*/target/
+!services/*/target/*-SNAPSHOT.jar
