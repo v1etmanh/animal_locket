@@ -176,6 +176,14 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 
 **Nhận avatar** — polaroid lớn: trước khi quay là **ảnh chưa rửa** (nền `fold1`, dấu "?" Lora, chú thích mới "ảnh chưa rửa…"); trong lúc quay hiện các con ngẫu nhiên; xong thì hiện avatar thật (vuông, không cắt tròn), chú thích là tên con vật. Ô biệt danh như dòng kẻ trên giấy (chữ viết tay), nút xúc xắc "Tạo biệt danh ngẫu nhiên". Nút chính "Quay avatar"/"Vào app" có mũi tên. Chữ khác giữ nguyên.
 
+### 7.4 Đợt 4 chi tiết · Chụp ảnh (chốt 2026-11-10)
+
+**Camera** — tiêu đề "Khoảnh khắc mới" (Lora) + nút đèn flash (icon nét: tự động / bật / tắt). Khung ngắm là **tờ ảnh trắng có 4 góc dán ảnh** (tam giác mực ở 4 góc như album cũ), không bo tròn. Hàng điều khiển: **nút chụp** tròn viền `accent` trên đế giấy; **Chọn từ thư viện** và **Lật camera** là **ô giấy gấp góc** chỉ có icon (nhãn chỉ cho trình đọc màn hình, giữ như cũ). Thanh tab nổi giữ như đợt 1, không đè hàng điều khiển. Chưa cho phép camera: trong khung ảnh là icon máy ảnh, câu **"Cho phép camera để chụp khoảnh khắc."** (thay câu cũ không còn đúng về xử lý khuôn mặt, chủ dự án đồng ý) và nút giấy "Cho phép camera".
+
+**Trạng thái gửi** (`SendStatusPill`) — nhãn giấy `paper` dán washi thay viên đen mờ: chữ `accent` (đang gửi), xanh lá sẫm (đã gửi, kèm "Xem"), `danger` (bị từ chối / lỗi, kèm "Thử lại", "Đóng"); icon nét của app; vẫn là live region.
+
+**Xem trước** — ảnh in thành **tấm ảnh dán băng** (khung giấy, nghiêng nhẹ, ảnh 4:5); ô **lời nhắn viết tay** ngay lề dưới tấm ảnh (dòng kẻ gạch, chữ Patrick Hand, đếm 200 ký tự, nhãn/gợi ý giữ nguyên); nút giấy "Gửi cho bạn bè" (icon gửi; đang gửi: "Đang gửi ảnh trước…", tắt); nhãn giấy "Chụp lại"; dòng ghi chú giữ nguyên.
+
 ## 8. Ràng buộc
 
 - Flutter (SDK hiện có 3.41), Riverpod, go_router — giữ nguyên kiến trúc; không thêm thư viện UI lớn. Dùng gói đã cài trước khi thêm gói mới.
