@@ -183,7 +183,8 @@ class _CameraScreenState extends State<CameraScreen>
     final initialized = controller?.value.isInitialized == true;
     return AppPage(
       scrollable: false,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+      // Chừa chỗ cho tấm polaroid "Ảnh" nhô lên khỏi thanh tab nổi.
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 26),
       child: Column(
         children: [
           Row(
