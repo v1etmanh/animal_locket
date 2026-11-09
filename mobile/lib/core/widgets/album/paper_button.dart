@@ -129,7 +129,7 @@ class PaperButton extends StatelessWidget {
                 child: CustomPaint(
                   size: const Size(_corner, _corner),
                   painter: FoldedCornerPainter(
-                    enabled ? p.accentDeep : p.muted,
+                    enabled ? p.accentDeep : Color.lerp(p.fold2, p.ink, .12)!,
                   ),
                 ),
               ),
