@@ -93,6 +93,27 @@ Chữ Nhật trang trí theo theme: Shu 朱, Yuzu 柚, Sakura 桜, Sora 空.
 - Đây là thay đổi quy tắc của docs/19 ("bản mới không đổi nghĩa hình cũ"): đợt 2 phải cập nhật docs/19 và thêm ADR.
 - Đợt 1 dùng avatar hiện tại, chỉ đặt trong khung mới.
 
+### 5.1 Đợt 2 chi tiết (chốt 2026-11-09)
+
+**Kiểu vẽ: B "Gấp đơn giản"** (người dùng chọn giữa 3 bản thử A low-poly / B gấp đơn giản / C origami dễ thương):
+- Mỗi con là vài **mảng giấy lớn**, cạnh thẳng (đa giác, không dùng hình tròn/ellipse cho đầu, tai, mõm).
+- **Một nếp gấp dọc giữa mặt**: nửa trái màu gốc, nửa phải sẫm hơn. Tai/mảnh phụ là **mảnh gấp đôi**: nếp từ đỉnh xuống giữa đáy, hai nửa hai sắc độ.
+- **Mắt chấm** tròn màu mực `#2B2420`, không ánh sáng, không má hồng; mũi tam giác nhỏ.
+- Sắc độ sẫm/sáng được **tính sẵn khi tạo thư viện** từ 10 màu gốc của v1 (giữ nguyên `fur`, `belly`, `accent`, `bg`), lưu thành trường thêm trong mỗi bảng màu (ví dụ `furD`, `furL`, `bellyD`, `accentD`). Client không tính màu.
+- 6 phụ kiện (cùng khoá) được vẽ lại theo cùng kiểu mảng phẳng, đặt khớp với đầu mới.
+
+**Hàm vẽ chuẩn**: thay mọi `{{tên}}` trong SVG bằng giá trị cùng tên của bảng màu (thay cho 3 tên cố định của v1). Với v1 kết quả không đổi. JS (`build-lib.mjs`) và Dart phải ra cùng chuỗi; mẫu đối chiếu `mobile/test/fixtures/avatar-lib.v2.samples.json`.
+
+**Phiên bản & phân phối**:
+- `libs/avatar-lib/avatar-lib.v1.json` giữ nguyên từng byte. Script tạo v1 và v2; dừng với lỗi nếu bộ khoá v2 khác v1.
+- Server nạp cả v2 (cùng thư mục) nhưng **không đổi code**: mỗi khoá vẫn thuộc phiên bản đầu tiên có nó (v1), nên mã avatar đã cấp (`1:fox:0:none`) và kho `avatar_pool` không đổi; `GET /animals/avatar-lib/2` trả được v2.
+- App chỉ đóng gói v2 (bỏ file v1 khỏi `mobile/assets`). Khi vẽ, app dùng **thư viện mới nhất có khoá đó**, không theo số phiên bản trong mã; không có thì mới tải phiên bản ghi trong mã (như cũ) hoặc hiện emoji.
+- App bản cũ đã cài vẫn vẽ hình v1; chấp nhận.
+
+**Tài liệu**: docs/19 đổi quy tắc §3.2 thành "phiên bản mới được **vẽ lại** khoá cũ nhưng phải giữ nguyên bộ khoá và ý nghĩa (con vật, màu, phụ kiện); khoá không bao giờ bị xoá"; thêm ADR; sửa dòng avatar trong `CLAUDE.md`.
+
+**Duyệt**: script xuất thêm trang xem trước (`--preview <file>`, không commit) gồm cả 50 con ở một bảng màu, 10 bảng màu trên vài con, 6 phụ kiện, và cỡ 40pt.
+
 ## 6. Chia đợt
 
 Mỗi đợt xong thì dừng để chủ dự án duyệt trên chế độ demo, rồi mới sang đợt sau.
