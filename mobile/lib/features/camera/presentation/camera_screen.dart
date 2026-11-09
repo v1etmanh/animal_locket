@@ -1,4 +1,8 @@
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
+import 'package:animal_locket/core/widgets/album/photo_corners_frame.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/features/camera/presentation/send_status_pill.dart';
 import 'package:camera/camera.dart';
@@ -7,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Camera: khung ngắm là tờ ảnh có góc dán album (spec §7.4).
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
 
@@ -149,25 +154,31 @@ class _CameraScreenState extends State<CameraScreen>
     await _controller?.setExposurePoint(point);
   }
 
-  Widget _preview(bool initialized, CameraController? controller) => ClipRRect(
-    borderRadius: BorderRadius.circular(34),
-    child: ColoredBox(
-      color: AppColors.ink,
-      child: _permissionDenied
-          ? _PermissionExplainer(onAllow: _requestPermission)
-          : !initialized
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : LayoutBuilder(
-              builder: (context, constraints) => GestureDetector(
-                onTapDown: (details) => _focus(details, constraints),
-                child: SizedBox.expand(child: CameraPreview(controller!)),
-              ),
-            ),
-    ),
-  );
+  Widget _preview(bool initialized, CameraController? controller) {
+    final p = context.album;
+    if (_permissionDenied) {
+      return ColoredBox(
+        color: p.fold1,
+        child: _PermissionExplainer(onAllow: _requestPermission),
+      );
+    }
+    if (!initialized) {
+      return ColoredBox(
+        color: p.ink,
+        child: Center(child: CircularProgressIndicator(color: p.paper)),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) => GestureDetector(
+        onTapDown: (details) => _focus(details, constraints),
+        child: SizedBox.expand(child: CameraPreview(controller!)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final p = context.album;
     final controller = _controller;
     final initialized = controller?.value.isInitialized == true;
     return AppPage(
@@ -178,72 +189,118 @@ class _CameraScreenState extends State<CameraScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Khoảnh khắc mới',
-                style: Theme.of(context).textTheme.headlineMedium,
+              Flexible(
+                child: Text(
+                  'Khoảnh khắc mới',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
               ),
               Semantics(
                 label: 'Đổi chế độ đèn flash',
                 button: true,
+                enabled: initialized,
+                excludeSemantics: true,
+                onTap: initialized ? _cycleFlash : null,
                 child: IconButton(
                   onPressed: initialized ? _cycleFlash : null,
-                  icon: Icon(switch (_flashMode) {
-                    FlashMode.always => Icons.flash_on_rounded,
-                    FlashMode.off => Icons.flash_off_rounded,
-                    _ => Icons.flash_auto_rounded,
-                  }),
+                  icon: AlbumIcon(switch (_flashMode) {
+                    FlashMode.always => AlbumIcons.flashOn,
+                    FlashMode.off => AlbumIcons.flashOff,
+                    _ => AlbumIcons.flashAuto,
+                  }, color: initialized ? p.ink : p.muted),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Expanded(
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                Positioned.fill(child: _preview(initialized, controller)),
+                Positioned.fill(
+                  child: PhotoCornersFrame(
+                    child: _preview(initialized, controller),
+                  ),
+                ),
                 const Positioned(
-                  top: 12,
-                  left: 12,
-                  right: 12,
+                  top: 22,
+                  left: 22,
+                  right: 22,
                   child: Center(child: SendStatusPill()),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _CameraAction(
+              PaperTileButton(
+                icon: AlbumIcons.gallery,
                 label: 'Chọn từ thư viện',
-                icon: Icons.photo_library_outlined,
-                onTap: _pickImage,
+                onPressed: _pickImage,
               ),
-              Semantics(
-                label: 'Chụp ảnh',
-                button: true,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: initialized ? _capture : null,
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      border: Border.all(color: AppColors.orange, width: 7),
-                    ),
-                  ),
-                ),
-              ),
-              _CameraAction(
+              _Shutter(onPressed: initialized ? _capture : null),
+              PaperTileButton(
+                icon: AlbumIcons.flipCamera,
                 label: 'Lật camera',
-                icon: Icons.cameraswitch_outlined,
-                onTap: _switchCamera,
+                onPressed: _switchCamera,
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Nút chụp: vòng son trên đế giấy tròn.
+class _Shutter extends StatelessWidget {
+  const _Shutter({required this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.album;
+    final color = onPressed == null ? p.muted : p.accent;
+    return Semantics(
+      label: 'Chụp ảnh',
+      button: true,
+      enabled: onPressed != null,
+      excludeSemantics: true,
+      onTap: onPressed,
+      child: Material(
+        color: p.paper,
+        shape: const CircleBorder(),
+        elevation: 3,
+        shadowColor: const Color(0x665A3C1E),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox.square(
+            dimension: 80,
+            child: Center(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: 4),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -255,47 +312,27 @@ class _PermissionExplainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 64),
-          const SizedBox(height: 16),
-          const Text(
-            'Cho phép camera để chụp khoảnh khắc. Ảnh chỉ được đăng sau khi khuôn mặt đã được xử lý.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, height: 1.5),
-          ),
-          const SizedBox(height: 18),
-          FilledButton(
-            onPressed: onAllow,
-            child: const Text('Cho phép camera'),
-          ),
-        ],
+    final p = context.album;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 200),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 24),
+            AlbumIcon(AlbumIcons.camera, color: p.muted, size: 56),
+            const SizedBox(height: 16),
+            const Text(
+              'Cho phép camera để chụp khoảnh khắc.',
+              textAlign: TextAlign.center,
+              style: TextStyle(height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            PaperButton(label: 'Cho phép camera', onPressed: onAllow),
+          ],
+        ),
       ),
     );
   }
-}
-
-class _CameraAction extends StatelessWidget {
-  const _CameraAction({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: label,
-    button: true,
-    child: IconButton.filledTonal(
-      onPressed: onTap,
-      icon: Icon(icon),
-      iconSize: 25,
-    ),
-  );
 }
