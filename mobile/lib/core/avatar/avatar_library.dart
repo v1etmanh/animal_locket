@@ -97,33 +97,37 @@ class AvatarLibraryData {
   final List<Map<String, String>> palettes;
   final Map<String, ({String name, String svg})> accessories;
 
-  /// Hàm vẽ chuẩn — phải ra đúng chuỗi như `render()` trong libs/avatar-lib/build-lib.mjs.
+  /// Thư viện có đủ con vật, bảng màu và phụ kiện của mã này không.
+  bool covers(AvatarCode code) =>
+      animals.containsKey(code.animal) &&
+      accessories.containsKey(code.accessory) &&
+      code.palette >= 0 &&
+      code.palette < palettes.length;
+
+  static final _slot = RegExp(r'\{\{(\w+)\}\}');
+
+  /// Hàm vẽ chuẩn — phải ra đúng chuỗi như `render()` trong libs/avatar-lib/build-lib.mjs:
+  /// mọi chỗ trống `{{tên}}` lấy màu cùng tên trong bảng màu.
   String? render(AvatarCode code) {
-    final animal = animals[code.animal];
-    final accessory = accessories[code.accessory];
-    if (animal == null ||
-        accessory == null ||
-        code.palette < 0 ||
-        code.palette >= palettes.length) {
-      return null;
-    }
+    if (!covers(code)) return null;
     final p = palettes[code.palette];
-    final body = animal.svg
-        .replaceAll('{{fur}}', p['fur']!)
-        .replaceAll('{{belly}}', p['belly']!)
-        .replaceAll('{{accent}}', p['accent']!);
+    String fill(String svg) =>
+        svg.replaceAllMapped(_slot, (m) => p[m[1]!] ?? m[0]!);
     return '<svg viewBox="$viewBox" xmlns="http://www.w3.org/2000/svg">'
-        '<rect width="100" height="100" fill="${p['bg']}"/>$body${accessory.svg}</svg>';
+        '<rect width="100" height="100" fill="${p['bg']}"/>'
+        '${fill(animals[code.animal]!.svg)}${fill(accessories[code.accessory]!.svg)}</svg>';
   }
 }
 
-/// Kho các phiên bản thư viện đang có trên máy. v1 đóng gói theo app; phiên bản mới tải một lần rồi lưu file.
+/// Kho các phiên bản thư viện đang có trên máy. App đóng gói bản mới nhất (v2 origami);
+/// phiên bản khác tải một lần rồi lưu file. Mọi mã được vẽ bằng thư viện mới nhất có
+/// khoá đó (docs/19 §3.2): mã đã cấp `1:fox:0:none` ra con cáo origami của v2.
 class AvatarLibraries {
   AvatarLibraries._();
 
   static final AvatarLibraries instance = AvatarLibraries._();
 
-  static const bundledVersions = [1];
+  static const bundledVersions = [2];
 
   final Map<int, AvatarLibraryData> _libs = {};
   final Map<String, String> _svgCache = {};
@@ -151,7 +155,18 @@ class AvatarLibraries {
   void register(Map<String, dynamic> json) {
     final lib = AvatarLibraryData.fromJson(json);
     _libs[lib.version] = lib;
+    // Thư viện mới có thể vẽ lại mã đã có trong bộ nhớ đệm.
+    _svgCache.clear();
     revision.value++;
+  }
+
+  /// Thư viện số lớn nhất có đủ khoá của mã, hoặc null.
+  AvatarLibraryData? _libFor(AvatarCode c) {
+    final newestFirst = _libs.keys.toList()..sort((a, b) => b - a);
+    for (final v in newestFirst) {
+      if (_libs[v]!.covers(c)) return _libs[v];
+    }
+    return null;
   }
 
   bool has(int version) => _libs.containsKey(version);
@@ -159,7 +174,7 @@ class AvatarLibraries {
   String? animalName(String? code) {
     final c = AvatarCode.tryParse(code);
     if (c == null) return null;
-    return (_libs[c.version] ?? _latest)?.animals[c.animal]?.name;
+    return (_libFor(c) ?? _libs[c.version] ?? _latest)?.animals[c.animal]?.name;
   }
 
   /// Một mã ngẫu nhiên chỉ để chạy hiệu ứng "đang quay" (kết quả thật luôn do server cấp).
@@ -181,9 +196,10 @@ class AvatarLibraries {
     if (c == null) return null;
     final cached = _svgCache[code!];
     if (cached != null) return cached;
-    final lib = _libs[c.version];
+    final lib = _libFor(c);
     if (lib == null) {
-      _ensure(c.version);
+      // Không thư viện nào trên máy có khoá này: thử tải đúng phiên bản ghi trong mã.
+      if (!_libs.containsKey(c.version)) _ensure(c.version);
       return null;
     }
     final svg = lib.render(c);
