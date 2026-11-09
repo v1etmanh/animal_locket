@@ -17,7 +17,7 @@ Thành công = mở app thấy ngay "sổ ảnh giấy gấp" có chủ đích, 
 - Avatar origami (thư viện v2) — đợt 2.
 
 **Không mục tiêu**
-- Không đổi nội dung chữ, luồng màn hình, thứ tự tab, hành vi, API, logic state (Riverpod/repository). Chỉ đổi lớp trình bày.
+- Không đổi nội dung chữ, luồng màn hình, hành vi, API, logic state (Riverpod/repository). Chỉ đổi lớp trình bày.
 - Không đổi backend (user-service, kho avatar 3.000 mã giữ nguyên).
 - Không theme tối, không theme đổi "chất liệu" (dải phim…). Không giới hạn theme cho Pro.
 
@@ -36,7 +36,7 @@ Ghép từ 3 hướng đã xem:
 | Feed / thẻ ảnh | hướng A "Sổ ảnh washi" | Ảnh như ảnh in dán vào sổ: viền giấy trắng ngà, bóng mềm, **nghiêng nhẹ** (±1–2°, xen kẽ), **băng washi** sọc chéo dán mép trên; caption **chữ viết tay**; nút thích là **con dấu hanko** tròn nghiêng (chữ 好); ngày kiểu nghiêng serif ("Thứ Bảy, 8 tháng 11"); chữ Nhật dọc trang trí mép phải (ví dụ 思い出のアルバム) |
 | Thanh điều hướng | hướng B, phương án 3 "Băng washi & polaroid" | Viên nổi bo tròn phía dưới (bo 4px trên, 18px dưới), viền trên như mép giấy xé; tab đang chọn có **mẩu băng washi dán chéo** sau icon; icon nét mảnh chủ đề album; tab **Ảnh** (camera) là **tấm polaroid nhỏ nghiêng** |
 
-**Thanh tab giữ nguyên thứ tự và nhãn hiện tại**: Ảnh · Bảng tin · Khám phá · Chat · Hồ sơ (`l10n.photosTab`…). Tab Ảnh nằm ở vị trí đầu như hiện tại, chỉ đổi dạng thành polaroid. *(Lựa chọn của người viết; mockup đặt nút chụp ở giữa — xem §9.)*
+**Thanh tab giữ nhãn hiện tại, tab Ảnh nằm giữa**: Bảng tin · Khám phá · Ảnh · Chat · Hồ sơ (`l10n.photosTab`…), tab Ảnh dạng polaroid. Chỉ đổi thứ tự hiển thị; router giữ nguyên index nhánh (`AppShell._branchAt`). *(Người dùng chọn sau khi duyệt đợt 1.)*
 
 ### 3.1 Typography
 
@@ -118,7 +118,7 @@ Mỗi đợt xong thì dừng để chủ dự án duyệt trên chế độ dem
 2. Ba font mới đăng ký trong `pubspec.yaml`; text theme map Lora/Be Vietnam Pro/Patrick Hand.
 3. Nền giấy gấp thay `app_background` (khối giấy vẽ bằng code theo token `fold*`).
 4. Thành phần dùng chung mới, đủ cho Feed và để các đợt sau tái dùng: thẻ ảnh washi (ảnh + băng + nghiêng), con dấu hanko (trạng thái thích/chưa thích), nút chính/phụ (thay `gradient_button`), ô nhập, hộp thoại xác nhận, chip đếm, tiêu đề trang + dòng ngày.
-5. Thanh điều hướng mới trong `app_shell.dart`, giữ nguyên nhánh, thứ tự, nhãn và hành vi `goBranch`.
+5. Thanh điều hướng mới trong `app_shell.dart`, giữ nguyên nhánh, nhãn và hành vi `goBranch`; tab Ảnh hiển thị ở giữa.
 6. Màn Feed (`feed_screen.dart`) làm lại hoàn toàn bằng thành phần mới: danh sách bài bạn bè, trạng thái tải/lỗi/rỗng. Mọi chữ giữ nguyên (xem §7.1). `PostsGrid` (`posts_grid.dart`) **không** thuộc đợt 1: nó chỉ hiển thị ở Hồ sơ và Hồ sơ người khác, nên làm cùng đợt 5/7.
 7. Mục chọn theme trong màn Cài đặt.
 8. Widget cũ (`glass_container`, `gradient_button`) **giữ lại** cho màn chưa làm; xoá ở đợt cuối khi không còn chỗ dùng.
@@ -150,7 +150,7 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 
 ## 9. Lựa chọn người viết tự quyết (chủ dự án nên rà)
 
-- Giữ thứ tự tab hiện tại; tab Ảnh dạng polaroid ở vị trí đầu thay vì nút giữa như mockup.
+- Tab Ảnh dạng polaroid đặt giữa thanh (người dùng chọn sau đợt 1); router giữ nguyên index nhánh.
 - Font Lora / Be Vietnam Pro / Patrick Hand; chữ Nhật trang trí dạng SVG.
 - Shu là theme mặc định.
 - Chuyển động như §3.3.

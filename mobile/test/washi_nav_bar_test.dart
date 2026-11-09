@@ -59,7 +59,7 @@ Widget _bar(int index, {ValueChanged<int>? onSelected}) => Scaffold(
 );
 
 void main() {
-  testWidgets('AppShell keeps the five tabs in order and routes them', (
+  testWidgets('AppShell puts Ảnh in the middle and routes every tab', (
     tester,
   ) async {
     final router = _router();
@@ -74,21 +74,44 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    const labels = ['Ảnh', 'Bảng tin', 'Khám phá', 'Chat', 'Hồ sơ'];
+    const labels = ['Bảng tin', 'Khám phá', 'Ảnh', 'Chat', 'Hồ sơ'];
     final xs = [for (final l in labels) tester.getCenter(find.text(l)).dx];
     for (var i = 1; i < xs.length; i++) {
       expect(xs[i], greaterThan(xs[i - 1]), reason: labels[i]);
     }
     expect(find.byType(NavigationBar), findsNothing);
 
-    await tester.tap(find.text('Khám phá'));
-    await tester.pumpAndSettle();
-    expect(router.state.uri.path, '/discover');
-    expect(find.text('screen /discover'), findsOneWidget);
+    // Tấm polaroid đi theo tab Ảnh, ở giữa thanh.
+    final polaroid = find.byWidgetPredicate(
+      (w) => w is AlbumIcon && w.icon == AlbumIcons.photos,
+    );
+    expect(polaroid, findsOneWidget);
+    expect(tester.getCenter(polaroid).dx, closeTo(xs[2], 4));
 
-    await tester.tap(find.text('Ảnh'));
-    await tester.pumpAndSettle();
-    expect(router.state.uri.path, '/camera');
+    // Mở ở /feed: tab Bảng tin (vị trí đầu) đang được chọn.
+    expect(
+      tester.getSemantics(find.text('Bảng tin')),
+      isSemantics(isButton: true, isSelected: true),
+    );
+
+    const routes = {
+      'Bảng tin': '/feed',
+      'Khám phá': '/discover',
+      'Ảnh': '/camera',
+      'Chat': '/chat',
+      'Hồ sơ': '/profile',
+    };
+    for (final MapEntry(key: label, value: path) in routes.entries) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, path, reason: label);
+      expect(find.text('screen $path'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.text(label)),
+        isSemantics(isButton: true, isSelected: true),
+        reason: label,
+      );
+    }
   });
 
   testWidgets('marks only the current tab as selected, in the accent', (
