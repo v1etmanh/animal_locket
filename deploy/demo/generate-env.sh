@@ -10,6 +10,11 @@ public_domain=$1
 env_file=${ENV_FILE:-/opt/animal-locket/.env}
 umask 077
 
+if [ -e "$env_file" ]; then
+  echo "Refusing to overwrite $env_file; reuse existing credentials when redeploying." >&2
+  exit 1
+fi
+
 random_hex() {
   openssl rand -hex 24
 }
@@ -73,7 +78,7 @@ PAYPAL_MODE=sandbox
 PAYPAL_CLIENT_ID=
 PAYPAL_CLIENT_SECRET=
 PAYPAL_WEBHOOK_ID=
-PAYPAL_RETURN_BASE_URL=
+PAYPAL_RETURN_BASE_URL=https://api.$public_domain
 PAYPAL_APP_RETURN_URL=animallocket://checkout
 PAYOS_CLIENT_ID=
 PAYOS_API_KEY=
