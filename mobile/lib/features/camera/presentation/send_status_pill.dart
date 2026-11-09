@@ -1,35 +1,45 @@
+import 'dart:math' as math;
+
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/camera/presentation/upload_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Viên trạng thái nhỏ nổi trên camera: "Đang gửi…" → "Đã gửi ✓" (tự ẩn) hoặc lỗi + "Thử lại".
+/// Xanh lá sẫm cho "Đã gửi" (đạt AA trên nền giấy).
+const _sentGreen = Color(0xFF2F6B3A);
+
+/// Nhãn giấy dán washi nổi trên camera: "Đang gửi…" → "Đã gửi" (tự ẩn) hoặc lỗi
+/// + "Thử lại" (spec §7.4). Nền giấy đục nên đọc rõ trên mọi ảnh.
 class SendStatusPill extends ConsumerWidget {
   const SendStatusPill({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.album;
     final upload = ref.watch(uploadControllerProvider);
     final notifier = ref.read(uploadControllerProvider.notifier);
     final Widget content = switch (upload.stage) {
       UploadStage.idle => const SizedBox.shrink(key: ValueKey('idle')),
-      UploadStage.sending => const _Pill(
-        key: ValueKey('sending'),
+      UploadStage.sending => _Pill(
+        key: const ValueKey('sending'),
         leading: SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+          child: CircularProgressIndicator(strokeWidth: 2, color: p.accent),
         ),
         text: 'Đang gửi…',
+        color: p.accent,
       ),
       UploadStage.sent => _Pill(
         key: const ValueKey('sent'),
-        leading: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+        leading: const AlbumIcon(AlbumIcons.check, size: 18, color: _sentGreen),
         text: 'Đã gửi',
-        color: AppColors.green,
+        color: _sentGreen,
         actionLabel: 'Xem',
         onAction: () {
           notifier.dismiss();
@@ -38,23 +48,25 @@ class SendStatusPill extends ConsumerWidget {
       ),
       UploadStage.rejected => _Pill(
         key: const ValueKey('rejected'),
-        leading: const Icon(Icons.block, color: Colors.white, size: 18),
+        leading: AlbumIcon(AlbumIcons.alert, size: 18, color: p.danger),
         text: 'Ảnh không được chấp nhận',
-        color: AppColors.danger,
+        color: p.danger,
         onClose: notifier.dismiss,
       ),
       UploadStage.failed => _Pill(
         key: const ValueKey('failed'),
-        leading: const Icon(Icons.error_outline, color: Colors.white, size: 18),
+        leading: AlbumIcon(AlbumIcons.cloudOff, size: 18, color: p.danger),
         text: _failureText(upload.error),
-        color: AppColors.danger,
+        color: p.danger,
         actionLabel: 'Thử lại',
         onAction: notifier.retry,
         onClose: notifier.dismiss,
       ),
     };
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
       child: content,
     );
   }
@@ -69,7 +81,7 @@ class _Pill extends StatelessWidget {
     super.key,
     required this.leading,
     required this.text,
-    this.color,
+    required this.color,
     this.actionLabel,
     this.onAction,
     this.onClose,
@@ -77,61 +89,111 @@ class _Pill extends StatelessWidget {
 
   final Widget leading;
   final String text;
-  final Color? color;
+  final Color color;
   final String? actionLabel;
   final VoidCallback? onAction;
   final VoidCallback? onClose;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-      constraints: const BoxConstraints(minHeight: 40),
-      decoration: BoxDecoration(
-        color: (color ?? Colors.black).withValues(alpha: .72),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) {
+    final p = context.album;
+    return Semantics(
+      liveRegion: true,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          leading,
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: p.paper,
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 40),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      leading,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          text,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (actionLabel != null)
+                        TextButton(
+                          onPressed: onAction,
+                          style: TextButton.styleFrom(foregroundColor: color),
+                          child: Text(
+                            actionLabel!,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline,
+                              decorationColor: color,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 10),
+                      if (onClose != null)
+                        Semantics(
+                          container: true,
+                          label: 'Đóng',
+                          button: true,
+                          excludeSemantics: true,
+                          onTap: onClose,
+                          child: InkResponse(
+                            onTap: onClose,
+                            radius: 22,
+                            child: SizedBox.square(
+                              dimension: 44,
+                              child: Center(
+                                child: AlbumIcon(
+                                  AlbumIcons.close,
+                                  size: 18,
+                                  color: p.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          if (actionLabel != null)
-            TextButton(
-              onPressed: onAction,
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              child: Text(
-                actionLabel!,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  decoration: TextDecoration.underline,
-                  decorationColor: Colors.white,
+          Positioned(
+            left: -8,
+            top: -9,
+            child: Transform.rotate(
+              angle: -12 * math.pi / 180,
+              child: Opacity(
+                opacity: .85,
+                child: CustomPaint(
+                  size: const Size(34, 14),
+                  painter: WashiTapePainter(p.tape1, p.tape2),
                 ),
               ),
-            )
-          else
-            const SizedBox(width: 8),
-          if (onClose != null)
-            IconButton(
-              tooltip: 'Đóng',
-              visualDensity: VisualDensity.compact,
-              onPressed: onClose,
-              icon: const Icon(Icons.close, color: Colors.white, size: 18),
             ),
+          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }
