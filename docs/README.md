@@ -30,6 +30,7 @@ Animal Locket là ứng dụng chia sẻ ảnh nhanh giữa bạn bè (kiểu Lo
 | 17 | [17-flutter-app-requirements.md](17-flutter-app-requirements.md) | Requirement app Flutter (iOS + Android) | Dev mobile |
 | 18 | [18-mobile-integration-brief.md](18-mobile-integration-brief.md) | Brief nối app với backend thật | Dev mobile |
 | 19 | [19-avatar-mechanism.md](19-avatar-mechanism.md) | Cơ chế avatar con vật duy nhất | Dev, PM |
+| 20 | [20-digitalocean-demo-deployment-runbook.md](20-digitalocean-demo-deployment-runbook.md) | Tái tạo demo DigitalOcean, HTTPS và Postman smoke tests | DevOps, Agent, QA |
 | — | [architecture/](architecture/README.md) | Sơ đồ lớp và tuần tự cho backend và frontend | Dev |
 | — | [glyph-chat-implementation-plan/](glyph-chat-implementation-plan/) | Kế hoạch glyph chat (backend + mobile) | Dev |
 

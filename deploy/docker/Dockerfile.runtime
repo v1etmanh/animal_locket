@@ -1,0 +1,18 @@
+# CI has already run mvn verify. No compiler/Maven runs on the demo Droplet.
+FROM eclipse-temurin:17-jre
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home app
+WORKDIR /app
+ARG MODULE_PATH
+COPY --chown=app:app ${MODULE_PATH}/target/*-SNAPSHOT.jar /app/app.jar
+ARG APP_PORT=8080
+ENV APP_PORT=${APP_PORT} \
+    JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+USER app
+EXPOSE ${APP_PORT}
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=6 \
+  CMD curl -fs "http://localhost:${APP_PORT}/actuator/health" | grep -q '"status":"UP"' || exit 1
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

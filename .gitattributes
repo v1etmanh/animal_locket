@@ -1,0 +1,2 @@
+# Deployment scripts must run on Linux even when edited/checked out on Windows.
+*.sh text eol=lf

@@ -1,0 +1,234 @@
+services:
+  mysql:
+    image: mysql:8.4
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    command:
+      - --innodb-buffer-pool-size=256M
+      - --max-connections=80
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Missing MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: user_db
+      MYSQL_USER: animal
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Missing MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 768m
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    environment:
+      POSTGRES_DB: billing_db
+      POSTGRES_USER: animal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Missing POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./deploy/demo/postgres-keycloak-schema.sql:/docker-entrypoint-initdb.d/02-keycloak-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U animal -d billing_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    mem_limit: 384m
+
+  mongo:
+    image: mongo:7
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    mem_limit: 512m
+
+  minio:
+    build:
+      context: .
+      dockerfile: deploy/minio/Dockerfile
+    image: animal-locket/minio:demo
+    profiles: [core]
+    restart: unless-stopped
+    networks: [animal-net]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Missing MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Missing MINIO_ROOT_PASSWORD}
+      MC_HOST_local: http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@127.0.0.1:9000
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "/usr/bin/mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=animal-net"
+      - "traefik.http.routers.files.rule=Host(`files.${PUBLIC_DOMAIN}`)"
+      - "traefik.http.routers.files.entrypoints=websecure"
+      - "traefik.http.routers.files.tls.certresolver=letsencrypt"
+      - "traefik.http.services.files.loadbalancer.server.port=9000"
+    mem_limit: 384m
+
+  minio-init:
+    image: animal-locket/minio:demo
+    profiles: [core]
+    restart: "no"
+    networks: [animal-net]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing local/animal-photos
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+
+  kafka:
+    environment:
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    mem_limit: 768m
+
+  redis:
+    mem_limit: 192m
+
+  keycloak:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: animal
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HOSTNAME: https://auth.${PUBLIC_DOMAIN}
+      JAVA_OPTS_KC_HEAP: -Xms128m -Xmx512m
+    labels:
+      - "traefik.http.routers.auth.entrypoints=websecure"
+      - "traefik.http.routers.auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.auth-admin.entrypoints=websecure"
+      - "traefik.http.routers.auth-admin.tls.certresolver=letsencrypt"
+    mem_limit: 768m
+
+  traefik:
+    volumes:
+      - ./deploy/demo/traefik.demo.yml:/etc/traefik/traefik.yml:ro
+      - letsencrypt-data:/letsencrypt
+
+
+  eureka-server:
+    environment:
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  config-server:
+    environment:
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  api-gateway:
+    environment:
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    labels:
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pay.entrypoints=websecure"
+      - "traefik.http.routers.pay.tls.certresolver=letsencrypt"
+    mem_limit: 448m
+
+  user-service:
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/user_db?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8
+      DB_USER: animal
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  media-service:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/media_db?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8
+      DB_USER: animal
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      R2_ENDPOINT: https://files.${PUBLIC_DOMAIN}
+      R2_ACCESS_KEY: ${MINIO_ROOT_USER}
+      R2_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      R2_BUCKET: animal-photos
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  post-service:
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/post_db?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8
+      DB_USER: animal
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  notification-service:
+    environment:
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  discovery-service:
+    environment:
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  chat-service:
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://mongo:27017/chat_db
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+  billing-service:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/billing_db
+      DB_USER: animal
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PAYPAL_RETURN_BASE_URL: ${PAYPAL_RETURN_BASE_URL:-https://api.${PUBLIC_DOMAIN}}
+      JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
+    mem_limit: 448m
+
+volumes:
+  mysql-data:
+  postgres-data:
+  mongo-data:
+  minio-data:
+  letsencrypt-data:

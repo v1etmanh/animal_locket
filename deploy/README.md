@@ -1,5 +1,8 @@
 # Triển khai Animal Locket bằng Docker Compose
 
+Stack demo DigitalOcean dùng [runbook riêng](../docs/deployment/digitalocean-demo/README.md).
+CI/CD backend, secret GitHub và rollback được hướng dẫn ở [bước 10](../docs/deployment/digitalocean-demo/10-backend-cicd.md).
+
 > **Trạng thái kiểm chứng:** bộ file này mới được kiểm tra **tĩnh** (cú pháp YAML/JSON, tham chiếu `depends_on`, biến môi trường,
 > cổng, file mount, khớp với `application.yml` của từng service). **Chưa được chạy thật với Docker.** Xem mục
 > [Chưa kiểm chứng](#chưa-kiểm-chứng-với-docker-thật) trước khi tin vào bất cứ điều gì ở đây.

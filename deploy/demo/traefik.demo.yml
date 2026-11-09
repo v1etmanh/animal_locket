@@ -1,0 +1,62 @@
+# Demo public HTTPS configuration. Certificates are issued and renewed automatically by Let's Encrypt.
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog:
+  format: json
+  filters:
+    statusCodes: ["400-599"]
+    minDuration: 1s
+  fields:
+    headers:
+      defaultMode: drop
+    names:
+      ClientHost: keep
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls: {}
+  traefik:
+    address: ":8080"
+
+api:
+  dashboard: true
+  insecure: true
+
+ping:
+  entryPoint: traefik
+
+metrics:
+  prometheus:
+    entryPoint: traefik
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: animal-net
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: tanvinhza2@gmail.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
