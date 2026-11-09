@@ -4,7 +4,8 @@ import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:flutter/material.dart';
 
-/// Nút thích dạng con dấu hanko (chữ 好). "Đóng dấu" khi bật.
+/// Nút bật/tắt dạng con dấu hanko khắc hình [mark] (mặc định trái tim cho nút thích,
+/// dấu tích cho ô đồng ý). Không dùng chữ (spec §2). "Đóng dấu" khi bật.
 class HankoStamp extends StatefulWidget {
   const HankoStamp({
     super.key,
@@ -12,12 +13,14 @@ class HankoStamp extends StatefulWidget {
     required this.onPressed,
     required this.tooltip,
     this.size = 34,
+    this.mark = AlbumIcons.heart,
   });
 
   final bool stamped;
   final VoidCallback? onPressed;
   final String tooltip;
   final double size;
+  final AlbumIcons mark;
 
   @override
   State<HankoStamp> createState() => _HankoStampState();
@@ -90,7 +93,7 @@ class _HankoStampState extends State<HankoStamp>
                     border: Border.all(color: ink, width: on ? 2.5 : 2),
                   ),
                   padding: EdgeInsets.all(widget.size * .2),
-                  child: DecoSvg(KanjiDeco.hanko, color: ink),
+                  child: FittedBox(child: AlbumIcon(widget.mark, color: ink)),
                 ),
               ),
             ),

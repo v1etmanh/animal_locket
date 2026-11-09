@@ -43,20 +43,11 @@ void main() {
     expect(AlbumIcons.photos.asset, 'photos');
   });
 
-  testWidgets('every icon and decoration asset is a path-only svg', (
-    tester,
-  ) async {
+  testWidgets('every icon asset is a path-only svg', (tester) async {
     for (final icon in AlbumIcons.values) {
       final svg = await rootBundle.loadString('assets/icons/${icon.asset}.svg');
       expect(svg, contains('<svg'), reason: icon.name);
-    }
-    for (final asset in [
-      KanjiDeco.hanko,
-      for (final id in AlbumThemeId.values) KanjiDeco.vertical(id),
-    ]) {
-      final svg = await rootBundle.loadString(asset);
-      expect(svg, contains('<svg'), reason: asset);
-      expect(svg, isNot(contains('<text')), reason: asset);
+      expect(svg, isNot(contains('<text')), reason: icon.name);
     }
   });
 }

@@ -8,10 +8,9 @@ void main() {
       final p = AlbumPalette.of(AlbumThemeId.shu);
       expect(p.background, const Color(0xFFFFF8EF));
       expect(p.accent, const Color(0xFFB8402A));
-      expect(p.kanji, '朱');
     });
 
-    test('each theme has its own accent and kanji', () {
+    test('each theme has its own accent', () {
       expect(
         AlbumPalette.of(AlbumThemeId.yuzu).accent,
         const Color(0xFFA35C00),
@@ -24,9 +23,6 @@ void main() {
         AlbumPalette.of(AlbumThemeId.sora).accent,
         const Color(0xFF2F5F8A),
       );
-      expect(AlbumPalette.of(AlbumThemeId.yuzu).kanji, '柚');
-      expect(AlbumPalette.of(AlbumThemeId.sakura).kanji, '桜');
-      expect(AlbumPalette.of(AlbumThemeId.sora).kanji, '空');
     });
   });
 

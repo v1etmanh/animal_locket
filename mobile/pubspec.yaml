@@ -89,7 +89,6 @@ flutter:
   assets:
     - assets/avatar/
     - assets/icons/
-    - assets/deco/
   fonts:
     - family: Plus Jakarta Sans
       fonts:

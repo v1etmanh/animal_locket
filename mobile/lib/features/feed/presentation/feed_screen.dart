@@ -4,7 +4,6 @@ import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
-import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
@@ -35,85 +34,68 @@ class FeedScreen extends ConsumerWidget {
           icon: const AlbumIcon(AlbumIcons.friends),
         ),
       ],
-      child: Stack(
-        children: [
-          // Chữ Nhật dọc trang trí trong rãnh lề phải (thẻ ảnh chừa 26 điểm).
-          Positioned(
-            right: 0,
-            top: 30,
-            child: DecoSvg(
-              KanjiDeco.vertical(ref.watch(albumThemeProvider)),
-              height: 140,
-            ),
-          ),
-          feed.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => _FeedError(error: error),
-            data: (data) => RefreshIndicator(
-              onRefresh: ref.read(feedControllerProvider.notifier).refresh,
-              child: data.items.isEmpty
-                  ? const _EmptyFeed()
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification.metrics.extentAfter < 500) {
-                          ref.read(feedControllerProvider.notifier).loadMore();
+      child: feed.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _FeedError(error: error),
+        data: (data) => RefreshIndicator(
+          onRefresh: ref.read(feedControllerProvider.notifier).refresh,
+          child: data.items.isEmpty
+              ? const _EmptyFeed()
+              : NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification.metrics.extentAfter < 500) {
+                      ref.read(feedControllerProvider.notifier).loadMore();
+                    }
+                    return false;
+                  },
+                  // Ẩn thanh cuộn (Flutter tự thêm trên web/desktop).
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context)
+                        .copyWith(scrollbars: false),
+                    // Mỗi lần vuốt chuyển đúng một bài, hiện trọn trong khung.
+                    child: PageView.builder(
+                      scrollDirection: Axis.vertical,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: data.items.length + (data.loadingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == data.items.length) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
-                        return false;
-                      },
-                      // Ẩn thanh cuộn (Flutter tự thêm trên web/desktop).
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context)
-                            .copyWith(scrollbars: false),
-                        // Mỗi lần vuốt chuyển đúng một bài, hiện trọn trong khung.
-                        child: PageView.builder(
-                          scrollDirection: Axis.vertical,
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          itemCount:
-                              data.items.length + (data.loadingMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == data.items.length) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            return Padding(
-                              // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
-                              padding: const EdgeInsets.only(
-                                top: 14,
-                                bottom: 110,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (index == 0 && data.degraded)
-                                    const _DegradedBanner(),
-                                  // Mỗi trang một bài nên trang nào cũng ghi ngày.
-                                  _DayLabel(_dayLabel(data.items[index])),
-                                  Flexible(
-                                    child: Padding(
-                                      // Chừa lề cho góc nghiêng, băng washi và chữ dọc.
-                                      padding: const EdgeInsets.fromLTRB(
-                                        4,
-                                        12,
-                                        26,
-                                        0,
-                                      ),
-                                      child: _PostCard(
-                                        post: data.items[index],
-                                        index: index,
-                                      ),
-                                    ),
+                        return Padding(
+                          // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
+                          padding: const EdgeInsets.only(top: 14, bottom: 110),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (index == 0 && data.degraded)
+                                const _DegradedBanner(),
+                              // Mỗi trang một bài nên trang nào cũng ghi ngày.
+                              _DayLabel(_dayLabel(data.items[index])),
+                              Flexible(
+                                child: Padding(
+                                  // Chừa lề cho góc nghiêng và băng washi.
+                                  padding: const EdgeInsets.fromLTRB(
+                                    10,
+                                    12,
+                                    10,
+                                    0,
                                   ),
-                                ],
+                                  child: _PostCard(
+                                    post: data.items[index],
+                                    index: index,
+                                  ),
+                                ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-            ),
-          ),
-        ],
+                  ),
+                ),
+        ),
       ),
     );
   }

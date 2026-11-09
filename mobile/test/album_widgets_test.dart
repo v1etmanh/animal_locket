@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +131,34 @@ void main() {
       expect(tester.hasRunningAnimations, isTrue);
       await tester.pumpAndSettle();
       expect(tester.hasRunningAnimations, isFalse);
+    });
+
+    testWidgets('carves a heart by default and any album icon on request', (
+      tester,
+    ) async {
+      AlbumIcons mark() => tester
+          .widget<AlbumIcon>(
+            find.descendant(
+              of: find.byType(HankoStamp),
+              matching: find.byType(AlbumIcon),
+            ),
+          )
+          .icon;
+      await tester.pumpWidget(
+        _app(HankoStamp(stamped: false, tooltip: 'Thích', onPressed: () {})),
+      );
+      expect(mark(), AlbumIcons.heart);
+      await tester.pumpWidget(
+        _app(
+          HankoStamp(
+            stamped: true,
+            tooltip: 'Đồng ý',
+            mark: AlbumIcons.check,
+            onPressed: () {},
+          ),
+        ),
+      );
+      expect(mark(), AlbumIcons.check);
     });
   });
 

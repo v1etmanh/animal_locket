@@ -23,7 +23,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
     required this.muted,
     required this.ink,
     required this.danger,
-    required this.kanji,
   });
 
   final Color background;
@@ -39,9 +38,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
   final Color muted;
   final Color ink;
   final Color danger;
-
-  /// Chữ Nhật trang trí của theme (朱 柚 桜 空).
-  final String kanji;
 
   static const _ink = Color(0xFF2B2420);
   static const _danger = Color(0xFFA8261E);
@@ -61,7 +57,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
       muted: Color(0xFF6A5B4E),
       ink: _ink,
       danger: _danger,
-      kanji: '朱',
     ),
     AlbumThemeId.yuzu: AlbumPalette(
       background: Color(0xFFFFFAEA),
@@ -77,7 +72,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
       muted: Color(0xFF6B5D45),
       ink: _ink,
       danger: _danger,
-      kanji: '柚',
     ),
     AlbumThemeId.sakura: AlbumPalette(
       background: Color(0xFFFFF6F1),
@@ -93,7 +87,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
       muted: Color(0xFF6C5A58),
       ink: _ink,
       danger: _danger,
-      kanji: '桜',
     ),
     AlbumThemeId.sora: AlbumPalette(
       background: Color(0xFFF6F9FB),
@@ -109,7 +102,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
       muted: Color(0xFF56616B),
       ink: _ink,
       danger: _danger,
-      kanji: '空',
     ),
   };
 
@@ -130,7 +122,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
     Color? muted,
     Color? ink,
     Color? danger,
-    String? kanji,
   }) => AlbumPalette(
     background: background ?? this.background,
     paper: paper ?? this.paper,
@@ -145,7 +136,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
     muted: muted ?? this.muted,
     ink: ink ?? this.ink,
     danger: danger ?? this.danger,
-    kanji: kanji ?? this.kanji,
   );
 
   @override
@@ -166,7 +156,6 @@ class AlbumPalette extends ThemeExtension<AlbumPalette> {
       muted: c(muted, other.muted),
       ink: c(ink, other.ink),
       danger: c(danger, other.danger),
-      kanji: t < .5 ? kanji : other.kanji,
     );
   }
 }

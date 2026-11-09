@@ -14,7 +14,9 @@ enum AlbumIcons {
   emptyAlbum,
   cloudOff,
   imageBroken,
-  image;
+  image,
+  heart,
+  check;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
   String get asset =>
@@ -47,12 +49,6 @@ class AlbumIcon extends StatelessWidget {
       excludeFromSemantics: semanticLabel == null,
     );
   }
-}
-
-/// Chữ Nhật trang trí, đã vẽ sẵn thành path (không nhúng font CJK).
-abstract final class KanjiDeco {
-  static const hanko = 'assets/deco/hanko_good.svg';
-  static String vertical(AlbumThemeId id) => 'assets/deco/album_${id.name}.svg';
 }
 
 /// Một SVG trang trí tô một màu; bị bỏ qua khi đọc màn hình.
