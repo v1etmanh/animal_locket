@@ -184,6 +184,16 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 
 **Xem trước** — ảnh in thành **tấm ảnh dán băng** (khung giấy, nghiêng nhẹ, ảnh 4:5); ô **lời nhắn viết tay** ngay lề dưới tấm ảnh (dòng kẻ gạch, chữ Patrick Hand, đếm 200 ký tự, nhãn/gợi ý giữ nguyên); nút giấy "Gửi cho bạn bè" (icon gửi; đang gửi: "Đang gửi ảnh trước…", tắt); nhãn giấy "Chụp lại"; dòng ghi chú giữ nguyên.
 
+### 7.5 Đợt 5 chi tiết · Kết bạn (chốt 2026-11-10)
+
+**Lưới ảnh dùng chung** (`PostsGrid`, cả Hồ sơ người khác và Hồ sơ của tôi): mỗi ô là **ảnh in nhỏ** viền trắng, bóng mềm, nghiêng xen kẽ ±1,5–2°; bài đang xử lý / bị từ chối có **nhãn giấy** trên ảnh (icon nét + chữ cũ). Hộp xem ảnh: ảnh in trên nền giấy, nút thích là **con dấu trái tim**, icon bình luận / xoá theo bộ icon của app.
+
+**Bạn bè và lời mời** — 3 **tab giấy** như mép sổ địa chỉ (tab chọn màu `paper`, chữ `accent`; tab khác nền `fold1`); danh sách trên **một trang giấy**, các dòng cách nhau bằng **gạch đứt**; mỗi người có **avatar polaroid nhỏ** nghiêng; "Đang online" chấm xanh. Lời mời đến: **con dấu dấu tích** (Chấp nhận) và **ô giấy ×** (Từ chối); lời mời đã gửi: nhãn giấy "Huỷ". Chữ giữ nguyên.
+
+**Khám phá** — thẻ là **polaroid lớn**: avatar vuông, chú thích là biệt danh viết tay, dưới ảnh các **nhãn giấy** "Đang online" / khoảng cách / "Con vật ẩn danh"; thẻ Boost có **huy hiệu vàng** tròn ghi "Boost" dán góc. Nút: **Bỏ qua** = ô giấy ×, **Dùng Boost** = ô giấy tia sét, **Kết bạn** = **con dấu trái tim** lớn. Hết thẻ / bật khám phá: trang giấy + nút giấy. Chữ giữ nguyên.
+
+**Hồ sơ người khác** — avatar **polaroid dán băng** cạnh biệt danh và "Hồ sơ ẩn danh"; nút giấy "Nhắn tin" (icon chat); "Huỷ kết bạn" là nhãn giấy; "Báo cáo" / "Chặn" là chữ nhỏ có icon (Chặn màu `danger`). Hộp thoại giữ như cũ (đã theo theme từ đợt 1).
+
 ## 8. Ràng buộc
 
 - Flutter (SDK hiện có 3.41), Riverpod, go_router — giữ nguyên kiến trúc; không thêm thư viện UI lớn. Dùng gói đã cài trước khi thêm gói mới.
