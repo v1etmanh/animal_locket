@@ -19,6 +19,15 @@ enum AlbumIcons {
   mail,
   arrowRight,
   dice,
+  flashAuto,
+  flashOn,
+  flashOff,
+  gallery,
+  flipCamera,
+  camera,
+  send,
+  close,
+  alert,
   check;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
