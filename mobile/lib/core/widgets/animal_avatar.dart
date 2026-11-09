@@ -15,6 +15,7 @@ class AnimalAvatar extends StatelessWidget {
     this.size = 64,
     this.colorIndex = 0,
     this.locked = false,
+    this.square = false,
   });
 
   final String? emoji;
@@ -23,6 +24,9 @@ class AnimalAvatar extends StatelessWidget {
   final double size;
   final int colorIndex;
   final bool locked;
+
+  /// Vẽ vuông (trong khung polaroid) thay vì cắt tròn.
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +41,16 @@ class AnimalAvatar extends StatelessWidget {
         return Semantics(
           image: true,
           label: name == null ? 'Ảnh đại diện con vật' : 'Ảnh đại diện: $name',
-          child: ClipOval(
-            child: SvgPicture.string(
-              svg,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-            ),
-          ),
+          child: square
+              ? SvgPicture.string(svg, width: size, height: size)
+              : ClipOval(
+                  child: SvgPicture.string(
+                    svg,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                  ),
+                ),
         );
       },
     );
