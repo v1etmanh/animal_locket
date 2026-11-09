@@ -12,6 +12,7 @@ Tài liệu triển khai đã được tách theo từng giai đoạn để ngư
 6. [Smoke check và kết nối Flutter local](deployment/digitalocean-demo/06-smoke-check-and-flutter.md)
 7. [Vận hành, destroy và tạo lại](deployment/digitalocean-demo/07-operations-and-redeploy.md)
 8. [Prompt giao việc cho Agent](deployment/digitalocean-demo/08-agent-handoff.md)
+9. [Prompt copy-paste khi source chỉ có ở local](deployment/digitalocean-demo/09-recreate-server-copy-paste-prompt.md)
 
 Trang bắt đầu: [DigitalOcean Demo Deployment](deployment/digitalocean-demo/README.md).
 

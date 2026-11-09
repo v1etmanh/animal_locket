@@ -14,6 +14,7 @@ Runbook này tái tạo Animal Locket trên một DigitalOcean Droplet mới v�
 | 6 | [Smoke check và Flutter](06-smoke-check-and-flutter.md) | Public boundary hoạt động |
 | 7 | [Vận hành và redeploy](07-operations-and-redeploy.md) | Biết restart, destroy và tạo lại |
 | 8 | [Agent handoff](08-agent-handoff.md) | Prompt triển khai tự động một lượt |
+| 9 | [Prompt copy-paste từ source local](09-recreate-server-copy-paste-prompt.md) | Tạo lại server khi branch chưa push GitHub |
 
 ## Đầu vào bắt buộc
 
