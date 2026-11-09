@@ -72,6 +72,9 @@ for (const [k, a] of Object.entries(v2.animals)) {
   els.forEach((el, i) => {
     if (!el.startsWith("<circle") || !el.includes(`fill="${INK}"`) || Number(/r="([\d.]+)"/.exec(el)[1]) < 3) return;
     assert.match(els[i - 1] ?? "", /^<polygon[^>]*fill="\{\{belly(D)?\}\}"/, `${k}: mắt không có mảnh nền`);
+    // Kiểu "mắt to" người dùng chọn: mắt ≥ 4.4 và có đốm sáng trắng ngay sau.
+    assert.ok(Number(/r="([\d.]+)"/.exec(el)[1]) >= 4.4, `${k}: mắt nhỏ`);
+    assert.match(els[i + 1] ?? "", /^<circle[^>]*fill="#fff"/, `${k}: mắt thiếu đốm sáng`);
   });
 }
 

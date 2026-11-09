@@ -98,7 +98,7 @@ Chữ Nhật trang trí theo theme: Shu 朱, Yuzu 柚, Sakura 桜, Sora 空.
 **Kiểu vẽ: B "Gấp đơn giản"** (người dùng chọn giữa 3 bản thử A low-poly / B gấp đơn giản / C origami dễ thương):
 - Mỗi con là vài **mảng giấy lớn**, cạnh thẳng (đa giác, không dùng hình tròn/ellipse cho đầu, tai, mõm).
 - **Một nếp gấp dọc giữa mặt**: nửa trái màu gốc, nửa phải sẫm hơn. Tai/mảnh phụ là **mảnh gấp đôi**: nếp từ đỉnh xuống giữa đáy, hai nửa hai sắc độ.
-- **Mắt chấm** tròn màu mực `#2B2420`, không ánh sáng, không má hồng; mũi tam giác nhỏ.
+- **Mắt to** chấm mực `#2B2420` (r 4.8, đặt thấp và xa nhau) có **đốm sáng trắng** nhỏ, nằm trên một mảnh giấy màu bụng để đọc rõ trên lông tối; không má hồng; mũi tam giác nhỏ. *(Người dùng chọn "mắt to" sau khi xem 3 mức dễ thương, 2026-11-09.)*
 - Sắc độ sẫm/sáng được **tính sẵn khi tạo thư viện** từ 10 màu gốc của v1 (giữ nguyên `fur`, `belly`, `accent`, `bg`), lưu thành trường thêm trong mỗi bảng màu (ví dụ `furD`, `furL`, `bellyD`, `accentD`). Client không tính màu.
 - 6 phụ kiện (cùng khoá) được vẽ lại theo cùng kiểu mảng phẳng, đặt khớp với đầu mới.
 

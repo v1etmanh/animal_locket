@@ -51,12 +51,12 @@ const flap = (tip, b1, b2, c1, c2) => {
 const pairFlap = (tip, b1, b2, [l1, l2], [r1, r2]) =>
   flap(tip, b1, b2, l1, l2) + flap(...mirror([tip, b1, b2]), r1, r2);
 const pairPoly = (ps, l, r) => poly(ps, l) + poly(mirror(ps), r);
-/** Mắt chấm mực đặt trên một mảnh giấy màu bụng, để đọc được cả trên lông tối. */
+/** Mắt to chấm mực có đốm sáng (kiểu "mắt to" người dùng chọn), đặt trên một mảnh giấy màu bụng để đọc được cả trên lông tối. */
 const eye = (x, y, r, back = "{{belly}}") => {
   const s = r + 2.6;
-  return poly([[x, y - s], [x + s, y], [x, y + s], [x - s, y]], back) + `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}"/>`;
+  return poly([[x, y - s], [x + s, y], [x, y + s], [x - s, y]], back) + `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}"/><circle cx="${f1(x + r * 0.35)}" cy="${f1(y - r * 0.38)}" r="${f1(r * 0.34)}" fill="#fff"/>`;
 };
-const dots = (y, r = 3.6, dx = 10) => eye(50 - dx, y, r) + eye(50 + dx, y, r, "{{bellyD}}");
+const dots = (y, r = 4.8, dx = 12) => eye(50 - dx, y, r) + eye(50 + dx, y, r, "{{bellyD}}");
 const line = (d, color, w) => `<path d="${d}" stroke="${color}" stroke-width="${w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
 const hexagon = (cx, cy, r) => [0, 1, 2, 3, 4, 5].map((k) => [cx + r * Math.cos((Math.PI / 3) * k), cy + r * Math.sin((Math.PI / 3) * k)]);
 
@@ -93,8 +93,8 @@ const MU = {
   n: "",
 };
 const EY = {
-  n: dots(53),
-  big: poly(hexagon(38, 51, 10), "{{belly}}") + poly(hexagon(62, 51, 10), "{{bellyD}}") + dots(51, 4.6, 12),
+  n: dots(55),
+  big: poly(hexagon(38, 51, 10), "{{belly}}") + poly(hexagon(62, 51, 10), "{{bellyD}}") + dots(51, 5, 12),
   top:
     pairFlap([32, 16], [19, 42], [45, 42], FURL, FUR) + eye(32, 33, 4.4) + eye(68, 33, 4.4, "{{bellyD}}"),
 };
@@ -135,7 +135,7 @@ const X = {
   stripe: ["M", line("M50 27v11M40 29l3 9M60 29l-3 9M21 56h9M22 64l8-2M79 56h-9M78 64l-8-2", "{{accentD}}", 3)],
   spots: ["M", [[30, 42, 5], [68, 36, 6], [72, 62, 4], [52, 33, 3]].map(([x, y, r]) => poly([[x, y - r], [x + r, y], [x, y + r], [x - r, y]], "{{accent}}")).join("")],
   mask: ["M", fold([[18, 52], [34, 43], [50, 49], [66, 43], [82, 52], [67, 62], [50, 56], [33, 62]], ...ACC)],
-  patch: ["M", pairPoly([[29, 50], [38, 43], [47, 53], [39, 63]], "{{accent}}", "{{accentD}}")],
+  patch: ["M", pairPoly([[29, 56], [38, 45], [47, 56], [38, 66]], "{{accent}}", "{{accentD}}")],
   cheek: ["M", pairPoly([[25, 63], [31, 59], [33, 66]], "{{accentL}}", "{{accent}}")],
   whisk: ["F", line("M30 63l-14-3M30 67l-14 3M70 63l14-3M70 67l14 3", INK, 1.2)],
   tongue: ["F", poly([[47, 72], [53, 72], [53, 77], [50, 80], [47, 77]], "#E86A7A")],
@@ -156,7 +156,7 @@ const TILTED_HATS = {
 };
 // Mắt trên đỉnh: kính dời lên và giãn theo mắt; mũ nhỏ đặt giữa hai mắt.
 const TOP_EYES = {
-  glasses: "translate(0 -20) translate(50 53) scale(1.8 1) translate(-50 -53)",
+  glasses: "translate(50 33) scale(1.5 1) translate(-50 -55)",
   party: "translate(50 44) scale(.55) translate(-50 -30)",
   crown: "translate(50 42) scale(.55) translate(-50 -31)",
 };
@@ -189,9 +189,9 @@ const accessories = {
   glasses: {
     name: "Kính",
     svg:
-      `<polygon points="${pts(hexagon(40, 53, 8))}" fill="none" stroke="${INK}" stroke-width="2"/>` +
-      `<polygon points="${pts(hexagon(60, 53, 8))}" fill="none" stroke="${INK}" stroke-width="2"/>` +
-      line("M48 53h4", INK, 2),
+      `<polygon points="${pts(hexagon(38, 55, 9))}" fill="none" stroke="${INK}" stroke-width="2"/>` +
+      `<polygon points="${pts(hexagon(62, 55, 9))}" fill="none" stroke="${INK}" stroke-width="2"/>` +
+      line("M47 55h6", INK, 2),
   },
   party: { name: "Mũ tiệc", svg: flap([50, 3], [38, 30], [62, 30], ...RED) + line("M42 22h16M45 14h10", "#fff", 2) + poly([[50, 0], [53, 3], [50, 6], [47, 3]], GOLD[0]) },
   crown: { name: "Vương miện", svg: fold([[34, 31], [34, 13], [42, 21], [50, 8], [58, 21], [66, 13], [66, 31]], ...GOLD) },
