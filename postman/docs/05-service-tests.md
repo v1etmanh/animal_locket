@@ -42,3 +42,4 @@ python3 postman/tools/build_service_tests.py
 74 request, 145 assertion, 1 lỗi:
 
 - `GET /api/v1/discovery/presence` thiếu `ids` trả **500** thay vì 400. `ApiExceptionHandler` trong `libs/common` chưa xử lý `MissingServletRequestParameterException`, nên lỗi rơi vào nhánh `Exception` chung. Lỗi này ảnh hưởng mọi endpoint có `@RequestParam` bắt buộc ở tất cả service.
+  - Đã sửa trong cùng PR: `ApiExceptionHandler` trả 400 `VALIDATION_FAILED`. Server demo cần build và deploy lại thì test này mới qua.
