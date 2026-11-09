@@ -38,4 +38,20 @@ for (const lib of libs) {
     assert.ok(!render(lib, key).includes("{{"), `v${lib.version} ${key} còn chỗ trống màu`);
   }
 }
+// v2 origami "gấp đơn giản" (spec §5.1).
+const v2 = libs.find((l) => l.version === 2);
+assert.ok(v2, "chưa có v2");
+const hex = /^#[0-9A-F]{6}$/i;
+v2.palettes.forEach((p, i) => {
+  for (const base of ["fur", "belly", "accent", "bg"]) assert.equal(p[base], v1.palettes[i][base], `bảng ${i}.${base}`);
+  for (const shade of ["furD", "furL", "bellyD", "accentD", "accentL"]) assert.match(p[shade] ?? "", hex, `bảng ${i}.${shade}`);
+});
+for (const [k, a] of Object.entries(v2.animals)) {
+  assert.equal(a.name, v1.animals[k].name, `tên ${k}`);
+  // Mảng giấy cạnh thẳng: hình tròn chỉ dùng cho chấm nhỏ (mắt, đốm).
+  for (const m of a.svg.matchAll(/<circle[^>]*\br="([\d.]+)"/g)) assert.ok(Number(m[1]) <= 6, `${k}: circle r=${m[1]}`);
+  assert.ok(!a.svg.includes("<ellipse"), `${k}: ellipse`);
+}
+for (const [k, x] of Object.entries(v2.accessories)) assert.ok(!x.svg.includes("<ellipse"), `phụ kiện ${k}: ellipse`);
+
 console.log(`check ok: ${libs.map((l) => "v" + l.version).join(", ")}`);

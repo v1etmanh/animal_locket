@@ -66,7 +66,7 @@ const X = {
   rhorn: ["F", '<polygon points="43,66 50,44 57,66" fill="#D9D2C5"/>'],
 };
 // khoá|tên|tai|đầu|mõm|mũi|mắt|chi tiết thêm
-const RAW = `cat|Mèo|tri|round|m|tri|n|whisk
+export const RAW = `cat|Mèo|tri|round|m|tri|n|whisk
 fox|Cáo|tri|wide|w|dot|n|
 wolf|Sói|tri|tall|m|dot|n|
 dog|Chó|flop|round|m|dot|n|tongue
@@ -131,7 +131,7 @@ for (const row of RAW.split("\n")) {
   animals[k] = { name, svg: layer("B") + E[e] + H[h] + layer("M") + MU[m] + EY[ey] + NO[no] + layer("F") };
 }
 
-const palettes = [
+export const palettes = [
   { fur: "#E8702A", belly: "#FFF1DE", accent: "#7A3511", bg: "#FFE4C4" },
   { fur: "#9AA3AE", belly: "#EEF1F4", accent: "#F2A6B5", bg: "#D6E8FA" },
   { fur: "#8B5E3C", belly: "#E8CDA8", accent: "#4A2E1A", bg: "#D9F0D0" },

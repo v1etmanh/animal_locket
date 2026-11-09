@@ -6,8 +6,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { lib as v1 } from "./lib-v1.mjs";
+import { lib as v2 } from "./lib-v2.mjs";
 
-export const versions = [v1];
+export const versions = [v1, v2];
 
 /// Hàm vẽ chuẩn. Client (Dart) phải cho ra đúng chuỗi này; mẫu đối chiếu ghi vào test fixture.
 /// Mọi chỗ trống {{tên}} lấy màu cùng tên trong bảng màu của khoá.
@@ -53,6 +54,28 @@ function build() {
     const n = (o) => Object.keys(o).length;
     console.log(`avatar-lib v${lib.version}: ${n(lib.animals)} con vật × ${lib.palettes.length} màu × ${n(lib.accessories)} phụ kiện = ${keySet(lib).size} avatar`);
   }
+  const i = process.argv.indexOf("--preview");
+  if (i > 0) {
+    write(process.argv[i + 1], preview(versions.at(-1)));
+    console.log(`xem trước: ${process.argv[i + 1]}`);
+  }
+}
+
+/** Trang duyệt hình (không commit): cả 50 con, 10 bảng màu, 6 phụ kiện, cỡ 40pt. */
+function preview(lib) {
+  const pic = (key, size) =>
+    `<div title="${key}" style="width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;display:inline-block;margin:3px">${render(lib, key).replace("<svg ", `<svg width="${size}" height="${size}" `)}</div>`;
+  const animals = Object.keys(lib.animals);
+  const label = (k) => `<div style="display:inline-block;text-align:center;font:11px sans-serif">${pic(`${k}:0:none`, 88)}<br>${lib.animals[k].name}</div>`;
+  const row = (title, items) => `<h3 style="font:600 15px sans-serif;margin:18px 0 6px">${title}</h3><div>${items.join("")}</div>`;
+  return (
+    `<!DOCTYPE html><meta charset="utf-8"><title>avatar-lib v${lib.version}</title><body style="background:#FBF3E8;margin:20px">` +
+    row(`50 con vật · bảng màu 0`, animals.map(label)) +
+    row(`Cỡ 40pt`, animals.map((k) => pic(`${k}:0:none`, 40))) +
+    ["fox", "panda", "owl", "frog", "elephant", "lion"].map((a) => row(`10 bảng màu · ${lib.animals[a].name}`, lib.palettes.map((_, p) => pic(`${a}:${p}:none`, 72)))).join("") +
+    ["cat", "rabbit", "duck"].map((a) => row(`6 phụ kiện · ${lib.animals[a].name}`, Object.keys(lib.accessories).map((x) => pic(`${a}:2:${x}`, 88)))).join("") +
+    `</body>`
+  );
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) build();
