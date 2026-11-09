@@ -16,6 +16,9 @@ enum AlbumIcons {
   imageBroken,
   image,
   heart,
+  mail,
+  arrowRight,
+  dice,
   check;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
