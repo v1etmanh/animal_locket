@@ -28,6 +28,13 @@ enum AlbumIcons {
   send,
   close,
   alert,
+  trash,
+  hourglass,
+  more,
+  bolt,
+  locationOff,
+  flag,
+  block,
   check;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
