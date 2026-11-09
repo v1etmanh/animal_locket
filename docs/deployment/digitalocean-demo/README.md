@@ -15,6 +15,8 @@ Runbook này tái tạo Animal Locket trên một DigitalOcean Droplet mới v�
 | 7 | [Vận hành và redeploy](07-operations-and-redeploy.md) | Biết restart, destroy và tạo lại |
 | 8 | [Agent handoff](08-agent-handoff.md) | Prompt triển khai tự động một lượt |
 | 9 | [Prompt copy-paste từ source local](09-recreate-server-copy-paste-prompt.md) | Tạo lại server khi branch chưa push GitHub |
+| 10 | [CI/CD backend](10-backend-cicd.md) | Test/build trên GitHub, deploy qua SSH, rollback |
+| 11 | [Đối chiếu master ngày 08/11](11-master-review-2026-11-08.md) | Thay đổi code và ảnh hưởng tới deploy |
 
 ## Đầu vào bắt buộc
 

@@ -222,6 +222,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/billing_db
       DB_USER: animal
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PAYPAL_RETURN_BASE_URL: ${PAYPAL_RETURN_BASE_URL:-https://api.${PUBLIC_DOMAIN}}
       JAVA_OPTS: ${DEMO_JAVA_OPTS:--Xms64m -Xmx320m -XX:+ExitOnOutOfMemoryError}
     mem_limit: 448m
 
