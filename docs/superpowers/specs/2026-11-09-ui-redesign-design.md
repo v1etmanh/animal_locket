@@ -23,7 +23,8 @@ Thành công = mở app thấy ngay "sổ ảnh giấy gấp" có chủ đích, 
 
 **Phản mục tiêu** (làm vậy là hỏng dù chạy được)
 - Thanh điều hướng trông như tab mặc định: icon vuông vô hồn, nút giống mọi app khác. Đây là điểm chủ dự án lo nhất.
-- Trang trí Nhật kiểu "dán cho có" (chữ Nhật khắp nơi, hoa văn sáo rỗng). Chữ Nhật chỉ là điểm nhấn hiếm.
+- Trang trí Nhật kiểu "dán cho có" (chữ Nhật khắp nơi, hoa văn sáo rỗng).
+- **Chữ Nhật trong UI** (chủ dự án chốt 2026-11-09, sau đợt 2): app chỉ hỗ trợ tiếng Việt và tiếng Anh, nên **không có ký tự Nhật** nào trên màn hình, kể cả trang trí. Chất Nhật đến từ giấy, washi, origami, con dấu, bố cục sổ ảnh.
 - Chữ tiếng Việt bị lỗi dấu, hoặc tương phản kém (mọi chữ đạt WCAG AA trên mọi theme).
 
 ## 3. Hướng thị giác đã chốt
@@ -33,7 +34,7 @@ Ghép từ 3 hướng đã xem:
 | Phần | Nguồn | Mô tả |
 |---|---|---|
 | Nền | hướng C "Origami pop" | Nền giấy sáng ấm theo theme, vài **khối giấy gấp** (hình vuông xoay 28–60°) màu nhạt tràn mép, đứng yên phía sau nội dung |
-| Feed / thẻ ảnh | hướng A "Sổ ảnh washi" | Ảnh như ảnh in dán vào sổ: viền giấy trắng ngà, bóng mềm, **nghiêng nhẹ** (±1–2°, xen kẽ), **băng washi** sọc chéo dán mép trên; caption **chữ viết tay**; nút thích là **con dấu hanko** tròn nghiêng (chữ 好); ngày kiểu nghiêng serif ("Thứ Bảy, 8 tháng 11"); chữ Nhật dọc trang trí mép phải (ví dụ 思い出のアルバム) |
+| Feed / thẻ ảnh | hướng A "Sổ ảnh washi" | Ảnh như ảnh in dán vào sổ: viền giấy trắng ngà, bóng mềm, **nghiêng nhẹ** (±1–2°, xen kẽ), **băng washi** sọc chéo dán mép trên; caption **chữ viết tay**; nút thích là **con dấu hanko** tròn nghiêng (hình **trái tim** khắc trong dấu, không dùng chữ); ngày kiểu nghiêng serif ("Thứ Bảy, 8 tháng 11") |
 | Thanh điều hướng | hướng B, phương án 3 "Băng washi & polaroid" | Viên nổi bo tròn phía dưới (bo 4px trên, 18px dưới), viền trên như mép giấy xé; tab đang chọn có **mẩu băng washi dán chéo** sau icon; icon nét mảnh chủ đề album; tab **Ảnh** (camera) là **tấm polaroid nhỏ nghiêng** |
 
 **Thanh tab giữ nhãn hiện tại, tab Ảnh nằm giữa**: Bảng tin · Khám phá · Ảnh · Chat · Hồ sơ (`l10n.photosTab`…), tab Ảnh dạng polaroid. Chỉ đổi thứ tự hiển thị; router giữ nguyên index nhánh (`AppShell._branchAt`). *(Người dùng chọn sau khi duyệt đợt 1.)*
@@ -45,7 +46,6 @@ Ghép từ 3 hướng đã xem:
 | Tiêu đề, ngày | **Lora** (700, 500 italic) | thay Fraunces |
 | Chữ thường, nhãn, nút | **Be Vietnam Pro** (400/500/600/700) | thay Plus Jakarta Sans |
 | Caption ảnh, ghi chú tay | **Patrick Hand** | chỉ cho chữ "viết tay"; không dùng cho chữ chức năng |
-| Chữ Nhật trang trí | không nhúng font | 好, 思い出のアルバム… vẽ sẵn thành SVG asset (tránh nhúng font CJK nhiều MB) |
 
 Cả ba font hỗ trợ đủ dấu tiếng Việt, giấy phép OFL; nhúng file `.ttf` vào `assets/fonts/` (kèm file giấy phép) như cách đang làm, không tải lúc chạy. Bỏ Fraunces và Plus Jakarta Sans khi không còn màn nào dùng (cuối chương trình).
 
@@ -162,6 +162,20 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 - Kiểm tra tương phản AA của token trên 4 theme.
 - Chạy kiểm tra thiết kế impeccable trên các file đã đổi.
 
+### 7.3 Đợt 3 chi tiết · Vào app (chốt 2026-11-09)
+
+**Cảm giác giấy cho nút** (dùng cho mọi màn làm lại từ đợt 3):
+- **Nút chính** `PaperButton`: một dải giấy màu `accent`, **mép trên và dưới răng cưa như giấy xé**, **góc phải trên gấp mép** (tam giác `accentDeep` kiểu origami), chữ trắng đậm, icon nét tuỳ chọn; cao tối thiểu 52pt; tắt thì nền `fold2`, chữ `muted`.
+- **Nút phụ** `PaperButton.tape`: nhãn giấy `paper` có mẩu washi dán chéo ở mép, chữ `accent`.
+- **Polaroid** `Polaroid`: khung trắng lề dưới dày có chú thích chữ viết tay, băng washi trên, nghiêng nhẹ; dùng cho avatar.
+- **Con dấu** `HankoStamp` nhận hình khắc: trái tim (thích), dấu tích (đồng ý). Chữ 好 bị bỏ; các SVG chữ Nhật trong `assets/deco` bị xoá; Bảng tin bỏ chữ dọc, thẻ ảnh căn giữa.
+
+**Đăng nhập** — bìa sổ ảnh: hai polaroid avatar origami (cáo `1:fox:0:none`, gấu trúc `1:panda:3:none`) dán băng, nghiêng ngược nhau, chú thích tên con vật viết tay; tiêu đề Lora; nút chính "Đăng nhập bằng email" (icon thư); nút phụ "Mở tài khoản demo"; dòng riêng tư nhỏ. Thay câu không còn đúng thành: "Chia sẻ khoảnh khắc với bạn bè. Mỗi người là một con vật duy nhất, không lộ tên thật." (chủ dự án đồng ý).
+
+**Thiết lập an toàn** — phiếu giấy dán băng chứa nhãn "Ngày sinh", tiêu đề, mô tả và **3 ô viết tay Ngày / Tháng / Năm** (chưa chọn thì `--`, `--`, `----`), cả phiếu chạm được để mở lịch như hiện tại, gợi ý mới "Chạm để chọn ngày sinh"; ô đồng ý là **con dấu dấu tích** bấm để đóng dấu, cùng câu điều khoản hiện tại; nút chính "Tiếp tục" chỉ bật khi đủ cả hai.
+
+**Nhận avatar** — polaroid lớn: trước khi quay là **ảnh chưa rửa** (nền `fold1`, dấu "?" Lora, chú thích mới "ảnh chưa rửa…"); trong lúc quay hiện các con ngẫu nhiên; xong thì hiện avatar thật (vuông, không cắt tròn), chú thích là tên con vật. Ô biệt danh như dòng kẻ trên giấy (chữ viết tay), nút xúc xắc "Tạo biệt danh ngẫu nhiên". Nút chính "Quay avatar"/"Vào app" có mũi tên. Chữ khác giữ nguyên.
+
 ## 8. Ràng buộc
 
 - Flutter (SDK hiện có 3.41), Riverpod, go_router — giữ nguyên kiến trúc; không thêm thư viện UI lớn. Dùng gói đã cài trước khi thêm gói mới.
@@ -172,7 +186,7 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 ## 9. Lựa chọn người viết tự quyết (chủ dự án nên rà)
 
 - Tab Ảnh dạng polaroid đặt giữa thanh (người dùng chọn sau đợt 1); router giữ nguyên index nhánh.
-- Font Lora / Be Vietnam Pro / Patrick Hand; chữ Nhật trang trí dạng SVG.
+- Font Lora / Be Vietnam Pro / Patrick Hand; không có chữ Nhật.
 - Shu là theme mặc định.
 - Chuyển động như §3.3.
 - Mục chọn theme nằm trong màn Cài đặt hiện có.
