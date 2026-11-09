@@ -84,6 +84,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
               maxLength: 200,
               minLines: 1,
               maxLines: 3,
+              // Xuống dòng để hiện hết chữ, nhưng Enter vẫn là "xong" như trước.
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
               style: TextStyle(
                 fontFamily: AppFonts.hand,
                 fontSize: 21,

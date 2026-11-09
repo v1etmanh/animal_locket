@@ -98,6 +98,15 @@ void main() {
     expect(field.style?.fontFamily, AppFonts.hand);
   });
 
+  testWidgets('enter closes the keyboard instead of adding a line', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.textInputAction, TextInputAction.done);
+    expect(field.keyboardType, TextInputType.text);
+  });
+
   testWidgets('send button and the retake label', (tester) async {
     final router = await _pump(tester);
     final send = tester.widget<PaperButton>(

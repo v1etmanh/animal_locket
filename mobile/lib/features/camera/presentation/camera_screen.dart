@@ -314,24 +314,26 @@ class _PermissionExplainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.album;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 200),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 24),
-            AlbumIcon(AlbumIcons.camera, color: p.muted, size: 56),
-            const SizedBox(height: 16),
-            const Text(
-              'Cho phép camera để chụp khoảnh khắc.',
-              textAlign: TextAlign.center,
-              style: TextStyle(height: 1.5),
-            ),
-            const SizedBox(height: 18),
-            PaperButton(label: 'Cho phép camera', onPressed: onAllow),
-          ],
+    // Nằm giữa khung ảnh; cuộn được khi khung thấp hoặc chữ to.
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.maxHeight - 48),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AlbumIcon(AlbumIcons.camera, color: p.muted, size: 56),
+              const SizedBox(height: 16),
+              const Text(
+                'Cho phép camera để chụp khoảnh khắc.',
+                textAlign: TextAlign.center,
+                style: TextStyle(height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              PaperButton(label: 'Cho phép camera', onPressed: onAllow),
+            ],
+          ),
         ),
       ),
     );

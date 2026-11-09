@@ -159,9 +159,9 @@ class _Pill extends StatelessWidget {
                           onTap: onClose,
                           child: InkResponse(
                             onTap: onClose,
-                            radius: 22,
+                            radius: 24,
                             child: SizedBox.square(
-                              dimension: 44,
+                              dimension: 48,
                               child: Center(
                                 child: AlbumIcon(
                                   AlbumIcons.close,

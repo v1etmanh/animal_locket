@@ -114,6 +114,17 @@ void main() {
     );
   });
 
+  testWidgets('permission card sits in the middle of the photo', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final frame = tester.getRect(find.byType(PhotoCornersFrame));
+    final text = tester.getCenter(
+      find.text('Cho phép camera để chụp khoảnh khắc.'),
+    );
+    expect(text.dy, closeTo(frame.center.dy, frame.height * .12));
+  });
+
   testWidgets('fits a short narrow phone at 1.5x text', (tester) async {
     await _pump(tester, width: 360, height: 640, textScale: 1.5);
     expect(tester.takeException(), isNull);

@@ -143,6 +143,13 @@ void main() {
     expect(fake.calls, ['retry', 'dismiss']);
   });
 
+  testWidgets('close is a 48pt target', (tester) async {
+    await _pump(tester, const UploadFlowState(stage: UploadStage.rejected));
+    final size = tester.getSize(find.bySemanticsLabel('Đóng'));
+    expect(size.width, greaterThanOrEqualTo(48));
+    expect(size.height, greaterThanOrEqualTo(48));
+  });
+
   testWidgets('failed without an API problem asks to check the network', (
     tester,
   ) async {
