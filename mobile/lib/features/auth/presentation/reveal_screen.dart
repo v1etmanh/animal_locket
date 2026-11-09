@@ -6,13 +6,17 @@ import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/polaroid.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
-import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Nhận avatar như một tấm polaroid đang rửa (spec §7.3).
 class RevealScreen extends ConsumerStatefulWidget {
   const RevealScreen({super.key, required this.birthDate});
   final String birthDate;
@@ -51,6 +55,8 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
     final random = Random();
     var ticks = 0;
     _spinTimer?.cancel();
+    // Quay ngay từ khung hình đầu để nút "Vào app" không bật trước khi quay xong.
+    _spinning = AvatarLibraries.instance.randomCodeForAnimation(random);
     _spinTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
       if (!mounted) return timer.cancel();
       ticks++;
@@ -74,7 +80,8 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
           .registerProfile(birthDate: widget.birthDate, alias: _alias.text);
       if (mounted) {
         setState(() => _profile = profile);
-        _playSpin();
+        // Giảm chuyển động: hiện ngay avatar thật, không quay.
+        if (!MediaQuery.disableAnimationsOf(context)) _playSpin();
       }
     } on ApiProblem catch (problem) {
       if (mounted) {
@@ -89,49 +96,92 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.album;
     final profile = _profile;
     final spinning = _spinning != null;
-    final animalName =
-        AvatarLibraries.instance.animalName(profile?.avatar) ??
-        profile?.leadAnimal;
+    final libs = AvatarLibraries.instance;
+    final animalName = libs.animalName(profile?.avatar) ?? profile?.leadAnimal;
+    final shown = _spinning ?? profile?.avatar;
+    const photo = 196.0;
     return AppPage(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 28),
-          const SectionLabel('Avatar của riêng bạn'),
-          const SizedBox(height: 22),
-          AnimalAvatar(
-            avatar: _spinning ?? profile?.avatar,
-            leadAnimal: profile?.leadAnimal,
-            locked: profile == null,
-            size: 184,
+          const SizedBox(height: 20),
+          const Center(child: SectionLabel('Avatar của riêng bạn')),
+          const SizedBox(height: 30),
+          Center(
+            child: Polaroid(
+              width: photo,
+              caption: profile == null
+                  ? 'ảnh chưa rửa…'
+                  : (libs.animalName(shown) ?? animalName ?? ''),
+              child: profile == null
+                  ? ColoredBox(
+                      color: p.fold1,
+                      child: Center(
+                        child: Text(
+                          '?',
+                          style: TextStyle(
+                            fontFamily: AppFonts.title,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 60,
+                            color: p.muted,
+                          ),
+                        ),
+                      ),
+                    )
+                  : AnimalAvatar(
+                      avatar: shown,
+                      leadAnimal: profile.leadAnimal,
+                      size: photo,
+                      square: true,
+                    ),
+            ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 26),
           Text(
-            _profile == null
+            profile == null
                 ? 'Sẵn sàng nhận con vật?'
-                : 'Chào ${_profile!.displayAlias}',
+                : 'Chào ${profile.displayAlias}',
             style: Theme.of(context).textTheme.headlineLarge,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            _profile == null
+            profile == null
                 ? 'Biệt danh của bạn không cần là tên thật.'
                 : spinning
                 ? 'Đang quay…'
                 : '${animalName ?? 'Con vật'} · không ai khác có avatar này',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.muted),
+            style: TextStyle(color: p.muted),
           ),
-          const SizedBox(height: 32),
-          if (_profile == null)
+          const SizedBox(height: 26),
+          if (profile == null)
+            // Ô biệt danh như một dòng kẻ trên giấy, chữ viết tay.
             TextField(
               controller: _alias,
               maxLength: 20,
+              style: TextStyle(
+                fontFamily: AppFonts.hand,
+                fontSize: 22,
+                color: p.ink,
+              ),
               decoration: InputDecoration(
                 labelText: 'Biệt danh',
                 errorText: _error,
+                filled: true,
+                fillColor: p.paper,
+                border: UnderlineInputBorder(
+                  borderSide: BorderSide(color: p.fold2, width: 2),
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: p.fold2, width: 2),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: p.accent, width: 2),
+                ),
                 suffixIcon: Semantics(
                   label: 'Tạo biệt danh ngẫu nhiên',
                   button: true,
@@ -139,24 +189,24 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
                     onPressed: () => setState(() {
                       _alias.text = aliases[Random().nextInt(aliases.length)];
                     }),
-                    icon: const Icon(Icons.casino_outlined),
+                    icon: AlbumIcon(AlbumIcons.dice, color: p.ink),
                   ),
                 ),
               ),
             ),
           const SizedBox(height: 18),
-          GradientButton(
-            label: _profile == null
+          PaperButton(
+            label: profile == null
                 ? (_busy ? 'Đang đăng ký…' : 'Quay avatar')
                 : 'Vào app',
-            icon: Icons.arrow_forward_rounded,
+            trailingIcon: AlbumIcons.arrowRight,
             onPressed: _busy || spinning
                 ? null
-                : _profile == null
+                : profile == null
                 ? _register
                 : () => ref
                       .read(authControllerProvider.notifier)
-                      .finishRegistration(_profile!),
+                      .finishRegistration(profile),
           ),
         ],
       ),
