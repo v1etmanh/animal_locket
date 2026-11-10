@@ -27,7 +27,7 @@ class WashiNavBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   static const _height = 68.0;
-  static const _washWidth = 70.0;
+  static const _washWidth = 54.0;
   static const _radius = BorderRadius.only(
     topLeft: Radius.circular(4),
     topRight: Radius.circular(4),
@@ -79,7 +79,7 @@ class WashiNavBar extends StatelessWidget {
                       duration: slide,
                       curve: Curves.easeOutCubic,
                       left: slot * currentIndex + (slot - _washWidth) / 2,
-                      top: 1,
+                      top: 0,
                       child: TweenAnimationBuilder<double>(
                         key: ValueKey(currentIndex),
                         tween: Tween(begin: 0, end: 1),
@@ -93,7 +93,7 @@ class WashiNavBar extends StatelessWidget {
                           ),
                         ),
                         child: WatercolorWash(
-                          size: const Size(_washWidth, 42),
+                          size: const Size.square(_washWidth),
                           seed: currentIndex,
                         ),
                       ),

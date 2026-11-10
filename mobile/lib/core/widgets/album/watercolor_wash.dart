@@ -3,8 +3,7 @@ import 'dart:math' as math;
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:flutter/material.dart';
 
-/// Vệt màu nước: vài lớp trong mờ chồng lên nhau, mép không đều như màu thấm
-/// giấy, đậm dần về tâm. Màu lấy hoàn toàn từ palette đang chọn nên đổi theme
+/// Giọt màu nước: mép tròn không đều, tâm nhạt, viền đọng sắc như màu khô lại. Màu lấy hoàn toàn từ palette đang chọn nên đổi theme
 /// là đổi màu theo; không dùng blur hay bóng. [seed] cố định hình dạng.
 class WatercolorWash extends StatelessWidget {
   const WatercolorWash({super.key, required this.size, this.seed = 0});
@@ -17,12 +16,7 @@ class WatercolorWash extends StatelessWidget {
     return RepaintBoundary(
       child: CustomPaint(
         size: size,
-        painter: _WashPainter(
-          base: p.tape1,
-          pigment: p.accent,
-          highlight: p.accentSoft,
-          seed: seed,
-        ),
+        painter: _WashPainter(base: p.tape1, pigment: p.accent, seed: seed),
       ),
     );
   }
@@ -32,12 +26,10 @@ class _WashPainter extends CustomPainter {
   const _WashPainter({
     required this.base,
     required this.pigment,
-    required this.highlight,
     required this.seed,
   });
   final Color base;
   final Color pigment;
-  final Color highlight;
   final int seed;
 
   /// Đường cong mượt khép kín quanh [center]; bán kính mỗi điểm lệch ngẫu nhiên
@@ -73,51 +65,25 @@ class _WashPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rnd = math.Random(seed * 97 + 13);
     final c = size.center(Offset.zero);
-    final r = Size(size.width / 2 - 2, size.height / 2 - 2);
-
-    // Lớp nền rộng: màu washi nhạt dần ra mép.
-    final main = _blob(c, r, rnd, .32);
+    final r = Size(size.width / 2 - 1, size.height / 2 - 1);
+    // Một giọt màu nước: tâm nhạt, sắc tố dạt ra và đọng thành viền đậm
+    // (hiệu ứng "backrun"), mép ngoài tan dần vào giấy.
     canvas.drawPath(
-      main,
+      _blob(c, r, rnd, .14),
       Paint()
         ..shader = RadialGradient(
-          colors: [base.withValues(alpha: .62), base.withValues(alpha: .2)],
+          colors: [
+            base.withValues(alpha: .25),
+            base.withValues(alpha: .55),
+            pigment.withValues(alpha: .28),
+            base.withValues(alpha: 0),
+          ],
+          stops: const [0, .72, .92, 1],
         ).createShader(Offset.zero & size),
-    );
-    // Mép đọng sắc tố: viền mảnh hơi đậm hơn như màu nước khô lại.
-    canvas.drawPath(
-      main,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = base.withValues(alpha: .35),
-    );
-    // Lớp sắc tố nhỏ lệch tâm, chồng lên để tạo chuyển màu.
-    canvas.drawPath(
-      _blob(
-        c + Offset(size.width * .08, -size.height * .06),
-        Size(r.width * .62, r.height * .6),
-        rnd,
-        .4,
-      ),
-      Paint()..color = pigment.withValues(alpha: .13),
-    );
-    // Lớp sáng ở góc đối diện cho cảm giác loang chồng.
-    canvas.drawPath(
-      _blob(
-        c - Offset(size.width * .14, -size.height * .1),
-        Size(r.width * .45, r.height * .5),
-        rnd,
-        .45,
-      ),
-      Paint()..color = highlight.withValues(alpha: .5),
     );
   }
 
   @override
   bool shouldRepaint(_WashPainter o) =>
-      o.base != base ||
-      o.pigment != pigment ||
-      o.highlight != highlight ||
-      o.seed != seed;
+      o.base != base || o.pigment != pigment || o.seed != seed;
 }
