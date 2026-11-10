@@ -84,4 +84,38 @@ void main() {
     expect(find.text('Đồng ý'), findsOneWidget);
     expect(find.textContaining('nội dung thay thế'), findsOneWidget);
   });
+
+  testWidgets('eye button reveals the handwritten meaning', (tester) async {
+    final glyphs = buildSystemGlyphs();
+    final message = ChatMessage(
+      id: 'm-2',
+      conversationId: 'c-1',
+      senderId: 'u-1',
+      type: ChatMessageType.glyph,
+      glyphIds: [glyphs.first.id],
+      createdAt: DateTime.utc(2026),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('vi'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: GlyphMessageBubble(
+            message: message,
+            dictionary: glyphs,
+            mine: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Icon), findsNothing);
+    expect(find.text(glyphs.first.meaning), findsNothing);
+    await tester.tap(find.byType(IconButton));
+    await tester.pumpAndSettle();
+    final meaning = tester.widget<Text>(find.text(glyphs.first.meaning));
+    expect(meaning.style?.fontFamily, 'Patrick Hand');
+    expect(meaning.style?.color, isNot(const Color(0xFFFFFFFF)));
+  });
 }

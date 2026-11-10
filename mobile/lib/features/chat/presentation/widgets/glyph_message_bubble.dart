@@ -1,3 +1,6 @@
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/chat/domain/chat_repository.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:animal_locket/features/chat/presentation/widgets/glyph_drawing_pad.dart';
@@ -22,6 +25,8 @@ class GlyphMessageBubble extends StatefulWidget {
 
 class _GlyphMessageBubbleState extends State<GlyphMessageBubble> {
   var _reveal = false;
+
+  void _toggle() => setState(() => _reveal = !_reveal);
 
   @override
   Widget build(BuildContext context) {
@@ -58,25 +63,30 @@ class _GlyphMessageBubbleState extends State<GlyphMessageBubble> {
         ),
         if (_reveal) ...[
           const SizedBox(height: 6),
+          // Nghĩa viết tay dưới các ký hiệu.
           Text(
             resolved.map((glyph) => glyph.meaning).join(' · '),
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: widget.mine ? Colors.white : null),
+            style: TextStyle(
+              fontFamily: AppFonts.hand,
+              fontSize: 17,
+              color: context.album.ink,
+            ),
           ),
         ],
         Semantics(
           button: true,
           label: _reveal ? l10n.glyphHideMeaning : l10n.glyphShowMeaning,
+          excludeSemantics: true,
+          onTap: _toggle,
           child: IconButton(
-            constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
             visualDensity: VisualDensity.compact,
             tooltip: _reveal ? l10n.glyphHideMeaning : l10n.glyphShowMeaning,
-            onPressed: () => setState(() => _reveal = !_reveal),
-            icon: Icon(
-              _reveal
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
+            onPressed: _toggle,
+            icon: AlbumIcon(
+              _reveal ? AlbumIcons.eyeOff : AlbumIcons.eye,
+              size: 20,
+              color: context.album.muted,
             ),
           ),
         ),
