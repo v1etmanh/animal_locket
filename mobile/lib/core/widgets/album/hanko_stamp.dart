@@ -63,7 +63,9 @@ class _HankoStampState extends State<HankoStamp>
   Widget build(BuildContext context) {
     final p = context.album;
     final on = widget.stamped;
-    final ink = on ? p.accent : p.muted;
+    final enabled = widget.onPressed != null;
+    // Tắt thì luôn trông "chưa đóng dấu", kể cả con dấu hành động (stamped: true).
+    final ink = on && enabled ? p.accent : p.muted;
     return Semantics(
       button: true,
       toggled: widget.toggle ? on : null,
@@ -76,8 +78,8 @@ class _HankoStampState extends State<HankoStamp>
           onTap: widget.onPressed,
           radius: 26,
           child: SizedBox(
-            width: math.max(44, widget.size),
-            height: math.max(44, widget.size),
+            width: math.max(48, widget.size),
+            height: math.max(48, widget.size),
             child: Center(
               child: AnimatedBuilder(
                 animation: _press,
@@ -93,7 +95,7 @@ class _HankoStampState extends State<HankoStamp>
                   height: widget.size,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: on ? p.accentSoft : Colors.transparent,
+                    color: on && enabled ? p.accentSoft : Colors.transparent,
                     border: Border.all(color: ink, width: on ? 2.5 : 2),
                   ),
                   padding: EdgeInsets.all(widget.size * .2),

@@ -24,6 +24,22 @@ Widget _app(Widget child, {double textScale = 1}) => MaterialApp(
 
 void main() {
   group('PaperButton', () {
+    testWidgets('tape label shrink-wraps its text even with room to spare', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(
+          SizedBox(
+            width: 300,
+            child: Wrap(
+              children: [PaperButton.tape(label: 'Huỷ', onPressed: () {})],
+            ),
+          ),
+        ),
+      );
+      expect(tester.getSize(find.byType(PaperButton)).width, lessThan(200));
+    });
+
     testWidgets('shows its label and icon and reports taps', (tester) async {
       var taps = 0;
       await tester.pumpWidget(

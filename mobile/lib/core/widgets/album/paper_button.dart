@@ -81,7 +81,8 @@ class PaperButton extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 52),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
-              child: Center(child: content),
+              // Nhãn giấy co theo chữ kể cả khi còn chỗ; nút chính trải ngang.
+              child: Center(widthFactor: _tape ? 1 : null, child: content),
             ),
           ),
         ),

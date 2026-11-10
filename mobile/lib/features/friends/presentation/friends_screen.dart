@@ -50,6 +50,10 @@ class FriendsScreen extends ConsumerWidget {
                   ),
                 ),
                 child: TabBar(
+                  // Cuộn ngang khi chữ to để số đếm trên tab không bị mờ mất.
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 14),
                   dividerColor: Colors.transparent,
                   indicatorSize: TabBarIndicatorSize.tab,
                   indicator: BoxDecoration(

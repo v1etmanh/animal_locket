@@ -71,6 +71,42 @@ void main() {
   });
 
   group('HankoStamp', () {
+    testWidgets('a disabled stamp looks off, even when stamped', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _app(
+          const HankoStamp(
+            stamped: true,
+            toggle: false,
+            tooltip: 'Kết bạn',
+            onPressed: null,
+          ),
+        ),
+      );
+      final ring = tester.widget<Container>(
+        find.descendant(
+          of: find.byType(HankoStamp),
+          matching: find.byWidgetPredicate(
+            (w) => w is Container && w.decoration is BoxDecoration,
+          ),
+        ),
+      );
+      final deco = ring.decoration! as BoxDecoration;
+      final palette = AlbumPalette.of(AlbumThemeId.shu);
+      expect((deco.border! as Border).top.color, palette.muted);
+      expect(deco.color, isNot(palette.accentSoft));
+    });
+
+    testWidgets('a small stamp still has a 48pt tap target', (tester) async {
+      await tester.pumpWidget(
+        _app(HankoStamp(stamped: false, tooltip: 'Thích', onPressed: () {})),
+      );
+      final size = tester.getSize(find.byType(HankoStamp));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    });
+
     testWidgets('is a 44pt toggle button that reports taps', (tester) async {
       var taps = 0;
       await tester.pumpWidget(

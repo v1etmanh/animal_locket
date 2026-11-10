@@ -11,6 +11,7 @@ import 'package:animal_locket/features/friends/domain/friends_repository.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:animal_locket/features/friends/presentation/friends_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -185,7 +186,16 @@ void main() {
   });
 
   testWidgets('fits a narrow phone at 1.5x text', (tester) async {
+    // Tab labels must show their counts in full, not fade them out.
     await _pump(tester, _state(), width: 360, height: 640, textScale: 1.5);
+    for (final label in ['Bạn bè 2', 'Lời mời 1', 'Đã gửi 1']) {
+      final text = tester.renderObject<RenderParagraph>(find.text(label));
+      expect(
+        text.size.width,
+        greaterThanOrEqualTo(text.getMaxIntrinsicWidth(double.infinity) - .5),
+        reason: label,
+      );
+    }
     expect(tester.takeException(), isNull);
     await _openTab(tester, 'Lời mời 1');
     expect(tester.takeException(), isNull);
