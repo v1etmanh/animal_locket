@@ -23,6 +23,8 @@ class PreviewScreen extends ConsumerStatefulWidget {
   ConsumerState<PreviewScreen> createState() => _PreviewScreenState();
 }
 
+const _maxCaption = 200;
+
 class _PreviewScreenState extends ConsumerState<PreviewScreen> {
   final _caption = TextEditingController();
 
@@ -82,7 +84,24 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             photo: photo,
             note: TextField(
               controller: _caption,
-              maxLength: 200,
+              maxLength: _maxCaption,
+              // Đạt giới hạn thì bộ đếm chuyển màu đỏ.
+              buildCounter:
+                  (
+                    context, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => Text(
+                    '$currentLength/$maxLength',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: currentLength >= _maxCaption
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: currentLength >= _maxCaption ? p.danger : p.muted,
+                    ),
+                  ),
               minLines: 1,
               maxLines: 3,
               // Xuống dòng để hiện hết chữ, nhưng Enter vẫn là "xong" như trước.
@@ -117,19 +136,28 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          PaperButton(
-            label: sending
-                ? context.l10n.sendingPhoto
-                : context.l10n.sendToFriends,
-            icon: AlbumIcons.send,
-            onPressed: sending ? null : _publish,
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: PaperButton.tape(
-              label: context.l10n.retake,
-              onPressed: () => context.pop(),
-            ),
+          // Chụp lại bên trái, gửi (nút chính) bên phải.
+          Row(
+            children: [
+              // Co lại (chữ xuống dòng) khi chữ to trên máy hẹp.
+              Flexible(
+                child: PaperButton.tape(
+                  label: context.l10n.retake,
+                  icon: AlbumIcons.camera,
+                  onPressed: () => context.pop(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: PaperButton(
+                  label: sending
+                      ? context.l10n.sendingPhoto
+                      : context.l10n.sendToFriends,
+                  icon: AlbumIcons.send,
+                  onPressed: sending ? null : _publish,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Text(
