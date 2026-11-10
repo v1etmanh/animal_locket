@@ -3,17 +3,20 @@ import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:flutter/material.dart';
 
-/// Ô giấy vuông gấp góc chỉ có icon; [label] dành cho trình đọc màn hình (spec §7.4).
+/// Ô giấy vuông gấp góc chỉ có icon (hoặc [child], ví dụ một glyph);
+/// [label] dành cho trình đọc màn hình (spec §7.4).
 class PaperTileButton extends StatelessWidget {
   const PaperTileButton({
     super.key,
-    required this.icon,
+    this.icon,
+    this.child,
     required this.label,
     required this.onPressed,
     this.size = 52,
-  });
+  }) : assert(icon != null || child != null);
 
-  final AlbumIcons icon;
+  final AlbumIcons? icon;
+  final Widget? child;
   final String label;
   final VoidCallback? onPressed;
   final double size;
@@ -55,10 +58,12 @@ class PaperTileButton extends StatelessWidget {
                       child: InkWell(
                         onTap: onPressed,
                         child: Center(
-                          child: AlbumIcon(
-                            icon,
-                            color: enabled ? p.ink : p.muted,
-                          ),
+                          child:
+                              child ??
+                              AlbumIcon(
+                                icon!,
+                                color: enabled ? p.ink : p.muted,
+                              ),
                         ),
                       ),
                     ),

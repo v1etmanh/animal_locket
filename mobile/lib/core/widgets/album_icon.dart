@@ -35,7 +35,12 @@ enum AlbumIcons {
   locationOff,
   flag,
   block,
-  check;
+  check,
+  eye,
+  eyeOff,
+  book,
+  plus,
+  refresh;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
   String get asset =>

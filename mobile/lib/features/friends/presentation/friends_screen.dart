@@ -1,12 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
-import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/features/friends/domain/friends_repository.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
@@ -76,34 +74,21 @@ class FriendsScreen extends ConsumerWidget {
                 ),
               ),
               Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: p.paper,
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x225A3C1E),
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
+                child: PaperSheet(
+                  child: TabBarView(
+                    children: [
+                      _FriendList(data: data),
+                      _RequestList(
+                        items: data.incoming,
+                        incoming: true,
+                        busyId: data.busyId,
+                      ),
+                      _RequestList(
+                        items: data.outgoing,
+                        incoming: false,
+                        busyId: data.busyId,
                       ),
                     ],
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: TabBarView(
-                      children: [
-                        _FriendList(data: data),
-                        _RequestList(
-                          items: data.incoming,
-                          incoming: true,
-                          busyId: data.busyId,
-                        ),
-                        _RequestList(
-                          items: data.outgoing,
-                          incoming: false,
-                          busyId: data.busyId,
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ),
@@ -239,10 +224,7 @@ class _ListShell extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             itemCount: count,
             // Trang kẻ: các dòng cách nhau bằng gạch đứt.
-            separatorBuilder: (_, _) => CustomPaint(
-              size: const Size.fromHeight(1),
-              painter: _DashedLinePainter(p.fold2),
-            ),
+            separatorBuilder: (_, _) => const DashedDivider(),
             itemBuilder: (_, index) => builder(index),
           );
   }
@@ -267,38 +249,16 @@ class _PersonTile extends StatelessWidget {
   final Widget trailing;
   @override
   Widget build(BuildContext context) {
-    final p = context.album;
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         child: Row(
           children: [
-            // Avatar polaroid nhỏ, nghiêng xen kẽ.
-            Transform.rotate(
-              angle: (index.isEven ? -3 : 2.5) * math.pi / 180,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x335A3C1E),
-                      blurRadius: 5,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                  border: Border.all(color: p.fold1),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(3, 3, 3, 8),
-                  child: AnimalAvatar(
-                    avatar: person.avatar,
-                    leadAnimal: person.leadAnimal,
-                    size: 44,
-                    square: true,
-                  ),
-                ),
-              ),
+            MiniPolaroidAvatar(
+              avatar: person.avatar,
+              leadAnimal: person.leadAnimal,
+              index: index,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -344,27 +304,4 @@ class _PersonTile extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DashedLinePainter extends CustomPainter {
-  const _DashedLinePainter(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 9) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(math.min(x + 5, size.width), 0),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedLinePainter oldDelegate) =>
-      oldDelegate.color != color;
 }
