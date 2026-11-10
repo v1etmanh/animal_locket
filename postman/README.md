@@ -5,7 +5,10 @@ Thư mục này chứa collection, environment và hướng dẫn kiểm tra pub
 ## File import vào Postman
 
 - [Collection](Animal-Locket-Demo-Smoke.postman_collection.json)
+- [User, Post & Notification collection](Animal-Locket-Demo-User-Post-Notification.postman_collection.json)
 - [Environment](Animal-Locket-Demo.postman_environment.json)
+- [Service Tests environment](Animal-Locket-Service-Tests.postman_environment.json)
+- [User, Post & Notification run summary](Animal-Locket-User-Post-Notification.test-run-summary.json)
 
 ## Hướng dẫn theo thứ tự
 

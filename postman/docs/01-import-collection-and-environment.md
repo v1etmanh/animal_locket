@@ -22,15 +22,24 @@ Dùng Postman Desktop để callback OAuth hoạt động ổn định.
 Với server hiện tại:
 
 ```text
-public_domain = 134-209-96-89.nip.io
-api_base_url = https://api.134-209-96-89.nip.io
-auth_base_url = https://auth.134-209-96-89.nip.io
-files_base_url = https://files.134-209-96-89.nip.io
+public_domain = 188-166-218-200.nip.io
+api_base_url = https://api.188-166-218-200.nip.io
+auth_base_url = https://auth.188-166-218-200.nip.io
+files_base_url = https://files.188-166-218-200.nip.io
 realm = animal-locket
 client_id = postman
 access_token = <để trống>
 test_alias = postman_demo
 test_birth_date = 2000-01-01
+```
+
+`Register profile` gửi body sau. Không xóa hai biến `test_alias` và `test_birth_date`; nếu biến chưa được thay thế, backend trả `400 Bad Request`.
+
+```json
+{
+  "alias": "{{test_alias}}",
+  "birthDate": "{{test_birth_date}}"
+}
 ```
 
 Nếu tạo Droplet mới, thay `public_domain` và cả ba URL bằng hostname dựa trên IP mới. Nhấn **Save** sau khi sửa.
