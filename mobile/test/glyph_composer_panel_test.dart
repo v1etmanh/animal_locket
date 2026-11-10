@@ -29,9 +29,7 @@ Future<void> _pump(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        conversationGlyphsProvider.overrideWith(() => _FakeGlyphs('c1')),
-      ],
+      overrides: [conversationGlyphsProvider.overrideWith2(_FakeGlyphs.new)],
       child: MaterialApp(
         theme: AppTheme.forPalette(AlbumPalette.of(AlbumThemeId.shu)),
         locale: const Locale('vi'),
