@@ -246,7 +246,10 @@ class _GlyphComposerPanelState extends ConsumerState<GlyphComposerPanel> {
                     Expanded(
                       child: PaperButton(
                         label: l10n.glyphSend,
-                        icon: AlbumIcons.send,
+                        // Đang gửi: đồng hồ cát thay icon gửi.
+                        icon: composer.busy
+                            ? AlbumIcons.hourglass
+                            : AlbumIcons.send,
                         onPressed: canEdit && composer.selected.isNotEmpty
                             ? () => _send(composer.selected)
                             : null,
@@ -301,10 +304,13 @@ class _RecognitionResult extends StatelessWidget {
       );
     }
     final glyph = recognition!.best!;
-    return Row(
+    // Wrap: chữ to thì nút "Thêm" xuống dòng thay vì bóp chữ.
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(child: Text(l10n.glyphMatched(glyph.meaning))),
-        const SizedBox(width: 8),
+        Text(l10n.glyphMatched(glyph.meaning)),
         PaperButton.tape(
           label: l10n.glyphAddToComposer,
           icon: AlbumIcons.plus,
