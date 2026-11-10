@@ -1,6 +1,9 @@
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/gold_badge.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:animal_locket/features/billing/presentation/billing_controller.dart';
 import 'package:flutter/material.dart';
@@ -35,100 +38,104 @@ class _ProScreenState extends ConsumerState<ProScreen> {
   @override
   Widget build(BuildContext context) {
     final value = ref.watch(billingControllerProvider);
+    final p = context.album;
+    final controller = ref.read(billingControllerProvider.notifier);
     return AppPage(
       title: 'Animal Locket Pro',
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
-          child: FilledButton(
+          child: PaperButton(
+            label: 'Không thể tải cửa hàng · Thử lại',
             onPressed: () => ref.invalidate(billingControllerProvider),
-            child: const Text('Không thể tải cửa hàng · Thử lại'),
           ),
         ),
         data: (data) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.auto_awesome, size: 80, color: AppColors.purple),
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
+            const Center(child: GoldBadge(label: 'Pro', size: 104)),
+            const SizedBox(height: 20),
             Text(
               'Nhiều cách kết nối hơn',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineLarge,
             ),
             const SizedBox(height: 18),
-            const GlassContainer(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(Icons.bolt),
-                    title: Text('Boost khám phá'),
-                  ),
-                  ListTile(
-                    leading: Icon(Icons.mark_email_unread_outlined),
-                    title: Text('Lời mời kết bạn ưu tiên'),
-                  ),
-                ],
+            PaperSheet(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    for (final (i, (icon, text)) in const [
+                      (AlbumIcons.bolt, 'Boost khám phá'),
+                      (AlbumIcons.mail, 'Lời mời kết bạn ưu tiên'),
+                    ].indexed) ...[
+                      if (i > 0) const DashedDivider(),
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                        ),
+                        leading: AlbumIcon(icon, color: p.accent),
+                        title: Text(text),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
             if (data.me != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 22),
               _CurrentPlan(me: data.me!),
             ],
-            const SizedBox(height: 18),
+            const SizedBox(height: 22),
             if (!data.enabled)
               Text(
                 data.message ?? 'Tài khoản dưới 18 tuổi không hiển thị ưu đãi.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted),
+                style: TextStyle(color: p.muted),
               )
             else ...[
               if (data.webProducts.isEmpty)
-                const Text(
+                Text(
                   'Chưa có sản phẩm bán qua web.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.muted),
+                  style: TextStyle(color: p.muted),
                 ),
               for (final product in data.webProducts)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: OutlinedButton(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: PaperButton(
+                    label: '${product.label} · ${product.priceLabel ?? ''}',
                     onPressed: data.busy
                         ? null
-                        : () => ref
-                              .read(billingControllerProvider.notifier)
-                              .buyOnWeb(product.sku),
-                    child: Text(
-                      '${product.label} · ${product.priceLabel ?? ''}',
-                    ),
+                        : () => controller.buyOnWeb(product.sku),
                   ),
                 ),
-              const Text(
+              Text(
                 'Thanh toán trên trang web của Animal Locket (VietQR/PayPal). '
                 'Xong bấm "Quay lại app".',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
+                style: TextStyle(color: p.muted, fontSize: 12),
               ),
               if (data.storeEnabled) ...[
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 for (final product in data.products)
                   if (data.details[product.sku] != null)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: TextButton(
-                        onPressed: data.busy
-                            ? null
-                            : () => ref
-                                  .read(billingControllerProvider.notifier)
-                                  .buy(product.sku),
-                        child: Text(
-                          'Qua cửa hàng: ${product.label} · ${data.details[product.sku]!.price}',
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Center(
+                        child: PaperButton.tape(
+                          label:
+                              'Qua cửa hàng: ${product.label} · ${data.details[product.sku]!.price}',
+                          onPressed: data.busy
+                              ? null
+                              : () => controller.buy(product.sku),
                         ),
                       ),
                     ),
                 TextButton(
-                  onPressed: data.busy
-                      ? null
-                      : ref.read(billingControllerProvider.notifier).restore,
+                  onPressed: data.busy ? null : controller.restore,
                   child: const Text('Khôi phục giao dịch cửa hàng'),
                 ),
               ],
@@ -154,7 +161,7 @@ class _CurrentPlan extends StatelessWidget {
     final expires = me.planExpiresAt?.toLocal();
     final boosts = me.wallet['BOOST'] ?? 0;
     final invites = me.wallet['PRIORITY_INVITE'] ?? 0;
-    return GlassContainer(
+    return TapedNote(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -167,7 +174,7 @@ class _CurrentPlan extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Boost: $boosts · Lời mời ưu tiên: $invites',
-            style: const TextStyle(color: AppColors.muted),
+            style: TextStyle(color: context.album.muted),
           ),
         ],
       ),
