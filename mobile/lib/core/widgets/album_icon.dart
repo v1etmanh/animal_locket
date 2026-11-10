@@ -43,7 +43,8 @@ enum AlbumIcons {
   refresh,
   settings,
   edit,
-  logout;
+  logout,
+  userMinus;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
   String get asset =>

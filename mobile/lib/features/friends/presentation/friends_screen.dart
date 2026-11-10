@@ -3,9 +3,9 @@ import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_list.dart';
-import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
+import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
 import 'package:animal_locket/features/friends/domain/friends_repository.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:flutter/material.dart';
@@ -90,19 +90,98 @@ class _FriendList extends ConsumerWidget {
           subtitleColor: online ? onlineGreen : p.muted,
           online: online,
           onTap: open,
-          trailing: Semantics(
-            label: context.l10n.viewProfile,
-            button: true,
-            excludeSemantics: true,
-            onTap: open,
-            child: IconButton(
-              onPressed: open,
-              icon: AlbumIcon(AlbumIcons.more, color: p.muted),
-            ),
-          ),
+          trailing: _FriendMenu(person: person, onDetail: open),
         );
       },
     );
+  }
+}
+
+enum _FriendAction { message, unfriend, detail }
+
+/// Menu 3 chấm của một người bạn: nhắn tin, huỷ kết bạn (có xác nhận), xem hồ sơ.
+class _FriendMenu extends ConsumerWidget {
+  const _FriendMenu({required this.person, required this.onDetail});
+  final PublicProfile person;
+  final VoidCallback onDetail;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.album;
+    PopupMenuItem<_FriendAction> item(
+      _FriendAction value,
+      AlbumIcons icon,
+      String label, {
+      Color? color,
+    }) => PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          AlbumIcon(icon, size: 20, color: color ?? p.ink),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(color: color ?? p.ink)),
+        ],
+      ),
+    );
+    return PopupMenuButton<_FriendAction>(
+      tooltip: context.l10n.viewProfile,
+      icon: AlbumIcon(AlbumIcons.more, color: p.muted),
+      color: p.paper,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      onSelected: (action) => switch (action) {
+        _FriendAction.message => _message(context, ref),
+        _FriendAction.unfriend => _unfriend(context, ref),
+        _FriendAction.detail => onDetail(),
+      },
+      itemBuilder: (context) => [
+        item(_FriendAction.message, AlbumIcons.chat, context.l10n.message),
+        item(
+          _FriendAction.detail,
+          AlbumIcons.profile,
+          context.l10n.viewProfile,
+        ),
+        item(
+          _FriendAction.unfriend,
+          AlbumIcons.userMinus,
+          context.l10n.unfriend,
+          color: p.danger,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _message(BuildContext context, WidgetRef ref) async {
+    final conversation = await ref
+        .read(chatRepositoryProvider)
+        .createConversation(person.publicId);
+    if (context.mounted) context.push('/chat/${conversation.id}');
+  }
+
+  Future<void> _unfriend(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.unfriendQ(person.displayAlias)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: context.album.danger,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n.unfriend),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref
+          .read(friendsControllerProvider.notifier)
+          .remove(person.publicId);
+    }
   }
 }
 
@@ -149,17 +228,17 @@ class _RequestList extends ConsumerWidget {
                       onPressed: () => controller.accept(request.id),
                     ),
                     const SizedBox(width: 4),
-                    PaperTileButton(
-                      icon: AlbumIcons.close,
-                      label: context.l10n.decline,
-                      size: 48,
+                    IconButton(
+                      tooltip: context.l10n.decline,
                       onPressed: () => controller.decline(request.id),
+                      icon: AlbumIcon(AlbumIcons.close, color: p.muted),
                     ),
                   ],
                 )
-              : PaperButton.tape(
-                  label: context.l10n.cancel,
+              : TextButton(
+                  style: TextButton.styleFrom(foregroundColor: p.accent),
                   onPressed: () => controller.cancel(request.id),
+                  child: Text(context.l10n.cancel),
                 ),
         );
       },
