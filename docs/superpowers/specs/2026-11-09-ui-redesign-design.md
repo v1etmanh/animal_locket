@@ -194,6 +194,35 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 
 **Hồ sơ người khác** — avatar **polaroid dán băng** cạnh biệt danh và "Hồ sơ ẩn danh"; nút giấy "Nhắn tin" (icon chat); "Huỷ kết bạn" là nhãn giấy; "Báo cáo" / "Chặn" là chữ nhỏ có icon (Chặn màu `danger`). Hộp thoại giữ như cũ (đã theo theme từ đợt 1).
 
+### 7.6 Đợt 6 chi tiết · Chat (người viết tự quyết 2026-11-10, chủ dự án bỏ qua phần hỏi)
+
+**Danh sách chat**: tiêu đề "Trò chuyện" và dòng "Tin nhắn chỉ mở giữa bạn bè." giữ nguyên. Danh sách nằm trên **một trang giấy** giống sổ bạn bè đợt 5: các dòng cách nhau bằng gạch đứt, mỗi dòng có avatar polaroid nhỏ nghiêng xen kẽ, biệt danh đậm, dòng phụ "Bắt đầu trò chuyện" / "Tin nhắn gần đây". Tin chưa đọc là **con dấu tròn màu `accent`** ghi số, thay chấm đỏ; trình đọc màn hình đọc "N tin chưa đọc". Lỗi tải hiện nút giấy "Không tải được · Thử lại". Khi trống, trang giấy có icon chat cùng câu cũ. Gạch đứt và avatar polaroid nhỏ tách thành thành phần dùng chung với Bạn bè.
+
+**Hội thoại**: tiêu đề giữ chuỗi `conversationTitle`. Mỗi tin là một **mẩu giấy ghi chú**: tin của tôi nền `accentSoft` lệch phải, tin của bạn nền `paper` lệch trái. Mẩu giấy bo góc nhỏ, có bóng mềm, mẩu washi ngắn ở mép trên và nghiêng ±1° xen kẽ. Tin đang gửi mờ như cũ. Tin gửi lỗi có viền `danger` và nút chữ "Thử lại" màu `danger` kèm icon. Nút xem/ẩn nghĩa dùng icon mắt nét của app (nhãn giữ như cũ), nghĩa hiện bằng chữ viết tay Patrick Hand. Thông báo hội thoại đã đóng là **nhãn giấy dán washi**, chữ `danger`.
+
+**Bảng soạn ký hiệu**: là tờ giấy `paper` đặt dưới đáy, **mép trên răng cưa** như giấy xé.
+- **Ô vẽ**: trang giấy **chấm lưới** (`fold2`), viền gạch đứt, gợi ý viết tay. Nét vẽ mặc định màu `accent`. Nút xoá nét là ô giấy nhỏ.
+- **Kết quả nhận dạng**: giữ chữ; "Thêm" là nhãn giấy. Khi nhận dạng mơ hồ, mỗi lựa chọn là một nhãn giấy gồm glyph và nghĩa.
+- **Chọn nhanh**: hàng **ô giấy gấp góc**, mỗi ô chứa một glyph.
+- **Glyph đã chọn**: mỗi glyph là một mẩu giấy nhỏ có nút ×.
+- **Hàng dưới**: Từ điển (icon sổ), Tạo ký hiệu (icon +) và Xoá hết (icon thùng rác) là ô giấy chỉ có icon. "Gửi" là nút giấy chính có icon gửi.
+- Nhãn trình đọc màn hình và các điều kiện bật/tắt giữ nguyên.
+
+**Tạo ký hiệu và Từ điển** (sheet):
+- Sheet nền `paper`, tiêu đề Lora.
+- **Tạo**:
+  - Ô vẽ giống bảng soạn.
+  - Ô nghĩa là dòng kẻ viết tay, giữ nhãn, gợi ý và giới hạn 64 ký tự.
+  - Màu chọn là **chấm mực** tròn 44pt, chấm đang chọn có vòng `ink`.
+  - Nút giấy "Lưu".
+  - Bảng màu glyph giữ nguyên vì là dữ liệu người dùng đã lưu.
+- **Từ điển**:
+  - 3 **tab giấy** như sổ bạn bè.
+  - Các dòng cách nhau bằng gạch đứt.
+  - Glyph đặt trong ô giấy nhỏ; nút xoá là ô giấy icon thùng rác.
+
+**Icon mới** (nét 1.8 như bộ hiện có): `eye`, `eyeOff`, `book`, `plus`, `refresh`.
+
 ## 8. Ràng buộc
 
 - Flutter (SDK hiện có 3.41), Riverpod, go_router — giữ nguyên kiến trúc; không thêm thư viện UI lớn. Dùng gói đã cài trước khi thêm gói mới.
@@ -210,6 +239,7 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 - Mục chọn theme nằm trong màn Cài đặt hiện có.
 - `PostsGrid` để sang đợt 5/7; chữ hiện tại thắng chữ mẫu trong mockup (§7.1).
 - Thanh tab giống nhau trên mọi tab, kể cả trên camera; tab Ảnh giữ nhãn (§7.2).
+- Toàn bộ §7.6 (Chat): tin nhắn dạng mẩu giấy ghi chú, ô vẽ chấm lưới, nét mặc định màu `accent`, bảng màu glyph giữ nguyên.
 
 ## 10. Để builder quyết
 
