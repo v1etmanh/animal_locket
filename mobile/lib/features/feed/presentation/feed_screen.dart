@@ -26,6 +26,7 @@ class FeedScreen extends ConsumerWidget {
     final feed = ref.watch(feedControllerProvider);
     return AppPage(
       title: context.l10n.feedTitle,
+      watermark: '瞬',
       // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
       scrollable: false,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),

@@ -25,6 +25,7 @@ Thành công = mở app thấy ngay "sổ ảnh giấy gấp" có chủ đích, 
 - Thanh điều hướng trông như tab mặc định: icon vuông vô hồn, nút giống mọi app khác. Đây là điểm chủ dự án lo nhất.
 - Trang trí Nhật kiểu "dán cho có" (chữ Nhật khắp nơi, hoa văn sáo rỗng).
 - **Chữ Nhật trong UI** (chủ dự án chốt 2026-11-09, sau đợt 2): app chỉ hỗ trợ tiếng Việt và tiếng Anh, nên **không có ký tự Nhật** nào trên màn hình, kể cả trang trí. Chất Nhật đến từ giấy, washi, origami, con dấu, bố cục sổ ảnh.
+  - *Sửa 2026-11-10:* chủ dự án cho phép đúng 3 điểm chữ Nhật **trang trí** (ẩn khỏi screen reader, không phải chuỗi giao diện): kanji trên ô chọn theme (朱 柚 桜 空), chữ 瞬 in mờ sau tiêu đề Bảng tin, chữ dọc 思い出をそっと ở màn đăng nhập. Font Shippori Mincho subset chỉ gồm các ký tự này; test `no_japanese_text_test` chặn mọi ký tự Nhật khác.
 - Chữ tiếng Việt bị lỗi dấu, hoặc tương phản kém (mọi chữ đạt WCAG AA trên mọi theme).
 
 ## 3. Hướng thị giác đã chốt
@@ -257,7 +258,7 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 ## 9. Lựa chọn người viết tự quyết (chủ dự án nên rà)
 
 - Tab Ảnh dạng polaroid đặt giữa thanh (người dùng chọn sau đợt 1); router giữ nguyên index nhánh.
-- Font Lora / Be Vietnam Pro / Patrick Hand; không có chữ Nhật.
+- Font Lora / Be Vietnam Pro / Patrick Hand; chữ Nhật trang trí dùng Shippori Mincho subset (chỉ 3 điểm, xem mục chữ Nhật trong UI).
 - Shu là theme mặc định.
 - Chuyển động như §3.3.
 - Mục chọn theme nằm trong màn Cài đặt hiện có.

@@ -1,4 +1,5 @@
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/app_background.dart';
 import 'package:flutter/material.dart';
 
@@ -10,10 +11,14 @@ class AppPage extends StatelessWidget {
     this.actions,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 24),
     this.scrollable = true,
+    this.watermark,
   });
 
   final Widget child;
   final String? title;
+
+  /// Chữ trang trí in mờ sau thanh tiêu đề, góc phải (chỉ khi có [title]).
+  final String? watermark;
   final List<Widget>? actions;
   final EdgeInsets padding;
   final bool scrollable;
@@ -36,6 +41,34 @@ class AppPage extends StatelessWidget {
                 title: Text(title!),
                 foregroundColor: context.album.ink,
                 actions: actions,
+                flexibleSpace: watermark == null
+                    ? null
+                    : ExcludeSemantics(
+                        child: ClipRect(
+                          child: Align(
+                            alignment: Alignment.bottomRight,
+                            // Lùi sang trái chừa chỗ cho nút ở góc phải.
+                            child: Transform.translate(
+                              offset: Offset(
+                                (actions?.isNotEmpty ?? false) ? -52 : 6,
+                                10,
+                              ),
+                              child: Text(
+                                watermark!,
+                                textScaler: TextScaler.noScaling,
+                                style: TextStyle(
+                                  fontFamily: AppFonts.jp,
+                                  fontSize: 64,
+                                  height: 1,
+                                  color: context.album.accent.withValues(
+                                    alpha: .1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
               ),
         body: body,
       ),

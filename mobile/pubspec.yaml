@@ -114,6 +114,10 @@ flutter:
     - family: Patrick Hand
       fonts:
         - asset: assets/fonts/PatrickHand-Regular.ttf
+    # Subset vài ký tự trang trí (xem AppFonts.jp); thêm chữ mới phải subset lại.
+    - family: Shippori Mincho
+      fonts:
+        - asset: assets/fonts/ShipporiMincho-Accents.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

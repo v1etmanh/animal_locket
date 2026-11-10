@@ -3,6 +3,7 @@ import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
@@ -56,6 +57,30 @@ class SignInScreen extends ConsumerWidget {
                       right: 6,
                       top: 52,
                       child: polaroid(_panda, 110, 7),
+                    ),
+                    // "Lặng lẽ cất giữ kỷ niệm", viết dọc như ghi chú bên lề.
+                    Positioned(
+                      right: -34,
+                      top: 0,
+                      child: ExcludeSemantics(
+                        child: Column(
+                          children: [
+                            for (final ch in '思い出をそっと'.characters)
+                              Text(
+                                ch,
+                                textScaler: TextScaler.noScaling,
+                                style: TextStyle(
+                                  fontFamily: AppFonts.jp,
+                                  fontSize: 15,
+                                  height: 1.45,
+                                  // 'vert': kana nhỏ (っ) về đúng góc khi viết dọc.
+                                  fontFeatures: const [FontFeature('vert')],
+                                  color: p.accent.withValues(alpha: .6),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
