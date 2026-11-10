@@ -2,7 +2,7 @@
 
 Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch gốc nằm ở [ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md); chỗ nào code khác kế hoạch đều có ghi chú "Khác kế hoạch".
 
-> Trạng thái: toàn bộ service đã có code và test đơn vị/tích hợp chạy bằng H2 + bộ nhớ. **Chưa** chạy cùng nhau trên hạ tầng thật (MySQL/PostgreSQL/Mongo/Redis/Kafka/MinIO/Keycloak). Xem [12-testing-strategy.md](12-testing-strategy.md) và [14-roadmap-risks.md](14-roadmap-risks.md).
+> Trạng thái: toàn bộ service đã có code và test đơn vị/tích hợp chạy bằng H2 + bộ nhớ. **Chưa** chạy cùng nhau trên hạ tầng thật (MySQL/PostgreSQL/Mongo/Redis/Kafka/Cloudflare R2/Keycloak). Xem [12-testing-strategy.md](12-testing-strategy.md) và [14-roadmap-risks.md](14-roadmap-risks.md).
 
 ## 3.1 Sơ đồ
 
@@ -11,9 +11,8 @@ Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch g�
                                    │
                            ┌───────▼────────┐
                            │    Traefik     │  TLS, 80/443 — cổng công khai duy nhất
-                           └───────┬────────┘
-              files.<domain> ──────┼────────────► MinIO (presigned upload/download)
-                                   │
+                           └───────┬────────┘     Client ──presigned PUT/GET──► Cloudflare R2
+                                   │                (thẳng tới R2, không qua Traefik/gateway)
                            ┌───────▼────────┐        ┌──────────────┐
                            │  API Gateway   │◄──────►│   Keycloak   │  (JWKS, đăng nhập OIDC)
                            │   :8080        │        └──────────────┘
@@ -28,15 +27,15 @@ Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch g�
 │ :8101 │ │ :8102 │ │ :8103   │ │ :8104    │ │:8105 │ │ :8106   │ │ :8107        │
 └──┬────┘ └──┬────┘ └──┬──────┘ └────┬─────┘ └──┬───┘ └────┬────┘ └──────┬───────┘
    │MySQL    │MySQL+   │MySQL+       │Redis     │Mongo+    │PostgreSQL   │(không DB)
-   │user_db  │Redis    │MinIO        │(GEO)     │Redis     │billing_db   │ FCM
+   │user_db  │Redis    │R2           │(GEO)     │Redis     │billing_db   │ FCM
    │         │post_db  │media_db     │          │pub/sub   │             │
    └─────────┴────┬────┴─────┬───────┴──────────┴──────────┴─────────────┘
                   │          │
-              ┌───▼──────────▼───┐   PHOTO_UPLOADED     ┌─────────────────────┐
-              │      Kafka       │ ───────────────────► │ face-worker (Python)│
-              │ (KRaft, outbox)  │ ◄─────────────────── │ :8110 metrics       │
-              └──────────────────┘   FACE_PROCESSED/    │ MinIO raw → public  │
-                                     FACE_FAILED        └─────────────────────┘
+              ┌───▼──────────▼───┐   PHOTO_READY / PHOTO_REJECTED (media → post)
+              │      Kafka       │   USER_* / FRIEND_* / SUBSCRIPTION_* ...
+              │ (KRaft, outbox)  │
+              └──────────────────┘
+   DB đều là dịch vụ ngoài: MySQL (Aiven), PostgreSQL (Supabase), MongoDB (Atlas) — xem .env.example
    Prometheus ◄── /actuator/prometheus      Tempo ◄── OTLP traces      Loki ◄── logs  →  Grafana
 ```
 
@@ -54,8 +53,8 @@ Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch g�
 | DB quan hệ | MySQL (user, media, post), PostgreSQL (billing, Keycloak) | Flyway; `JPA_DDL_AUTO` mặc định `none` (MySQL, chờ kiểm chứng) / `validate` (billing) |
 | Document | MongoDB (chat) | `conversations`, `messages` |
 | Cache/GEO/hạn mức | Redis | Qua `KeyValueStore` (hạn mức, cache) và `RedisDiscoveryStore` (GEO, online) |
-| Kho ảnh | MinIO (S3) | Bucket `raw` và `public`, đều private |
-| Xử lý ảnh | Python 3.12, Pillow, OpenCV 4.x, MinIO SDK, confluent-kafka | `face-worker/`; AI inpainting tuỳ chọn (diffusers) |
+| Kho ảnh | Cloudflare R2 (S3), client MinIO Java SDK | Một bucket private (`R2_BUCKET`); upload bằng presigned PUT, xem bằng presigned GET |
+| Xử lý ảnh | Không có ở server | Client nén lại và xoá EXIF (`ImagePreparationService`, `keepExif: false`). face-worker (Python) **đã bị gỡ** |
 | Quan sát | Micrometer → Prometheus; OTLP → Tempo; log → Loki; Grafana | Xem [11-observability-resilience.md](11-observability-resilience.md) |
 | Push | Firebase Admin (FCM) | Mặc định `LoggingPushSender` khi chưa có khoá |
 
@@ -73,10 +72,9 @@ Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch g�
 | chat-service | 8105 | idem |
 | billing-service | 8106 | quy ước (xem [04-service-specs.md](04-service-specs.md)) |
 | notification-service | 8107 | idem |
-| face-worker (metrics/health) | 8110 | `face-worker/facework/config.py` |
 | Keycloak | 8081 | mặc định trong `KEYCLOAK_JWK_URI` |
 
-Hạ tầng (MySQL 3306, PostgreSQL 5432, MongoDB 27017, Redis 6379, MinIO 9000/9001, Kafka 9092, Prometheus 9090, Loki 3100, Tempo 3200/4318, Grafana 3000) xem [10-deployment-infrastructure.md](10-deployment-infrastructure.md).
+Hạ tầng (MySQL 3306, PostgreSQL 5432, MongoDB 27017 — đều là dịch vụ ngoài; Redis 6379, Kafka 9092, Prometheus 9090, Loki 3100, Tempo 3200/4318, Grafana 3000) xem [10-deployment-infrastructure.md](10-deployment-infrastructure.md).
 
 ## 3.3 Luồng một request có xác thực
 
@@ -110,12 +108,11 @@ Ngoại lệ: `POST /api/v1/users/register` không cần `X-Public-Id`; user-ser
 | Client → Gateway → service | REST/WebSocket | Circuit breaker + timeout ở gateway |
 | post → user (danh sách bạn) | REST nội bộ, cache Redis 45s + bản dự phòng 1 giờ | Dùng cache cũ; không có cache thì 503 → feed trả rỗng `degraded=true` |
 | post → user (hồ sơ hiển thị) | REST nội bộ, cache Caffeine 5 phút | Fail soft: thiếu alias vẫn trả bài |
-| media → user (con vật chủ đạo) | Bản sao `owner_animals` cập nhật bằng event; thiếu thì REST | REST lỗi → 503 (fail closed) |
 | media/chat → user (quan hệ bạn bè) | REST nội bộ | Fail closed |
 | discovery → user | REST nội bộ (hồ sơ, loại trừ, quẹt phải) | Quẹt: 503 và hoàn lượt; thẻ: trả rỗng `degraded=true` |
 | discovery → billing (Boost) | REST nội bộ | 503 `BILLING_UNAVAILABLE` |
 | chat → media (kiểm tra ảnh) | REST nội bộ | 503 |
-| Ảnh: upload → ẩn mặt → đăng | Kafka (`PHOTO_UPLOADED` → `FACE_PROCESSED` → `PHOTO_READY`) | Retry/DLQ ở worker, timeout ở media-service |
+| Ảnh: upload → đăng | `POST /media/{id}/complete` kiểm tra object rồi phát `PHOTO_READY` (hoặc `PHOTO_REJECTED`) qua Outbox → post-service | Outbox + consumer idempotent; `PendingPostReconciler` gỡ bài kẹt `PENDING_MEDIA` |
 | Kết bạn, chặn, xoá tài khoản, gói Pro | Kafka (Outbox) | Consumer idempotent |
 | Push | Kafka → notification-service → FCM | Retry 3 lần rồi bỏ qua |
 | Tin nhắn realtime | WebSocket + Redis pub/sub | Xem 3.7 |
@@ -127,7 +124,6 @@ Ngoại lệ: `POST /api/v1/users/register` không cần `X-Public-Id`; user-ser
 - Consumer có DB dùng bảng `processed_events` qua `IdempotencyService.firstTime(eventId)` **trong cùng transaction** xử lý: lỗi thì dấu vết rollback và event được xử lý lại.
 - Consumer không có DB (discovery, chat, notification) dùng thao tác tự idempotent; notification thêm cache Caffeine theo `eventId` (best-effort).
 - chat-service phát `MESSAGE_SENT` **trực tiếp** bằng `KafkaTemplate`, không qua Outbox (push là fail-soft). **Khác kế hoạch** ("mọi event phát từ service có DB đi qua Outbox"): chat dùng MongoDB, chưa có outbox cho Mongo.
-- face-worker không có DB, tự phát kết quả lên `media.results`.
 
 Chi tiết topic và payload: [07-event-catalog.md](07-event-catalog.md).
 
@@ -143,8 +139,7 @@ Chi tiết topic và payload: [07-event-catalog.md](07-event-catalog.md).
 | Danh sách bạn (post) | Cache tươi 45s + bản cũ 1h | |
 | Hồ sơ hiển thị (post) | Caffeine 5 phút | fail soft |
 | Push | Thread pool riêng (4–16 luồng, hàng đợi 5000, `DiscardPolicy`) + retry 3 lần, backoff `500ms × lần` | bulkhead tự cài |
-| face-worker | Retry `MAX_ATTEMPTS=3`, backoff `1.5s × lần`, DLQ `media.events.dlq` | AI timeout 45s |
-| media-service | Job kẹt `UPLOADED` quá 10 phút → `REJECTED/PROCESSING_TIMEOUT` | |
+| media-service | `MediaJanitor` xoá job `PENDING_UPLOAD` quá 1 giờ (client xin upload nhưng không báo xong) | quét mỗi 60 giây |
 | Chat | Giới hạn 20 tin/10 giây/người | Bulkhead Resilience4j **mới chỉ khai báo trong YAML**, chưa gắn vào code |
 
 > Cần kiểm chứng khi chạy thật: các giá trị `resilience4j.circuitbreaker/timelimiter.configs.default` trong YAML có áp dụng cho `CircuitBreakerFactory` của Spring Cloud hay không. Nếu không, time limiter mặc định của Spring Cloud CircuitBreaker là **1 giây**, dễ gây lỗi giả. Cách chắc chắn: khai báo `Customizer<Resilience4JCircuitBreakerFactory>` trong từng service.
@@ -164,10 +159,9 @@ Mỗi instance `PSUBSCRIBE chat:user:*` một lần (`RedisMessageBus`) và ch�
 
 | Nhóm | Hành vi | Nơi trong code |
 |---|---|---|
-| Ẩn mặt | **Closed**: ảnh chỉ `PUBLISHED` khi có `PHOTO_READY`; lỗi/timeout → `REJECTED` | `PostService.applyMedia`, `MediaService.onFaceFailed/expireStuck`, `Worker.handle` |
+| Đăng ảnh | **Closed**: bài chỉ `PUBLISHED` khi có `PHOTO_READY`; sai cỡ/sai loại → `REJECTED` | `PostService.applyMedia`, `MediaService.complete` |
 | Xác định người dùng | **Closed**: không tra được `sub` → 503 | `IdentityFilter` |
 | Xác minh quan hệ bạn bè (chat, xem ảnh) | **Closed** | `ChatService.requireFriends`, `MediaService.viewUrl` |
-| Con vật chủ đạo khi upload | **Closed** nếu cả bản sao lẫn REST đều thiếu | `MediaService.complete` |
 | Thanh toán/quyền lợi | **Closed**: chỉ mở quyền sau khi xác minh với store | `billing-service` (xem 04) |
 | Vị trí | **Closed**: chỉ lưu khi bật khám phá; xác thực hồ sơ mới cho cập nhật | `DiscoveryService.updateLocation` |
 | Feed | **Soft**: không biết danh sách bạn → trả rỗng `degraded` | `PostService.feed` |
@@ -181,6 +175,7 @@ Mỗi instance `PSUBSCRIBE chat:user:*` một lần (`RedisMessageBus`) và ch�
 animal-locket/
 ├─ pom.xml                      parent (Spring Boot 3.3.5, Spring Cloud 2023.0.3)
 ├─ libs/
+│  ├─ avatar-lib/               build-lib.mjs sinh thư viện avatar con vật (xem docs/19)
 │  ├─ common/                   dùng cho mọi service servlet
 │  │   Headers, Topics, EventTypes, PublicIds
 │  │   event/  EventEnvelope, EventJson, Events (payload)
@@ -190,7 +185,8 @@ animal-locket/
 │  └─ outbox-jpa/               OutboxEvent/Repository/Service/Relay, ProcessedEvent, IdempotencyService
 ├─ infra/  config-server, eureka-server, api-gateway, config-repo/
 ├─ services/ user, media, post, notification, discovery, chat, billing
-├─ face-worker/                 Python
+├─ mobile/                      app Flutter
+├─ deploy/, docker-compose.yml  hạ tầng Compose
 └─ docs/
 ```
 

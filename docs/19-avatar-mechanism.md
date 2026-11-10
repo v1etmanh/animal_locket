@@ -1,8 +1,8 @@
 # 19. Cơ chế avatar con vật
 
-> Trạng thái: **đã triển khai phần cơ chế avatar** (2026-11-08): thư viện v1, kho + cấp phát duy nhất, cấp cho tài khoản cũ, hiển thị trên mobile. Nạp tiền & hạn mức (§8) chưa làm. Chưa chạy thử với MySQL thật (test dùng H2).
+> Trạng thái: **đã triển khai phần cơ chế avatar** (2026-11-08): thư viện v1, kho + cấp phát duy nhất, cấp cho tài khoản cũ, hiển thị trên mobile. 2026-11-09: thư viện **v2 origami** (vẽ lại cùng bộ khoá, ADR-015), app vẽ mọi avatar bằng v2. Nạp tiền & hạn mức (§8) chưa làm. Chưa chạy thử với MySQL thật (test dùng H2).
 >
-> Mã nguồn chính: `libs/avatar-lib/build-lib.mjs` (sinh thư viện), user-service `AvatarLibrary`, `AvatarPoolSeeder`, `AvatarAllocator`, `AvatarBackfill`, `AvatarService`; mobile `lib/core/avatar/`, `AnimalAvatar`.
+> Mã nguồn chính: `libs/avatar-lib/build-lib.mjs` (sinh thư viện từ `lib-v1.mjs`, `lib-v2.mjs`; tự kiểm bằng `check.mjs`), user-service `AvatarLibrary`, `AvatarPoolSeeder`, `AvatarAllocator`, `AvatarBackfill`, `AvatarService`; mobile `lib/core/avatar/`, `AnimalAvatar`.
 
 ## 0. Quyết định đã chốt (2026-11-08)
 
@@ -53,20 +53,21 @@ Chuỗi truyền giữa các service: `1:fox:0:none` (`v:avatar_key`).
 
 ### 3.2. Thư viện (`avatar-lib`)
 
-JSON chứa 50 mẫu SVG (placeholder `{{fur}}`, `{{belly}}`, `{{accent}}`), 10 bảng màu, 6 phụ kiện, đúng như `lib` trong file HTML mẫu.
+JSON chứa 50 mẫu SVG có chỗ trống màu `{{tên}}`, 10 bảng màu, 6 phụ kiện. v1 dùng `{{fur}}`, `{{belly}}`, `{{accent}}` (đúng như `lib` trong file HTML mẫu); v2 origami thêm sắc độ tính sẵn `furD`, `furL`, `bellyD`, `accentD`, `accentL` vào mỗi bảng màu, giữ nguyên 4 màu gốc.
 
 Quy tắc bất biến:
 
-1. Một phiên bản đã phát hành thì **không bao giờ đổi nghĩa**: `fox:0:none` phải luôn vẽ ra cùng một hình.
-2. Phiên bản mới chỉ được **thêm** khoá (con vật, màu, phụ kiện, hoặc một chiều mới) và không xoá khoá đang có chủ. Nhờ vậy `avatar_key` cũ vẫn hợp lệ, và tính duy nhất vẫn đúng qua các phiên bản.
-3. Hàm vẽ là hàm thuần `build(avatar, lib) → svg`, lấy theo hàm `build()` trong file mẫu: nền `bg` → thân (đã thay màu) → phụ kiện.
+1. File của một phiên bản đã phát hành **không bao giờ đổi**: sinh lại phải trùng từng byte (`check.mjs` so với bản trong git). Server và app cũ vẫn vẽ theo nó.
+2. **Bộ khoá không bao giờ mất và không đổi ý nghĩa**: `fox:0:none` luôn là con cáo, bảng màu 0, không phụ kiện. Phiên bản mới phải chứa mọi khoá cũ và chỉ được **thêm** khoá (con vật, màu, phụ kiện, hoặc một chiều mới). Nhờ vậy `avatar_key` cũ vẫn hợp lệ, và tính duy nhất vẫn đúng qua các phiên bản.
+3. Phiên bản mới **được vẽ lại** hình của khoá cũ (đổi phong cách, ví dụ v2 origami), nhưng hai khoá khác nhau phải vẫn phân biệt được bằng mắt. App vẽ mỗi mã bằng **thư viện mới nhất có khoá đó**, không theo số phiên bản trong mã (ADR-015).
+4. Hàm vẽ là hàm thuần `render(lib, key) → svg`: nền `bg` → thân → phụ kiện, mọi chỗ trống `{{tên}}` lấy màu cùng tên trong bảng màu. JS (`build-lib.mjs`) và Dart phải ra cùng chuỗi (mẫu đối chiếu `mobile/test/fixtures/avatar-lib.vN.samples.json`).
 
 | Bản | Vị trí | Mục đích |
 | --- | --- | --- |
-| Nguồn gốc | `libs/avatar-lib/avatar-lib.v1.json` | Một nguồn duy nhất cho server và mobile. |
+| Nguồn gốc | `libs/avatar-lib/avatar-lib.v1.json`, `avatar-lib.v2.json` | Một nguồn duy nhất cho server và mobile. Mỗi khoá thuộc phiên bản đầu tiên có nó (hiện tại đều là v1). |
 | Server | user-service đọc từ classpath | Sinh kho avatar, kiểm tra mã hợp lệ. |
-| Mobile | `mobile/assets/avatar/avatar-lib.v1.json` | Vẽ được ngay, không cần mạng. |
-| Bản mới | `GET /api/v1/animals/avatar-lib/{v}` (cần đăng nhập, `Cache-Control: immutable`, có `ETag`) | App cũ gặp avatar `v2` thì tải một lần, lưu file trong thư mục support của app. |
+| Mobile | `mobile/assets/avatar/avatar-lib.v2.json` (chỉ bản mới nhất) | Vẽ được ngay, không cần mạng; mã `1:…` cũng vẽ bằng v2. |
+| Bản mới | `GET /api/v1/animals/avatar-lib/{v}` (cần đăng nhập, `Cache-Control: immutable`, có `ETag`) | App gặp mã có khoá mà không thư viện nào trên máy có thì tải đúng phiên bản trong mã một lần, lưu file trong thư mục support của app. |
 
 ### 3.3. Cơ chế render: từ bộ mã ra hình
 
@@ -88,7 +89,7 @@ avatar {animal:"fox", palette:0, accessory:"glasses"}
         </svg>
 ```
 
-Khung con vật (bước 1) cũng là đồ ghép, nhưng **được ghép sẵn một lần khi tạo thư viện**, không phải lúc render. Mỗi con vật là một dòng mô tả trong file mẫu, ví dụ `fox|Cáo|tri|wide|w|dot|n|`: tai `tri`, đầu `wide`, mõm `w`, mũi `dot`, mắt `n`, cùng các chi tiết thêm (`X`) như sọc, bờm, vòi. Mỗi chi tiết thêm có lớp `B` (vẽ sau đầu), `M` (trên đầu) hoặc `F` (trên cùng). Script tạo thư viện ghép các mảnh theo thứ tự `B → tai → đầu → M → mõm → mắt → mũi → F` thành chuỗi `animals[k].svg`. File `avatar-lib.v1.json` chỉ chứa kết quả đã ghép, nên client không cần biết các mảnh tai/đầu/mõm.
+Khung con vật (bước 1) cũng là đồ ghép, nhưng **được ghép sẵn một lần khi tạo thư viện**, không phải lúc render. Mỗi con vật là một dòng mô tả trong file mẫu, ví dụ `fox|Cáo|tri|wide|w|dot|n|`: tai `tri`, đầu `wide`, mõm `w`, mũi `dot`, mắt `n`, cùng các chi tiết thêm (`X`) như sọc, bờm, vòi. Mỗi chi tiết thêm có lớp `B` (vẽ sau đầu), `M` (trên đầu) hoặc `F` (trên cùng). Script tạo thư viện ghép các mảnh theo thứ tự `B → tai → đầu → M → mõm → mắt → mũi → F` thành chuỗi `animals[k].svg`. File `avatar-lib.vN.json` chỉ chứa kết quả đã ghép (v2 dùng cùng bảng mô tả, vẽ lại từng mảnh theo kiểu origami), nên client không cần biết các mảnh tai/đầu/mõm.
 
 Ai render:
 
@@ -230,7 +231,7 @@ Máy **chỉ là bộ đệm**, server là nguồn sự thật:
 | Avatar người khác | Không lưu riêng | Đi kèm trong thẻ discovery, bài đăng, danh sách bạn (chuỗi mã) và được vẽ tại chỗ. |
 | SVG đã dựng | Cache bộ nhớ theo `avatar_key` | Tránh dựng lại SVG khi cuộn danh sách. |
 
-Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (`SvgPicture.string`). Nếu không có thư viện cho phiên bản `v` thì hiện emoji cũ làm dự phòng. `reveal_screen` hiện avatar thật, với hiệu ứng quay chạy trên kết quả server đã trả.
+Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (`SvgPicture.string`), dùng thư viện mới nhất trên máy có khoá của mã. Nếu không thư viện nào có khoá đó thì tải phiên bản `v` trong nền và hiện emoji cũ làm dự phòng. `reveal_screen` hiện avatar thật, với hiệu ứng quay chạy trên kết quả server đã trả.
 
 ## 7. API & event
 

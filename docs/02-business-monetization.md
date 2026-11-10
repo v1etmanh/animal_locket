@@ -4,8 +4,8 @@
 
 ## 2.1 Nguyên tắc
 
-1. **Miễn phí đủ dùng**: giá trị cốt lõi (đăng ảnh ẩn mặt, kết bạn, chat với bạn) luôn miễn phí để mạng lưới lớn lên.
-2. **Trả tiền để có thêm quyền chọn và hạn mức**, không trả tiền để mua sự an toàn: chặn, báo cáo, ẩn mặt không bao giờ bị khoá sau paywall.
+1. **Miễn phí đủ dùng**: giá trị cốt lõi (đăng ảnh cho bạn bè, kết bạn, chat với bạn) luôn miễn phí để mạng lưới lớn lên.
+2. **Trả tiền để có thêm quyền chọn và hạn mức**, không trả tiền để mua sự an toàn: chặn, báo cáo không bao giờ bị khoá sau paywall.
 3. **Không bán dữ liệu người dùng**, không quảng cáo nhắm theo vị trí chính xác.
 4. **Chi phí GPU là khoản biến đổi lớn nhất**, nên hạn mức ảnh/ngày gắn với chi phí này.
 
@@ -16,13 +16,11 @@
 | Đăng ảnh / ngày | 10 | 50 |
 | Quẹt phải / ngày | 30 | 150 |
 | Lời mời kết bạn / ngày | 20 | 80 |
-| Con vật chủ đạo | Ngẫu nhiên được cấp lúc đăng ký | Chọn từ bộ sưu tập |
-| Quay thưởng | 1 lượt/tuần | 1 lượt/ngày |
+| Avatar | Một avatar duy nhất, quay một lần lúc đăng ký | Như Free (đổi con vật chủ đạo và quay thưởng **đã ngừng**; quay thêm sẽ gắn với nạp tiền, docs/19 §8) |
 | Hoàn tác quẹt trái | Không | Có (câu hỏi mở) |
-| Chất lượng ẩn mặt AI | AI khi GPU rảnh, sticker khi tải cao | Ưu tiên hàng đợi AI |
 | Quảng cáo | Không (đề xuất giữ app sạch) | Không |
 
-Giá tham khảo (đề xuất): Pro tháng 49.000đ, năm 399.000đ.
+Giá tham khảo (đề xuất): Pro tháng 49.000đ, năm 399.000đ. **Lưu ý**: giá web đang seed trong code (migration billing V2/V4, giá tạm) khác: Pro tháng 79.000đ / 2,99 USD, năm 649.000đ / 24,99 USD — cần chốt một bộ giá.
 
 ## 2.3 Mua lẻ (consumable)
 
@@ -36,28 +34,27 @@ Số dư vật phẩm ghi trong **sổ cái** của billing-service (mỗi lần
 
 ## 2.4 Kinh tế đơn vị (khung tính)
 
-Công thức để cập nhật sau khi có số liệu từ spike ẩn mặt (xem [14-roadmap-risks.md](14-roadmap-risks.md)):
+Từ khi bỏ ẩn mặt (ADR-014) không còn chi phí GPU; chi phí ảnh chủ yếu là lưu trữ và thao tác trên Cloudflare R2 (R2 không tính phí băng thông ra).
 
 ```
-Chi phí GPU / ảnh = (giá thuê GPU mỗi giờ) / (số ảnh xử lý được mỗi giờ ở hiệu suất thực)
-Chi phí hạ tầng / người dùng hoạt động / tháng
-   = (ảnh trung bình/ngày × 30 × chi phí GPU/ảnh) + lưu trữ + băng thông + chi phí cố định chia đầu người
+Chi phí lưu trữ / người dùng hoạt động / tháng
+   = ảnh trung bình/ngày × 30 × cỡ ảnh trung bình × giá lưu trữ R2 (cộng dồn vì ảnh giữ tới khi xoá tài khoản)
+Chi phí thao tác / người dùng / tháng = (số PUT + số GET ký sẵn) × giá thao tác R2
+Chi phí hạ tầng / người dùng = lưu trữ + thao tác + chi phí cố định chia đầu người (DB, máy chủ)
 Biên lợi nhuận Pro = giá Pro (sau phí store 15–30%) − chi phí hạ tầng người dùng Pro
 ```
 
-Ví dụ minh hoạ (số giả định, **không phải đo thật**): GPU 0,5 USD/giờ, 600 ảnh/giờ ⇒ ~0,0008 USD/ảnh. Người dùng đăng 3 ảnh/ngày ⇒ ~0,07 USD/tháng chỉ riêng GPU.
-
 Đòn bẩy giảm chi phí:
-- Dùng sticker khi tải cao hoặc cho nhóm miễn phí vượt ngưỡng.
-- Gom batch ảnh trên GPU, hàng đợi theo ưu tiên.
-- Giảm độ phân giải xử lý (xử lý vùng mặt cắt, không xử lý cả ảnh).
-- GPU theo yêu cầu (serverless) nếu lưu lượng thấp và thất thường.
+- Client nén ảnh trước khi upload (đã làm).
+- Xoá ảnh khỏi R2 khi xoá bài (chưa làm, xem 14.4).
+- Hạn mức ảnh/ngày theo gói.
 
 ## 2.5 Phí store và thanh toán
 
 - Apple/Google lấy 15–30% phí; giá niêm yết phải tính cả khoản này.
 - Quyền lợi chỉ được mở sau khi billing-service **xác thực chữ ký webhook / hoá đơn**. Không mở quyền chỉ dựa vào tuyên bố của client.
 - Hoàn tiền/huỷ: nhận thông báo từ store, phát `SUBSCRIPTION_EXPIRED` hoặc thu hồi vật phẩm.
+- **Thanh toán web** (đã có code, chưa chạy với tài khoản thật): PayPal (USD) và VietQR qua payOS (VND) trên trang `/pay/**`. Giá web lưu riêng trong `products` (`price_usd_cents`, `price_vnd`) và hiện là **giá tạm** (ví dụ Pro tháng 2,99 USD / 79.000 VND). Thuê bao web trả trước theo kỳ, không tự gia hạn. Phí cổng web thấp hơn store nhưng **app phát hành trên App Store/Google Play vẫn phải dùng thanh toán trong ứng dụng** cho hàng hoá số; dẫn người dùng sang trang web có thể bị từ chối khi duyệt. payOS không có sandbox.
 
 ## 2.6 Chỉ số theo dõi
 

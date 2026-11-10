@@ -88,6 +88,15 @@ class AvatarAllocationIntegrationTest {
     }
 
     @Test
+    void origamiLibraryV2KeepsEveryKeyOnV1() {
+        // v2 chỉ vẽ lại hình (docs/19 §3.2, ADR-015): khoá vẫn thuộc phiên bản đầu tiên có nó.
+        assertEquals(2, library.latestVersion());
+        assertEquals(3000, library.allKeys().size());
+        assertTrue(library.allKeys().values().stream().allMatch(v -> v == 1));
+        assertEquals("1:fox:0:none", library.find("fox:0:none").orElseThrow().code());
+    }
+
+    @Test
     void concurrentRegistrationsNeverShareAnAvatar() throws Exception {
         ExecutorService exec = Executors.newFixedThreadPool(10);
         List<Future<MvcResult>> futures = new ArrayList<>();

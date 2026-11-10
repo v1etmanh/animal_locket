@@ -69,7 +69,6 @@ classDiagram
     class S3ObjectStorage {
         <<@Component>>
         -MinioClient client
-        -MinioClient signer
         -String bucket
         +presignUpload(String key, String contentType, Duration ttl) PresignedPut
         +presignDownload(String key, Duration ttl) String
@@ -256,7 +255,7 @@ sequenceDiagram
             Listener->>MS: onUserDeleted(publicId)
             MS->>Repo: findByOwnerPublicId(publicId)
             loop Từng MediaJob của người dùng
-                MS->>S3: delete(rawKey) & delete(publicKey)
+                MS->>S3: delete(rawKey) (publicKey trùng rawKey)
                 MS->>Repo: jobs.delete(job)
             end
             MS->>Repo: ownerAnimals.deleteById(publicId)

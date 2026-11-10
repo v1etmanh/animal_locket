@@ -2,10 +2,14 @@ import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
+import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
+import 'package:animal_locket/core/widgets/album/polaroid.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
@@ -14,25 +18,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+/// Hồ sơ của tôi như một trang album (spec §7.7).
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(profileControllerProvider);
     return AppPage(
-      actions: [
-        IconButton(
-          onPressed: () => context.push('/settings'),
-          icon: const Icon(Icons.settings_outlined),
-          tooltip: 'Cài đặt',
-        ),
-      ],
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
-          child: FilledButton(
+          child: PaperButton(
+            label: 'Không tải được · Thử lại',
             onPressed: ref.read(profileControllerProvider.notifier).refresh,
-            child: const Text('Không tải được · Thử lại'),
           ),
         ),
         data: (data) => _ProfileContent(data: data),
@@ -45,109 +43,136 @@ class _ProfileContent extends ConsumerWidget {
   const _ProfileContent({required this.data});
   final ProfileData data;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Column(
-    children: [
-      Align(
-        alignment: Alignment.centerRight,
-        child: IconButton(
-          onPressed: () => context.push('/settings'),
-          icon: const Icon(Icons.settings_outlined),
-          tooltip: 'Cài đặt',
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.album;
+    final heading = Theme.of(context).textTheme.headlineMedium;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: PaperTileButton(
+            icon: AlbumIcons.settings,
+            label: 'Cài đặt',
+            size: 48,
+            onPressed: () => context.push('/settings'),
+          ),
         ),
-      ),
-      AnimalAvatar(
-        avatar: data.profile.avatar,
-        leadAnimal: data.profile.leadAnimal,
-        size: 130,
-      ),
-      const SizedBox(height: 14),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Text(
-              data.profile.displayAlias,
-              style: Theme.of(context).textTheme.headlineLarge,
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Polaroid(
+              width: 124,
+              tiltDegrees: -4,
+              caption: '',
+              child: AnimalAvatar(
+                avatar: data.profile.avatar,
+                leadAnimal: data.profile.leadAnimal,
+                size: 124,
+                square: true,
+              ),
             ),
-          ),
-          IconButton(
-            onPressed: () => _editAlias(context, ref),
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Đổi biệt danh',
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      Text(
-        'Thành viên ${data.profile.plan == AccountPlan.pro ? 'Pro' : 'Free'}',
-        style: const TextStyle(color: AppColors.muted),
-      ),
-      const SizedBox(height: 20),
-      Row(
-        children: [
-          Expanded(
-            child: _Stat(
-              value: '${data.avatars.length}',
-              label: 'Avatar sở hữu',
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          data.profile.displayAlias,
+                          style: Theme.of(context).textTheme.headlineLarge,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      PaperTileButton(
+                        icon: AlbumIcons.edit,
+                        label: 'Đổi biệt danh',
+                        size: 48,
+                        onPressed: () => _editAlias(context, ref),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Thành viên ${data.profile.plan == AccountPlan.pro ? 'Pro' : 'Free'}',
+                    style: TextStyle(color: p.muted),
+                  ),
+                  const SizedBox(height: 16),
+                  TapedNote(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${data.avatars.length}',
+                            style: TextStyle(
+                              color: p.accent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '  Avatar sở hữu',
+                            style: TextStyle(color: p.muted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 24),
-      const _FriendsStrip(),
-      const SizedBox(height: 24),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          'Ảnh của tôi',
-          style: Theme.of(context).textTheme.headlineMedium,
+          ],
         ),
-      ),
-      const SizedBox(height: 12),
-      PostsGrid(
-        publicId: data.profile.publicId,
-        mine: true,
-        emptyText: 'Bạn chưa đăng ảnh nào.',
-      ),
-      const SizedBox(height: 24),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          'Bộ sưu tập',
-          style: Theme.of(context).textTheme.headlineMedium,
+        const SizedBox(height: 28),
+        const _FriendsStrip(),
+        const SizedBox(height: 24),
+        Text('Ảnh của tôi', style: heading),
+        const SizedBox(height: 12),
+        PostsGrid(
+          publicId: data.profile.publicId,
+          mine: true,
+          emptyText: 'Bạn chưa đăng ảnh nào.',
         ),
-      ),
-      const SizedBox(height: 6),
-      const Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
+        const SizedBox(height: 24),
+        Text('Bộ sưu tập', style: heading),
+        const SizedBox(height: 6),
+        Text(
           'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.',
-          style: TextStyle(color: AppColors.muted, fontSize: 12),
+          style: TextStyle(color: p.muted, fontSize: 12),
         ),
-      ),
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 13,
-        runSpacing: 13,
-        children: [
-          for (final owned in data.avatars)
-            Tooltip(
-              message:
-                  AvatarLibraries.instance.animalName(owned.avatar) ??
-                  owned.avatar,
-              child: AnimalAvatar(avatar: owned.avatar, size: 72),
-            ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      if (data.profile.ageGroup == AgeGroup.adult &&
-          data.profile.plan != AccountPlan.pro)
-        OutlinedButton(
-          onPressed: () => context.push('/pro'),
-          child: const Text('Khám phá Animal Locket Pro'),
+        const SizedBox(height: 18),
+        // Album sticker: mỗi avatar là một polaroid nhỏ có tên con vật.
+        Wrap(
+          spacing: 14,
+          runSpacing: 18,
+          children: [
+            for (final (i, owned) in data.avatars.indexed)
+              Polaroid(
+                width: 92,
+                tiltDegrees: i.isEven ? -2.5 : 2,
+                caption:
+                    AvatarLibraries.instance.animalName(owned.avatar) ?? '',
+                child: AnimalAvatar(
+                  avatar: owned.avatar,
+                  size: 92,
+                  square: true,
+                ),
+              ),
+          ],
         ),
-    ],
-  );
+        const SizedBox(height: 24),
+        if (data.profile.ageGroup == AgeGroup.adult &&
+            data.profile.plan != AccountPlan.pro)
+          PaperButton(
+            label: 'Khám phá Animal Locket Pro',
+            icon: AlbumIcons.bolt,
+            onPressed: () => context.push('/pro'),
+          ),
+      ],
+    );
+  }
 
   Future<void> _editAlias(BuildContext context, WidgetRef ref) async {
     final alias = await showDialog<String>(
@@ -181,12 +206,13 @@ class _ProfileContent extends ConsumerWidget {
   }
 }
 
-/// Hàng avatar bạn bè cuộn ngang; chạm một người để mở trang của họ.
+/// Hàng polaroid bạn bè cuộn ngang; chạm một người để mở trang của họ.
 class _FriendsStrip extends ConsumerWidget {
   const _FriendsStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.album;
     final friends = ref.watch(friendsControllerProvider);
     final count = friends.value?.friends.length;
     return Column(
@@ -200,77 +226,76 @@ class _FriendsStrip extends ConsumerWidget {
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
             ),
-            TextButton(
+            PaperButton.tape(
+              label: 'Xem tất cả',
               onPressed: () => context.push('/friends'),
-              child: const Text('Xem tất cả'),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         friends.when(
           loading: () => const SizedBox(
             height: 96,
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (_, _) => TextButton(
+          error: (_, _) => PaperButton.tape(
+            label: 'Không tải được bạn bè · Thử lại',
             onPressed: () => ref.invalidate(friendsControllerProvider),
-            child: const Text('Không tải được bạn bè · Thử lại'),
           ),
           data: (data) => data.friends.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Chưa có bạn bè nào.',
-                          style: TextStyle(color: AppColors.muted),
-                        ),
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Chưa có bạn bè nào.',
+                        style: TextStyle(color: p.muted),
                       ),
-                      TextButton(
-                        onPressed: () => context.go('/discover'),
-                        child: const Text('Tìm bạn'),
-                      ),
-                    ],
-                  ),
+                    ),
+                    PaperButton.tape(
+                      label: 'Tìm bạn',
+                      onPressed: () => context.go('/discover'),
+                    ),
+                  ],
                 )
               : SizedBox(
-                  height: 104,
+                  height: 108,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     itemCount: data.friends.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final person = data.friends[index];
                       return Semantics(
                         button: true,
                         label: 'Mở trang của ${person.displayAlias}',
+                        excludeSemantics: true,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
                           onTap: () => context.push('/user/${person.publicId}'),
                           child: SizedBox(
-                            width: 76,
+                            width: 72,
                             child: Column(
                               children: [
                                 Stack(
+                                  clipBehavior: Clip.none,
                                   children: [
-                                    AnimalAvatar(
+                                    MiniPolaroidAvatar(
                                       avatar: person.avatar,
                                       leadAnimal: person.leadAnimal,
-                                      size: 64,
+                                      index: index,
                                     ),
                                     if (data.online[person.publicId] == true)
                                       Positioned(
-                                        right: 2,
-                                        bottom: 2,
+                                        right: -3,
+                                        bottom: 4,
                                         child: Container(
-                                          width: 14,
-                                          height: 14,
+                                          width: 13,
+                                          height: 13,
                                           decoration: BoxDecoration(
-                                            color: AppColors.green,
+                                            color: onlineGreen,
                                             shape: BoxShape.circle,
                                             border: Border.all(
-                                              color: Colors.white,
+                                              color: p.paper,
                                               width: 2,
                                             ),
                                           ),
@@ -278,7 +303,7 @@ class _FriendsStrip extends ConsumerWidget {
                                       ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 8),
                                 Text(
                                   person.displayAlias,
                                   maxLines: 1,
@@ -298,27 +323,4 @@ class _FriendsStrip extends ConsumerWidget {
       ],
     );
   }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label});
-  final String value;
-  final String label;
-  @override
-  Widget build(BuildContext context) => GlassContainer(
-    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-    child: Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.muted, fontSize: 10),
-        ),
-      ],
-    ),
-  );
 }

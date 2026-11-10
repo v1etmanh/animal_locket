@@ -6,9 +6,9 @@
 |---|---|---|
 | JDK | 17 | Spring Boot 3.3.5 |
 | Maven | 3.9.x | Không có wrapper; dùng `mvn` cài sẵn |
-| Python | 3.12 | Cho `face-worker` |
 | Docker Desktop | 4.x+ | Chỉ cần khi chạy cả hệ thống / Testcontainers; **không bắt buộc** để build và chạy test |
-| GPU NVIDIA 8–12 GB VRAM | tuỳ chọn | Chỉ cho AI inpainting |
+| Flutter SDK | theo `mobile/pubspec.yaml` (Dart `^3.13`) | Chỉ khi làm app `mobile/` |
+| Node.js | bản LTS | Chỉ khi sinh lại thư viện avatar (`node libs/avatar-lib/build-lib.mjs`) |
 
 ## 13.2 Cấu trúc repo
 
@@ -17,12 +17,13 @@ animal-locket/
 ├─ pom.xml                       parent + danh sách module
 ├─ libs/common                   dùng chung (xem 3.9)
 ├─ libs/outbox-jpa               Outbox + idempotency
+├─ libs/avatar-lib               build-lib.mjs sinh thư viện avatar (xem 19)
 ├─ infra/config-server | eureka-server | api-gateway | config-repo
 ├─ services/user | media | post | notification | discovery | chat | billing -service
-├─ face-worker/                  Python (facework/, tests/, tools/evaluate.py, Dockerfile)
-├─ deploy/                       Traefik, Keycloak realm, MinIO policy, observability, init SQL, Dockerfile.java
+├─ mobile/                       app Flutter
+├─ deploy/                       Traefik, Keycloak realm, observability, init SQL, Dockerfile.java
 ├─ docs/                         tài liệu (file này nằm ở đây)
-└─ docker-compose.yml            (do nhánh hạ tầng cung cấp)
+└─ docker-compose.yml
 ```
 
 Mỗi service Java: `config/`, `domain/` (entity), `repo/`, `service/`, `web/` (controller), `dto/`, `messaging/` (Kafka listener), `client/` (gọi service khác), `src/main/resources/{application.yml, db/migration/V*.sql}`, `src/test/{java, resources/application.yml}`.
@@ -40,7 +41,7 @@ mvn -B -pl services/user-service -am install
 | Service | Cần chạy kèm |
 |---|---|
 | user | MySQL (`user_db`), Kafka (tuỳ chọn: không có thì outbox chỉ tích luỹ), Keycloak (xác thực JWT) |
-| media | MySQL (`media_db`), Kafka, MinIO, user-service |
+| media | MySQL (`media_db`), Kafka, bucket R2 (hoặc kho S3 tương thích qua `R2_ENDPOINT`), user-service (khi xem ảnh của người khác) |
 | post | MySQL (`post_db`), Redis, Kafka, user-service |
 | discovery | Redis, user-service (+ billing cho Boost) |
 | chat | MongoDB, Redis, user-service, media-service |
@@ -97,22 +98,22 @@ Xem [07-event-catalog.md](07-event-catalog.md) mục 7.8.
 3. Thêm route vào gateway; thêm vào Compose, Prometheus (`deploy/observability/prometheus`), tài liệu 03/04.
 4. Test: tạo `src/test/resources/application.yml` riêng (H2/in-memory, `animal.kv.type=memory`, `animal.outbox.relay.enabled=false`, `spring.kafka.listener.auto-startup=false`, `eureka.client.enabled=false`, `spring.cloud.config.enabled=false`) và `@MockBean JwtDecoder`.
 
-### Thêm tính năng cho face-worker
-Thêm module nhỏ trong `facework/`, nối vào `Pipeline`/`FaceReplacer`, viết test trong `tests/` dùng `FixedDetector`/`FakeStorage`/`FakePublisher` (`tests/helpers.py`). Mọi thay đổi định dạng event Python phải cập nhật `FaceWorkerContractTest`.
+### Đổi thư viện avatar
+Chỉ sửa `libs/avatar-lib/build-lib.mjs` rồi chạy `node libs/avatar-lib/build-lib.mjs`. Phiên bản đã phát hành không được đổi nghĩa, chỉ thêm phiên bản mới. Chi tiết: [19-avatar-mechanism.md](19-avatar-mechanism.md).
 
 ## 13.6 Git và commit
 
-- Nhánh: `main` luôn xanh và triển khai được; làm việc trên `feat/<mô-tả>`, `fix/<mô-tả>`; PR nhỏ (một mối quan tâm).
-- Commit theo Conventional Commits: `feat(user): thêm cooldown alias`, `fix(face-worker): đăng ký pillow-heif`, `docs: …`, `test: …`, `chore: …`. Tiêu đề ≤ 72 ký tự, thân giải thích **vì sao**.
+- Nhánh: `master` luôn xanh và triển khai được; làm việc trên `feat/<mô-tả>`, `fix/<mô-tả>`; PR nhỏ (một mối quan tâm).
+- Commit theo Conventional Commits: `feat(user): thêm cooldown alias`, `fix(media): kiểm tra Content-Type khi complete`, `docs: …`, `test: …`, `chore: …`. Tiêu đề ≤ 72 ký tự, thân giải thích **vì sao**.
 - PR phải: build xanh, có test, không thêm bí mật, cập nhật tài liệu, đánh dấu rõ nếu thay đổi hợp đồng API/event.
-- Bắt buộc review thêm người thứ hai với thay đổi chạm: DTO công khai, `LocationPrivacy`, `CommonAutoConfiguration`, `IdentityFilter`, billing, face-worker.
+- Bắt buộc review thêm người thứ hai với thay đổi chạm: DTO công khai, `LocationPrivacy`, `CommonAutoConfiguration`, `IdentityFilter`, billing, `AvatarAllocator`.
 
-## 13.7 CI/CD (gợi ý)
+## 13.7 CI/CD (gợi ý — repo **chưa có** `.github/workflows`)
 
 ```yaml
 # .github/workflows/ci.yml
 name: ci
-on: { pull_request: {}, push: { branches: [main] } }
+on: { pull_request: {}, push: { branches: [master] } }
 jobs:
   java:
     runs-on: ubuntu-latest
@@ -121,18 +122,19 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17, cache: maven }
       - run: mvn -B install                       # Docker có sẵn → test Testcontainers (Mongo) cũng chạy
-  python:
+  mobile:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: face-worker } }
+    defaults: { run: { working-directory: mobile } }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12', cache: pip }
-      - run: pip install -r requirements-dev.txt
-      - run: pytest -q
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
   docker:
-    needs: [java, python]
-    if: github.ref == 'refs/heads/main'
+    needs: [java, mobile]
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:                                      # build image từng service (deploy/docker/Dockerfile.java, MODULE_PATH=…)
       - uses: actions/checkout@v4
@@ -143,7 +145,7 @@ Thêm: quét phụ thuộc (Dependabot/OWASP), quét bí mật (gitleaks), job n
 
 ## 13.8 Checklist onboarding
 
-- [ ] Cài JDK 17, Maven, Python 3.12; chạy `mvn -B install` và `pytest` xanh.
+- [ ] Cài JDK 17, Maven; chạy `mvn -B install` xanh (làm mobile thì thêm Flutter và `flutter test`).
 - [ ] Đọc README → 01 → 03 → 09 (riêng tư) → tài liệu của khu vực bạn làm.
 - [ ] Đọc `libs/common` (Headers, `ApiException`, `CommonAutoConfiguration`) và `libs/outbox-jpa`.
 - [ ] Chạy một service cục bộ và gọi thử bằng `curl` với `animal.security.enabled=false` + header `X-Public-Id`.
@@ -154,8 +156,7 @@ Thêm: quét phụ thuộc (Dependabot/OWASP), quét bí mật (gitleaks), job n
 
 | # | Bẫy | Hệ quả/Cách tránh |
 |---|---|---|
-| 1 | **OpenCV 5.x đã bỏ Haar cascade** (`cv2.data.haarcascades` rỗng, không có `CascadeClassifier`) | Ghim `opencv-python-headless>=4.9,<5` (đã làm trong `requirements.txt`); không nâng lên 5 |
-| 2 | **`pillow-heif` có trong `requirements` nhưng chưa được đăng ký** | HEIC bị `UNREADABLE_IMAGE`; cần `pillow_heif.register_heif_opener()` |
+| 1–2 | (Bẫy của face-worker Python: OpenCV 5 bỏ Haar, `pillow-heif` chưa đăng ký) | Không còn áp dụng — face-worker đã gỡ |
 | 3 | **Hibernate 6.5 + MySQL + `ddl-auto: validate`** có thể báo sai kiểu cột enum | Mặc định `JPA_DDL_AUTO=none` cho MySQL; kiểm tra với MySQL thật rồi bật `validate` |
 | 4 | **Bộ thẻ discovery = lân cận HOẶC đang online**; `updateLocation` cũng đánh dấu online | Người ở xa vẫn có thẻ (không có khoảng cách). Khi viết test, đặt "người ở xa không online" qua `store.putLocation` |
 | 5 | **Dữ liệu test dùng chung** trong context Spring (H2/`InMemoryKeyValueStore`) | Dọn trong `@BeforeEach`; đặt hạn mức test đủ lớn hoặc kiểm hạn mức bằng unit test riêng |
@@ -165,8 +166,8 @@ Thêm: quét phụ thuộc (Dependabot/OWASP), quét bí mật (gitleaks), job n
 | 9 | `IdempotencyService.firstTime` cũng `MANDATORY`; listener phải `@Transactional` | Quên annotation → lỗi `IllegalTransactionStateException` |
 | 10 | `spring-cloud-starter-config` bắt buộc cần `spring.config.import` | Đã dùng `optional:configserver:` nên chạy được khi không có Config Server |
 | 11 | `common` đặt Redis là `optional` | Service cần Redis phải tự thêm `spring-boot-starter-data-redis` |
-| 12 | Chữ ký presigned URL gắn với **host** | `minio.endpoint` (nội bộ) khác `minio.public-endpoint` (điện thoại truy cập) — đặt sai thì upload thất bại `SignatureDoesNotMatch` |
-| 13 | Trong form POST S3, trường `file` **phải là trường cuối cùng** | Client đặt sai thứ tự sẽ bị MinIO từ chối |
+| 12 | **R2 không hỗ trợ presigned POST** | Dùng presigned PUT; chữ ký không ràng buộc cỡ/`Content-Type` nên `complete` phải kiểm tra lại (đã làm) |
+| 13 | Upload PUT thẳng tới R2 không được gắn `Authorization` của app | Client dùng HTTP client riêng không có Bearer JWT (`_unsignedDio` trong `LiveMediaRepository`) |
 | 14 | Spring không có `HttpClientErrorException.PaymentRequired` | So sánh `getStatusCode().value()` cho 402 |
 | 15 | `ApiExceptionHandler` có handler `Exception` chung | Đừng bắt `Exception` rộng ở nơi khác làm mất mã lỗi chuẩn; handler đã ném lại lỗi bảo mật/404/405 |
-| 16 | Mặc định `dev-internal-token`, `config-dev-password`, `minioadmin`, `DISCOVERY_SECRET` dev | Chỉ cho dev; **đổi ở mọi môi trường thật** |
+| 16 | Mặc định `dev-internal-token`, `config-dev-password`, `R2_ACCESS_KEY=changeme`, `DISCOVERY_SECRET` dev | Chỉ cho dev; **đổi ở mọi môi trường thật** |

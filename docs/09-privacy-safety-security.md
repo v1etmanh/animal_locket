@@ -13,8 +13,8 @@ Tài liệu ánh xạ các cam kết ẩn danh/an toàn trong kế hoạch sang 
 | Không lộ người dùng có thật hay không | `404` thay vì `403` cho bài/ảnh/hồ sơ không được phép xem; hồ sơ giữa hai bên có chặn đều `404` |
 | Event/Kafka không chứa dữ liệu định danh | Payload chỉ `publicId` và mã nghiệp vụ; `MESSAGE_SENT` không chứa nội dung |
 | Push không lộ danh tính | Tiêu đề/nội dung chung chung (`NotificationPlanner`); `data` chỉ có `type`, `postId`/`conversationId`/`mediaId` |
-| Mặt thật không đến được người khác | Pipeline ẩn mặt + fail closed ([08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md)); `PostView` không có đường dẫn kho ảnh; ảnh xem qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè |
-| EXIF/GPS bị xoá | `decode_clean` tạo ảnh mới từ điểm ảnh, có test chứng minh |
+| ~~Mặt thật không đến được người khác~~ | **Không còn đảm bảo** (ADR-014): ảnh hiển thị nguyên khuôn mặt. Còn lại: chỉ chủ ảnh và bạn bè không bị chặn xem được; `PostView` không có đường dẫn kho ảnh; ảnh xem qua URL ký sẵn 10 phút sau khi kiểm tra bạn bè |
+| EXIF/GPS bị xoá | **Chỉ ở client**: app nén lại ảnh với `keepExif: false` (`ImagePreparationService`). Server **không** kiểm tra — client sửa đổi có thể gửi ảnh kèm GPS |
 
 Quy tắc code (bắt buộc khi review): **mọi DTO mới trả cho người khác chỉ được chứa `publicId`, alias, con vật** hoặc dữ liệu của chính người gọi. Test `cardsNeverExposeCoordinatesOrDistancesInMeters` dùng reflection để bắt trường toạ độ trong `Card`; nên có test tương tự cho DTO mới.
 
@@ -69,7 +69,8 @@ Quy tắc code (bắt buộc khi review): **mọi DTO mới trả cho người k
 | T4 | Lạm dụng URL upload ký sẵn | Biểu mẫu POST policy ràng buộc `key`, `Content-Type`, kích thước 1..10 MB, hết hạn 5 phút; bucket `raw` private và tự xoá ≤ 1 giờ | Quota 60 upload/giờ/người. Kiểm tra magic-bytes được thực hiện ở worker (`UNREADABLE_IMAGE`). Cân nhắc quét virus nếu cho phép định dạng khác |
 | T5 | IDOR trên bài/ảnh/hội thoại | Mọi truy cập bài kiểm tra `tác giả hoặc bạn bè` + `PUBLISHED`; ảnh kiểm tra chủ/bạn/chặn; hội thoại kiểm tra `participants`; job media chỉ chủ xem được (`ownedJob`). Sai quyền → `404` | Test đã có cho các trường hợp chính; thêm test bảo mật tự động (xem [12-testing-strategy.md](12-testing-strategy.md)) |
 | T6 | Liệt kê (enumeration) người dùng/ảnh | `publicId` ngẫu nhiên 100 bit; id ảnh là UUID; mọi lỗi quyền là `404` | Tránh trả lỗi khác nhau theo trường hợp (đã làm với bài/ảnh/hồ sơ) |
-| T7 | Giả mạo webhook thanh toán | `/webhooks/**` công khai ở gateway; billing phải tự xác thực chữ ký (Apple JWS chuỗi chứng chỉ, Google OIDC của Pub/Sub) và **luôn hỏi lại store** trước khi cấp quyền | Phần endpoint webhook chưa có trong code lúc viết; trước khi bật phải có test chữ ký giả/hết hạn |
+| T7 | Giả mạo webhook thanh toán | `/webhooks/**` công khai ở gateway; billing tự xác thực chữ ký (Apple JWS chuỗi chứng chỉ, Google OIDC của Pub/Sub, PayPal `verify-webhook-signature`, payOS HMAC-SHA256 so sánh thời gian không đổi) và **luôn hỏi lại bên thanh toán** trước khi cấp quyền; chữ ký đúng cũng không tự quyết định quyền lợi | Đã có code + test chữ ký sai → 401; chưa chạy với bên thật |
+| T7b | Giả mạo/đoán trang thanh toán web `/pay/{token}` | Mã 32 byte ngẫu nhiên, chỉ lưu SHA-256, sống 30 phút; `publicId` lấy từ phiên, không từ URL; tham số trên URL quay về (không được ký) chỉ dùng làm gợi ý; số tiền chốt lúc tạo phiên và đối chiếu với số thu thật | Link bị lộ (chia sẻ, lịch sử trình duyệt) cho người khác trả tiền **thay** chủ phiên — không lộ dữ liệu, không cấp quyền cho người khác |
 | T8 | Dùng lại biên lai (replay / chia sẻ) | `UNIQUE(store, store_transaction_id)`; biên lai đã gắn tài khoản khác → `409 RECEIPT_ALREADY_USED` | — |
 | T9 | Tin vào biên lai của client | `StoreRouter` chỉ cấp quyền từ `VerifiedPurchase` do gateway store trả; store chưa bật → từ chối. `DevStoreGateway` mặc định **tắt** | Đảm bảo `BILLING_DEV_STORE=false` ở production (nên có kiểm tra khởi động cảnh báo) |
 | T10 | Chiếm phiên WebSocket | JWT được kiểm tra ở bước HTTP Upgrade; `X-Public-Id` bắt buộc; khung ≤ 16 KB; idle 120 giây; rate limit 20 tin/10 giây | JWT truyền trong header (không trong query string để khỏi vào log). Token hết hạn khi phiên đang mở: phiên **không** bị ngắt — cần giới hạn thời gian sống phiên hoặc ping kiểm tra lại |
@@ -93,11 +94,12 @@ Quy tắc code (bắt buộc khi review): **mọi DTO mới trả cho người k
 | Khoá gọi nội bộ | `INTERNAL_TOKEN` | Đổi khỏi mặc định |
 | Khoá offset vị trí | `DISCOVERY_SECRET` | ≥ 16 ký tự; **đổi sẽ làm toàn bộ offset đổi** — chỉ đổi cùng lúc xoá dữ liệu vị trí |
 | DB | `DB_USER`, `DB_PASSWORD` | Mỗi service một user chỉ có quyền trên DB của nó (production) |
-| MinIO | `MINIO_ACCESS_KEY/SECRET_KEY` | Tài khoản riêng cho worker/media-service, giới hạn theo bucket |
+| Cloudflare R2 | `R2_ACCESS_KEY/R2_SECRET_KEY` | Token chỉ có quyền *Object Read & Write* trên đúng bucket |
 | Config Server | `CONFIG_USER/CONFIG_PASSWORD` | |
 | Keycloak Admin | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service account chỉ có quyền xoá user |
 | FCM | `FCM_CREDENTIALS_FILE` | File khoá dịch vụ, mount read-only |
-| Store | khoá Apple (.p8), service account Google | Chưa dùng trong code lúc viết |
+| Store | khoá Apple (.p8), service account Google | Đặt ở `deploy/secrets/`, mount read-only |
+| Thanh toán web | `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` | Để trống = tắt kênh; checksum key không bao giờ gửi ra ngoài |
 
 Không commit bí mật; `.env` nằm trong `.gitignore`.
 
@@ -108,7 +110,7 @@ Cửa hàng ứng dụng yêu cầu với ứng dụng có nội dung người d
 ## 9.9 Điểm cần rà soát pháp lý (không phải tư vấn pháp lý)
 
 - **Trẻ vị thành niên**: kế hoạch cho phép mọi lứa tuổi. Nhiều khu vực yêu cầu độ tuổi tối thiểu và sự đồng ý của cha mẹ cho trẻ nhỏ (ví dụ 13 tuổi theo COPPA ở Mỹ, 13–16 theo GDPR tuỳ nước) và hạn chế dữ liệu vị trí/quảng cáo/tin nhắn với người lạ. Code chỉ **tự khai ngày sinh** (không xác minh). Cần luật sư rà soát trước khi phát hành, đặc biệt tính năng lân cận và chat với người lạ có liên quan trẻ em.
-- **Dữ liệu sinh trắc học**: xử lý khuôn mặt để che có thể bị coi là xử lý dữ liệu nhạy cảm ở một số luật (GDPR, BIPA…) dù không lưu khuôn mặt. Ảnh gốc xoá ngay, không gửi ra bên thứ ba — cần ghi vào chính sách quyền riêng tư.
+- **Ảnh có khuôn mặt người**: server không còn xử lý khuôn mặt (không phát hiện, không che), nhưng lưu ảnh có mặt thật — kể cả mặt của người khác không dùng app — trên Cloudflare R2 (bên thứ ba lưu trữ) tới khi xoá tài khoản. Cần ghi vào chính sách quyền riêng tư và cân nhắc quyền yêu cầu gỡ ảnh của người xuất hiện trong ảnh.
 - **Xoá dữ liệu / quyền của chủ thể dữ liệu**: App Store và Google Play yêu cầu xoá tài khoản trong ứng dụng; code đáp ứng luồng cơ bản (9.4) nhưng cần chốt thời hạn lưu `reports`, backup, log, Kafka.
 - **Lưu trữ dữ liệu tại Việt Nam**: cân nhắc quy định về lưu trữ/xuất dữ liệu nếu vận hành tại Việt Nam.
 - **Thanh toán**: tuân thủ chính sách in-app purchase của Apple/Google; người dưới 18 cần cơ chế đồng ý của phụ huynh do nền tảng cung cấp.

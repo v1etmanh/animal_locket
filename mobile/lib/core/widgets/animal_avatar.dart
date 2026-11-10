@@ -1,6 +1,5 @@
 import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/avatar/avatar_library.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -15,6 +14,7 @@ class AnimalAvatar extends StatelessWidget {
     this.size = 64,
     this.colorIndex = 0,
     this.locked = false,
+    this.square = false,
   });
 
   final String? emoji;
@@ -23,6 +23,9 @@ class AnimalAvatar extends StatelessWidget {
   final double size;
   final int colorIndex;
   final bool locked;
+
+  /// Vẽ vuông (trong khung polaroid) thay vì cắt tròn.
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +40,16 @@ class AnimalAvatar extends StatelessWidget {
         return Semantics(
           image: true,
           label: name == null ? 'Ảnh đại diện con vật' : 'Ảnh đại diện: $name',
-          child: ClipOval(
-            child: SvgPicture.string(
-              svg,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-            ),
-          ),
+          child: square
+              ? SvgPicture.string(svg, width: size, height: size)
+              : ClipOval(
+                  child: SvgPicture.string(
+                    svg,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                  ),
+                ),
         );
       },
     );
@@ -67,8 +72,10 @@ class AnimalAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           color: locked
               ? Colors.transparent
-              : AppColors.pastels[colorIndex % AppColors.pastels.length],
-          border: locked ? Border.all(color: AppColors.border, width: 2) : null,
+              : _pastels[colorIndex % _pastels.length],
+          border: locked
+              ? Border.all(color: const Color(0xFFE8E5EE), width: 2)
+              : null,
         ),
         child: Text(
           locked ? '?' : glyph,
@@ -78,3 +85,13 @@ class AnimalAvatar extends StatelessWidget {
     );
   }
 }
+
+/// Nền dự phòng khi chưa có SVG avatar.
+const _pastels = <Color>[
+  Color(0xFFFFF1C2),
+  Color(0xFFB1EEF3),
+  Color(0xFFD0F7A3),
+  Color(0xFFF5D3B3),
+  Color(0xFFE6DDF5),
+  Color(0xFFFCE3CB),
+];

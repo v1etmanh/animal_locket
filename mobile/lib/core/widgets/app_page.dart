@@ -1,4 +1,4 @@
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/app_background.dart';
 import 'package:flutter/material.dart';
 
@@ -34,7 +34,7 @@ class AppPage extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 title: Text(title!),
-                foregroundColor: AppColors.ink,
+                foregroundColor: context.album.ink,
                 actions: actions,
               ),
         body: body,
@@ -51,8 +51,8 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
-        color: AppColors.purple,
+      style: TextStyle(
+        color: context.album.accent,
         fontSize: 12,
         fontWeight: FontWeight.w700,
         letterSpacing: 1,
@@ -72,15 +72,15 @@ class InfoPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color ?? Colors.white.withValues(alpha: .72),
+        color: color ?? context.album.paper,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.album.fold1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: AppColors.purple),
+            Icon(icon, size: 15, color: context.album.accent),
             const SizedBox(width: 5),
           ],
           Text(

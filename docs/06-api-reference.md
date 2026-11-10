@@ -6,7 +6,7 @@ Mọi đường dẫn dưới đây đi qua gateway (`https://<domain>`) trừ p
 
 | Mục | Quy ước |
 |---|---|
-| Tiền tố | `/api/v1` (billing webhook: `/webhooks/**`; WebSocket: `/ws/chat`) |
+| Tiền tố | `/api/v1` (billing webhook: `/webhooks/**`; trang thanh toán web: `/pay/**`; WebSocket: `/ws/chat`) |
 | Xác thực | `Authorization: Bearer <JWT Keycloak>` trên mọi request (trừ `/webhooks/**`) |
 | Danh tính | Gateway gắn `X-Public-Id`; client **không** được tự gửi (bị gateway xoá). Người dùng chưa đăng ký hồ sơ chỉ gọi được `POST /users/register`; các endpoint khác trả `403 PROFILE_REQUIRED` |
 | Định dạng | JSON UTF-8, thời gian ISO-8601 UTC (`2026-11-06T03:21:45.123Z`) |
@@ -86,26 +86,28 @@ AnimalView   {code, name, rarity: "COMMON|RARE|EPIC", packCode|null}
 
 ```
 1. POST /api/v1/media/uploads  {context, refId?, contentType, sizeBytes}
-        ← 201 {mediaId, uploadUrl, fields:{...}, expiresInSeconds: 300}
-2. POST <uploadUrl>   (multipart/form-data, gửi THẲNG tới MinIO qua Traefik, không qua gateway)
-        các trường của "fields" đúng nguyên văn, rồi trường "file" PHẢI LÀ TRƯỜNG CUỐI CÙNG
-        Content-Type của phần file = contentType đã khai báo; kích thước 1..10 MB
-        ← 204 từ MinIO
+        ← 201 {mediaId, uploadUrl, headers:{"Content-Type": ...}, expiresInSeconds: 300}
+2. PUT <uploadUrl>    (thân = file, gửi THẲNG tới Cloudflare R2, không qua gateway/Traefik)
+        gắn đúng các "headers" đã nhận; KHÔNG gắn Authorization của app
+        ← 200 từ R2
 3. POST /api/v1/media/{mediaId}/complete
-        ← 200 {mediaId, status:"UPLOADED"}     (phát PHOTO_UPLOADED)
-4. Hỏi trạng thái:  GET /api/v1/media/{mediaId}  →  UPLOADED → READY | REJECTED
-   (hoặc chờ push PHOTO_REJECTED; với POST thì bài tự chuyển PUBLISHED)
-5. Xem ảnh đã ẩn mặt:  GET /api/v1/media/{mediaId}/url  → {url, expiresInSeconds: 600}
+        ← 200 {mediaId, status:"READY", method:"NONE"}            (phát PHOTO_READY)
+           hoặc {status:"REJECTED", rejectReason:"FILE_TOO_LARGE"|"UNSUPPORTED_MEDIA_TYPE"}  (phát PHOTO_REJECTED)
+4. Với context=POST bài tự chuyển PUBLISHED khi post-service nhận PHOTO_READY
+   (GET /api/v1/media/{mediaId} để xem lại trạng thái)
+5. Xem ảnh:  GET /api/v1/media/{mediaId}/url  → {url, expiresInSeconds: 600}
 ```
+
+R2 không hỗ trợ presigned POST, nên lúc upload không ràng buộc được cỡ file; `complete` đọc cỡ và `Content-Type` thật của object rồi mới quyết định. Ảnh không qua xử lý nào ở server: client phải tự xoá EXIF/GPS trước khi upload.
 
 | Method & đường dẫn | Request | Response | Lỗi |
 |---|---|---|---|
-| `POST /media/uploads` | `{context: POST\|CHAT, refId?(≤64), contentType: image/jpeg\|png\|webp\|heic, sizeBytes(1..50_000_000)}` | `201 {mediaId, uploadUrl, fields, expiresInSeconds}` | `400 UNSUPPORTED_MEDIA_TYPE`, `400 FILE_TOO_LARGE` (> 10 MB), `429 UPLOAD_LIMIT` (60/giờ) |
-| `POST /media/{id}/complete` | — | `{mediaId, status, method, rejectReason}` | `409 NOT_UPLOADED`, `404`, `503 USER_SERVICE_UNAVAILABLE` |
+| `POST /media/uploads` | `{context: POST\|CHAT, refId?(≤64), contentType: image/jpeg\|png\|webp\|heic, sizeBytes(1..50_000_000)}` | `201 {mediaId, uploadUrl, headers, expiresInSeconds}` | `400 UNSUPPORTED_MEDIA_TYPE`, `400 FILE_TOO_LARGE` (> 10 MB), `429 UPLOAD_LIMIT` (60/giờ) |
+| `POST /media/{id}/complete` | — | `{mediaId, status, method, rejectReason}` | `409 NOT_UPLOADED`, `404` |
 | `GET /media/{id}` | — | `{mediaId, status, method, rejectReason}` | 404 (chỉ chủ ảnh) |
 | `GET /media/{id}/url` | — | `{url, expiresInSeconds}` | 404 (chưa `READY`, không phải chủ/bạn, hoặc bị chặn) |
 
-`status`: `PENDING_UPLOAD`, `UPLOADED`, `READY`, `REJECTED`. `method`: `AI`, `STICKER`, `NONE`.
+`status`: `PENDING_UPLOAD`, `READY`, `REJECTED`. `method`: luôn `NONE` khi `READY` (giữ trường cho tương thích; không còn ẩn mặt).
 
 ---
 
@@ -115,6 +117,7 @@ AnimalView   {code, name, rarity: "COMMON|RARE|EPIC", packCode|null}
 |---|---|---|---|---|
 | `POST /posts` | Tạo bài từ `mediaId` đã upload | `{mediaId, caption?(≤200)}` | `201 PostView` (`PENDING_MEDIA` hoặc `PUBLISHED` nếu ảnh đã xong) | `403 FORBIDDEN` (ảnh của người khác), `429 PHOTO_LIMIT` |
 | `GET /posts/mine` | Bài của tôi (mọi trạng thái trừ `DELETED`) | `?limit` | `[PostView]` | |
+| `GET /posts/by/{publicId}` | Bài của một người, mới nhất trước (lưới "ảnh của tôi"/hồ sơ bạn). Chính mình: mọi trạng thái trừ `DELETED`, phân trang theo `createdAt`; bạn bè: chỉ `PUBLISHED`, theo `publishedAt` | `?before=&limit=30` (tối đa 50) | `{items:[PostView], nextBefore, degraded:false}` | `404` (không phải bạn, hoặc không xác minh được quan hệ) |
 | `GET /posts/{id}` | Xem bài | — | `PostView` | 404 (không phải tác giả/bạn, hoặc chưa `PUBLISHED`) |
 | `DELETE /posts/{id}` | Xoá bài (tác giả) | — | `204` | 404 |
 | `GET /feed` | Feed bạn bè + của tôi | `?before=&limit=20` | `{items:[PostView], nextBefore, degraded}` | — (lỗi bạn bè → `degraded:true`, `items:[]`) |
@@ -201,10 +204,13 @@ Tin ảnh (khi được bật): client tạo upload với `context=CHAT`, `refId
 
 | Method & đường dẫn | Mô tả | Request | Response | Lỗi |
 |---|---|---|---|---|
-| `GET /billing/products` | Danh mục đang bán | — | `[{sku, type, item, quantity}]` | |
+| `GET /billing/products` | Danh mục đang bán | — | `[{sku, type, item, quantity, priceUsdCents, priceVnd, periodDays}]` (giá web `null` = không bán qua kênh đó) | |
 | `GET /billing/me` | Gói hiện tại và ví | — | `{plan: FREE\|PRO, planExpiresAt, wallet:{BOOST:n,PRIORITY_INVITE:n}}` | |
 | `POST /billing/purchases/verify` | Gửi giao dịch vừa mua/khôi phục; server tự hỏi store | `{store: APPLE\|GOOGLE\|DEV, sku, token}` (`token` = transactionId của Apple hoặc purchaseToken của Google) | `MeResponse` như `/me` | `400 UNKNOWN_PRODUCT`, `400 INVALID_RECEIPT`, `400 SKU_MISMATCH`, `400 RECEIPT_REVOKED`, `409 RECEIPT_ALREADY_USED`, `503 STORE_UNAVAILABLE` |
-| `POST /webhooks/apple`, `POST /webhooks/google` | Thông báo từ store (công khai, **tự xác thực chữ ký**) | theo định dạng của store | `2xx` khi đã xử lý; `5xx` để store gửi lại | *(chưa có trong code tại thời điểm viết; cấu hình đã khai báo `public-paths: /webhooks/**`)* |
+| `POST /billing/checkout-sessions` | Xin link trang thanh toán web (PayPal/VietQR) | `{sku}` | `201 {url, expiresAt}` — `url` = `<PAYPAL_RETURN_BASE_URL>/pay/<mã dùng một lần>`, sống 30 phút | `400 UNKNOWN_PRODUCT`, `400 NOT_PURCHASABLE_ONLINE`, `503 PAYMENT_UNAVAILABLE` |
+| `POST /webhooks/apple`, `/webhooks/google`, `/webhooks/paypal`, `/webhooks/payos` | Thông báo từ store/cổng thanh toán (công khai, **tự xác thực chữ ký**) | theo định dạng của từng bên | `2xx` khi đã xử lý hoặc bỏ qua; `401` chữ ký sai; `5xx` để bên gửi gửi lại | |
+
+**Trang thanh toán web** (`/pay/**`, HTML, không qua `/api/v1`, không cần JWT): app mở `url` bằng trình duyệt; xong trang kết quả mở lại app qua deep link `PAYPAL_APP_RETURN_URL` (mặc định `animallocket://checkout`). App nên gọi lại `GET /billing/me` sau khi quay về. Luồng chi tiết: `services/billing-service/PAYPAL.md`, `PAYOS.md`.
 
 Client chỉ **kết thúc giao dịch với store** sau khi nhận `200` từ `verify`. `store=DEV` chỉ hoạt động khi `animal.billing.dev-store.enabled=true` (token `dev:<transactionId>[:<originalTransactionId>[:<expiresEpochSeconds>]]`) và **không bao giờ bật ở production**.
 

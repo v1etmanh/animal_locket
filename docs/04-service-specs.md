@@ -19,10 +19,11 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 | discovery-service | `/api/v1/discovery/**` (CB `discovery` + limiter chặt 2 req/s, burst 10) | `lb://discovery-service` |
 | chat-ws | `/ws/**` | `lb:ws://chat-service` |
 | chat-service | `/api/v1/chat/**` | `lb://chat-service` |
-| billing-service | `/api/v1/billing/**, /webhooks/**` | `lb://billing-service` |
+| billing-service | `/api/v1/billing/**, /webhooks/**, /pay/**` | `lb://billing-service` |
 
 - `/internal/**` **không có route** nên không bao giờ ra ngoài.
-- **Công khai (không JWT)**: `/actuator/health/**`, `/actuator/prometheus`, `/fallback/**`, `/webhooks/**`, mọi `OPTIONS`.
+- **Công khai (không JWT)**: `/actuator/health/**`, `/actuator/prometheus`, `/fallback/**`, `/webhooks/**`, `/pay/**` (trang thanh toán web), mọi `OPTIONS`.
+- **Rate limit** mặc định 20 req/s, burst 40 (khoá = `publicId` hoặc IP từ `X-Forwarded-For`).
 - **Lỗi**: user-service không trả lời và chưa có cache → `503 IDENTITY_UNAVAILABLE`; mạch mở → `503 SERVICE_UNAVAILABLE` (hoặc discovery trả rỗng).
 - **Cấu hình**: `KEYCLOAK_JWK_URI`, `REDIS_HOST/PORT`, `EUREKA_URL`, `INTERNAL_TOKEN`, `animal.security.enabled`.
 
@@ -36,56 +37,56 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.3 user-service (8101, MySQL `user_db`)
 
-**Trách nhiệm**: danh tính ẩn danh, kết bạn, chặn, báo cáo, bộ sưu tập con vật, quay thưởng, thiết bị push, bản sao quyền lợi Pro.
+**Trách nhiệm**: danh tính ẩn danh, **avatar con vật duy nhất** ([19-avatar-mechanism.md](19-avatar-mechanism.md)), kết bạn, chặn, báo cáo, gói con vật (bộ sưu tập cũ), thiết bị push, bản sao quyền lợi Pro.
 
-**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `spin_log`, `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
+**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `avatar_pool`, `user_avatars`, `spin_log` (legacy), `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
 
-**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, đổi con vật chủ đạo (Pro), con vật đã sở hữu, quay thưởng, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị.
+**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, bộ sưu tập avatar, con vật đã sở hữu, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị. `PUT /users/me/lead-animal` và `POST /users/me/spin` **đã ngừng** (`410 FEATURE_RETIRED`).
 **API nội bộ**: `identity/{sub}`, `users/{id}`, `users?ids=`, `friends/{id}`, `relationship`, `exclusions/{id}`, `swipes/right`, `devices/{id}`, `DELETE devices/{token}`.
 
-**Event phát** (Outbox): `USER_REGISTERED`, `USER_DELETED`, `USER_BLOCKED`, `LEAD_ANIMAL_CHANGED` (topic `user.events`); `FRIEND_REQUEST_RECEIVED`, `FRIEND_ACCEPTED` (topic `friend.events`).
-**Event nhận** (`billing.events`, group `user-service`): `SUBSCRIPTION_ACTIVATED/EXPIRED` → bảng `entitlements`; `CONSUMABLE_GRANTED` với `item=ANIMAL_PACK:<mã>` → thêm con vật của gói.
+**Event phát** (Outbox): `USER_REGISTERED` (kèm `avatar`), `USER_DELETED`, `USER_BLOCKED`, `DISCOVERY_DISABLED` (khi tắt `discoverable`), `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED` (khi cấp avatar cho tài khoản cũ) (topic `user.events`); `FRIEND_REQUEST_RECEIVED`, `FRIEND_ACCEPTED`, `FRIEND_REMOVED` (topic `friend.events`).
+**Event nhận** (`billing.events`, group `user-service`): `SUBSCRIPTION_ACTIVATED/EXPIRED` → bảng `entitlements`; `CONSUMABLE_GRANTED` với `item=ANIMAL_PACK:<mã>` → thêm con vật của gói vào `user_animals`.
 
 **Quy tắc nghiệp vụ chính**
 - Đăng ký idempotent theo `sub`. Ngày sinh → `ageGroup` (`MINOR` nếu dưới 18). Tuổi > 120 hoặc ngày sinh tương lai → `400 INVALID_BIRTHDATE`. Không chặn theo tuổi.
 - `discoverable` mặc định **false** cho mọi người.
-- Con vật đầu tiên: ngẫu nhiên trong nhóm COMMON của bộ cơ bản. Alias gợi ý dạng "`<Tên con vật> <Tính từ> <3 chữ số>`".
+- **Avatar**: lúc đăng ký "quay" đúng một lần — `AvatarAllocator` lấy ngẫu nhiên một avatar còn trống trong `avatar_pool` (UPDATE có điều kiện, nên không hai người trùng) trong cùng transaction; `lead_animal` = con vật của avatar. Alias gợi ý theo tên con vật đó nếu người dùng không nhập. Kho được nạp lúc khởi động (`AvatarPoolSeeder`, thư viện v1: 50 con × 10 màu × 6 phụ kiện = 3.000). Tài khoản cũ chưa có avatar được cấp lúc khởi động (`AvatarBackfill`). Avatar **không bao giờ thu hồi**, kể cả khi xoá tài khoản.
 - Alias: 3–20 ký tự (chữ, số, khoảng trắng, `_ . -`), chặn từ khoá (`admin`, `moderator`, `support`, `animallocket`, `staff` — so sánh sau khi bỏ dấu), đổi tối đa 1 lần/24 giờ.
-- Đổi con vật chủ đạo: cần Pro (`402 PRO_REQUIRED`) và đã sở hữu (`400 ANIMAL_NOT_OWNED`).
-- Quay thưởng: chọn theo trọng số COMMON 70 / RARE 25 / EPIC 5 trong bộ cơ bản chưa sở hữu; cooldown free 7 ngày, Pro 1 ngày.
+- Đổi con vật chủ đạo và quay thưởng miễn phí: **đã ngừng** (`410 FEATURE_RETIRED`); quay thêm sẽ gắn với nạp tiền (docs/19 §8, chưa làm).
+- **Dev buddy** (`DEV_BUDDY_PUBLIC_ID`, chỉ dev): nếu đặt, mỗi tài khoản mới tự thành bạn với tài khoản này. Để trống ở production.
 - `connect(from,to,source)` (dùng cho quẹt phải và lời mời): chặn → `BLOCKED`; khác nhóm tuổi → `403`; đã là bạn → `ALREADY_FRIENDS`; bên kia đã mời → `MATCHED` (thành bạn ngay, phát `FRIEND_ACCEPTED`); đã mời → `ALREADY_REQUESTED`; vượt hạn mức → `429 INVITE_LIMIT`; còn lại tạo/tái dùng lời mời → `REQUESTED` (phát `FRIEND_REQUEST_RECEIVED`).
 - Chặn: lưu `blocks`, xoá quan hệ bạn, huỷ lời mời đang chờ hai chiều, phát `USER_BLOCKED`. Hồ sơ người chặn/bị chặn trả `404` cho nhau.
-- Xoá tài khoản: xoá quan hệ/chặn/thiết bị/con vật/lượt quay/quyền lợi, ẩn danh bản ghi (`alias="deleted"`, `keycloak_sub="deleted:<publicId>"`, `birth_date=null`), phát `USER_DELETED`, gọi Keycloak Admin xoá user. Lỗi Keycloak → rollback (người dùng thử lại).
+- Huỷ kết bạn: xoá quan hệ, phát `FRIEND_REMOVED` (post xoá cache bạn bè, chat đóng hội thoại).
+- Xoá tài khoản: xoá quan hệ/chặn/thiết bị/con vật/lượt quay/quyền lợi (giữ avatar), ẩn danh bản ghi (`alias="deleted"`, `keycloak_sub="deleted:<publicId>"`, `birth_date=null`), phát `USER_DELETED`, gọi Keycloak Admin xoá user. Lỗi Keycloak → rollback (người dùng thử lại).
 - Báo cáo: tối đa 20/24 giờ. **Không xoá `reports` khi xoá tài khoản** (giữ cho an toàn/pháp lý).
 
-**Cấu hình**: `animal.limits.invites-per-day.free|pro` (20/80), `animal.limits.spin-interval.free|pro` (7d/1d), `keycloak.admin.url|realm|client-id|client-secret`, `DB_URL/DB_USER/DB_PASSWORD`, `KAFKA_BOOTSTRAP`.
+**Cấu hình**: `animal.limits.invites-per-day.free|pro` (20/80), `animal.limits.spin-interval.free|pro` (còn trong YAML, không còn dùng), `animal.dev-buddy.public-id` (`DEV_BUDDY_PUBLIC_ID`), `keycloak.admin.url|realm|client-id|client-secret`, `DB_URL/DB_USER/DB_PASSWORD`, `KAFKA_BOOTSTRAP`.
 
 **Khi lỗi**: Keycloak Admin không cấu hình → `NoopIdentityProviderClient` chỉ ghi cảnh báo (chỉ cho dev). Kafka tạm hỏng không ảnh hưởng ghi DB (event nằm trong outbox).
 
 ---
 
-## 4.4 media-service (8103, MySQL `media_db` + MinIO)
+## 4.4 media-service (8103, MySQL `media_db` + Cloudflare R2)
 
-**Trách nhiệm**: cấp biểu mẫu upload (presigned POST policy), theo dõi job ảnh, nhận kết quả từ face-worker, phát `PHOTO_*`, cấp URL xem ngắn hạn, dọn ảnh gốc.
+**Trách nhiệm**: cấp URL upload ký sẵn (presigned PUT), kiểm tra ảnh khi client báo xong, phát `PHOTO_READY/REJECTED`, cấp URL xem ngắn hạn, dọn job bỏ dở. **Không xử lý ảnh** (face-worker đã gỡ; client tự nén và xoá EXIF).
 
-**Dữ liệu**: `media_jobs` (trạng thái `PENDING_UPLOAD → UPLOADED → READY | REJECTED`), `owner_animals`, outbox/processed. MinIO: bucket `raw` (khoá `{mediaId}.{ext}`), `public` (khoá `pub/{mediaId}.jpg`).
+**Dữ liệu**: `media_jobs` (trạng thái `PENDING_UPLOAD → READY | REJECTED`), `owner_animals`, outbox/processed. R2: **một** bucket private (`R2_BUCKET`), khoá `{mediaId}.{ext}`; `publicKey` = `rawKey` (cùng object, không sao chép). Các cột `method`, `faces_detected`, `lead_animal` còn trong bảng nhưng không còn ý nghĩa (`method = "NONE"`, `faces_detected = 0`).
 
 **API**: `POST /media/uploads`, `POST /media/{id}/complete`, `GET /media/{id}`, `GET /media/{id}/url`; nội bộ `GET /internal/media/{id}`.
 
-**Event phát**: `PHOTO_UPLOADED`, `PHOTO_READY`, `PHOTO_REJECTED` (topic `media.events`, khoá = `mediaId`).
-**Event nhận** (group `media-service`): `FACE_PROCESSED`, `FACE_FAILED` (topic `media.results`); `USER_REGISTERED`, `LEAD_ANIMAL_CHANGED` → `owner_animals`; `USER_DELETED` → xoá job và object.
+**Event phát**: `PHOTO_READY`, `PHOTO_REJECTED` (topic `media.events`, khoá = `mediaId`).
+**Event nhận** (group `media-service`, topic `user.events`): `USER_REGISTERED`, `LEAD_ANIMAL_CHANGED` → `owner_animals` (bản sao hiện không được đọc ở đâu); `USER_DELETED` → xoá job và object.
 
 **Quy tắc**
 - Chỉ nhận `image/jpeg|png|webp|heic`, tối đa `animal.media.max-bytes` (10 MB), tối đa 60 yêu cầu upload/giờ/người (`UPLOAD_LIMIT`).
-- Biểu mẫu POST có điều kiện `key`, `Content-Type`, `content-length-range 1..max` và hết hạn sau 5 phút; client không thể tự chọn khoá hay vượt kích thước.
-- `complete`: kiểm tra object tồn tại (`409 NOT_UPLOADED` nếu chưa), con vật chủ đạo lấy từ `owner_animals` hoặc REST sang user-service, rồi phát `PHOTO_UPLOADED` (idempotent: gọi lại không phát thêm).
-- **Khác kế hoạch**: kế hoạch để face-worker phát thẳng `PHOTO_READY/REJECTED`. Code dùng **hai bước**: worker phát `FACE_PROCESSED/FACE_FAILED` lên `media.results`; media-service cập nhật job rồi phát `PHOTO_READY/REJECTED` qua Outbox, để trạng thái job và event luôn nhất quán.
+- `POST /media/uploads` trả `{mediaId, uploadUrl, headers, expiresInSeconds: 300}`. Client `PUT` file tới `uploadUrl` kèm đúng `headers` (`Content-Type`). R2 **không hỗ trợ presigned POST** nên không ràng buộc được cỡ file lúc upload.
+- `complete`: kiểm tra object tồn tại (`409 NOT_UPLOADED` nếu chưa), rồi kiểm tra lại cỡ và `Content-Type` thật của object (chữ ký PUT không khoá được hai thứ này). Sai → xoá object, job `REJECTED` (`FILE_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE`), phát `PHOTO_REJECTED`. Đúng → job `READY`, phát `PHOTO_READY`. Idempotent: gọi lại khi job đã khỏi `PENDING_UPLOAD` chỉ trả trạng thái.
 - Xem ảnh (`/url`): chủ ảnh, hoặc bạn bè **không bị chặn**; còn lại `404`. URL ký sẵn hiệu lực 10 phút.
-- Dọn dẹp định kỳ (`MediaJanitor`): job `UPLOADED` quá `processing-timeout` (10 phút) → `REJECTED/PROCESSING_TIMEOUT` + xoá raw; job `PENDING_UPLOAD` quá 1 giờ bị xoá; mọi object `raw` cũ hơn `raw-max-age` (1 giờ) bị xoá (quét mỗi 10 phút).
+- Dọn dẹp định kỳ (`MediaJanitor`, mỗi 60 giây, tắt bằng `animal.media.janitor.enabled=false`): job `PENDING_UPLOAD` quá 1 giờ bị xoá cùng object.
 
-**Cấu hình**: `minio.endpoint` (nội bộ) và `minio.public-endpoint` (địa chỉ điện thoại truy cập được, chữ ký gắn với host), `minio.access-key/secret-key`, `animal.media.*`.
+**Cấu hình**: `storage.endpoint` (`R2_ENDPOINT`, dạng `https://<account-id>.r2.cloudflarestorage.com`), `storage.region=auto`, `storage.access-key/secret-key` (`R2_ACCESS_KEY/R2_SECRET_KEY`), `storage.bucket` (`R2_BUCKET`), `animal.media.*`.
 
-**Khi lỗi**: user-service lỗi và thiếu bản sao con vật → `503`; worker chết → job tự `REJECTED` sau 10 phút (không bao giờ tự đăng).
+**Khi lỗi**: user-service lỗi khi xem ảnh của người khác → không cấp URL (fail closed). R2 lỗi → `complete` lỗi, client gọi lại được (idempotent).
 
 ---
 
@@ -95,16 +96,16 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 **Dữ liệu**: `posts`, `post_likes`, `comments`, `media_states`, outbox/processed. Redis: `quota:photo:*`, `pro:*`, `friends:*`.
 
-**API**: tạo/xem/xoá bài, bài của tôi, feed (`before`, `limit`), like/unlike, bình luận (thêm/liệt kê/xoá).
+**API**: tạo/xem/xoá bài, bài của tôi, bài của một người (`/posts/by/{publicId}`, chỉ chính mình hoặc bạn bè), feed (`before`, `limit`), like/unlike, bình luận (thêm/liệt kê/xoá).
 
 **Event phát** (`post.events`): `POST_PUBLISHED`, `POST_LIKED` (không phát khi tự like), `POST_COMMENTED`.
-**Event nhận** (group `post-service`): `PHOTO_READY/REJECTED` (chỉ `context=POST`), `USER_DELETED`, `USER_BLOCKED` và `FRIEND_ACCEPTED` (xoá cache bạn bè), `SUBSCRIPTION_ACTIVATED/EXPIRED` (khoá `pro:{id}`).
+**Event nhận** (group `post-service`): `PHOTO_READY/REJECTED` (chỉ `context=POST`), `USER_DELETED`, `USER_BLOCKED`, `FRIEND_ACCEPTED` và `FRIEND_REMOVED` (xoá cache bạn bè), `SUBSCRIPTION_ACTIVATED/EXPIRED` (khoá `pro:{id}`).
 
 **Quy tắc**
-- Tạo bài từ `mediaId` đã upload. Bài ở `PENDING_MEDIA`; chuyển `PUBLISHED` khi `PHOTO_READY` và **chủ ảnh trùng tác giả** (sai → `REJECTED/OWNER_MISMATCH`). `PHOTO_READY` đến **trước** khi tạo bài được xử lý nhờ bảng `media_states`.
+- Tạo bài từ `mediaId` đã upload. Bài ở `PENDING_MEDIA`; chuyển `PUBLISHED` khi `PHOTO_READY` và **chủ ảnh trùng tác giả** (sai → `REJECTED/OWNER_MISMATCH`). `PHOTO_READY` đến **trước** khi tạo bài được xử lý nhờ bảng `media_states`; `PendingPostReconciler` (mỗi 3 giây, `animal.post.reconcile-interval-ms`) gỡ bài kẹt `PENDING_MEDIA` khi đã có kết quả trong `media_states` (cuộc đua giữa tạo bài và listener).
 - Hạn mức ảnh: free 10, Pro 50 mỗi ngày giờ Việt Nam; ảnh bị từ chối được hoàn lượt.
-- Chỉ tác giả và bạn bè thấy bài `PUBLISHED`; người khác nhận `404` (không lộ sự tồn tại). Chỉ lưu `publicKey` ảnh đã ẩn mặt và **không bao giờ** trả ra DTO.
-- Xoá bài: trạng thái `DELETED`, xoá like/bình luận. (Ảnh trong MinIO chưa được xoá — xem [14-roadmap-risks.md](14-roadmap-risks.md).)
+- Chỉ tác giả và bạn bè thấy bài `PUBLISHED`; người khác nhận `404` (không lộ sự tồn tại). Chỉ lưu `publicKey` của ảnh và **không bao giờ** trả ra DTO.
+- Xoá bài: trạng thái `DELETED`, xoá like/bình luận. (Ảnh trên R2 chưa được xoá — xem [14-roadmap-risks.md](14-roadmap-risks.md).)
 
 **Cấu hình**: `animal.limits.photos-per-day.free|pro` (10/50), `animal.kv.type`, `REDIS_HOST`.
 **Khi lỗi**: user-service lỗi → feed trả rỗng `degraded=true`; xem bài lẻ `404`.
@@ -127,14 +128,15 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 **Trách nhiệm**: vị trí gần đúng, trạng thái online, bộ thẻ quẹt, lượt quẹt phải, Boost.
 
-**Dữ liệu (Redis)**: `geo:{ageGroup}`, `geo:exp:{ageGroup}`, `online:{ageGroup}`, `boost`, `swipe:left:{me}`, `swipe:right:{me}`, khoá hạn mức qua `KeyValueStore` ([05-data-model.md](05-data-model.md)).
+**Dữ liệu (Redis)**: `geo:{ageGroup}`, `geo:exp:{ageGroup}`, `online:{ageGroup}`, `presence:{id}`, `boost`, `swipe:left:{me}`, `swipe:right:{me}`, khoá hạn mức qua `KeyValueStore` ([05-data-model.md](05-data-model.md)).
 
 **API**: `PUT/DELETE /discovery/location`, `POST /heartbeat`, `GET /presence?ids=`, `GET /cards`, `POST /swipes`, `POST /boost`.
 
-**Event nhận** (group `discovery-service`): `USER_DELETED` → xoá mọi dấu vết; `SUBSCRIPTION_*` → khoá `pro:{id}`. `USER_BLOCKED`/`FRIEND_ACCEPTED` **không cần** xử lý vì danh sách loại trừ lấy trực tiếp từ user-service mỗi lần.
+**Event nhận** (group `discovery-service`): `USER_DELETED` → xoá mọi dấu vết; `DISCOVERY_DISABLED` → xoá vị trí, online và Boost (giữ lịch sử quẹt); `SUBSCRIPTION_*` → khoá `pro:{id}`. `USER_BLOCKED`/`FRIEND_ACCEPTED` **không cần** xử lý vì danh sách loại trừ lấy trực tiếp từ user-service mỗi lần.
 
 **Quy tắc**
 - Cập nhật vị trí chỉ khi hồ sơ đang `discoverable`; vị trí được làm tròn lưới 500 m, cộng độ lệch cố định theo người, TTL 30 phút; chỉ ghép trong cùng nhóm tuổi ([09-privacy-safety-security.md](09-privacy-safety-security.md)).
+- Heartbeat ghi `presence:{id}` cho mọi người (bạn bè xem qua `GET /presence`, chỉ trả trạng thái của bạn bè); chỉ người đang `discoverable` mới vào danh sách online của bộ thẻ.
 - **Bộ thẻ = người lân cận HOẶC đang online** (online = heartbeat trong 60 giây). Người online ngoài bán kính vẫn có thẻ nhưng **không có mức khoảng cách**. Bán kính: người lớn 10 km, dưới 18 5 km.
 - Loại trừ: chính mình, bạn bè, chặn hai chiều, đã quẹt trái trong 30 ngày, đã quẹt phải. Hồ sơ ứng viên được lấy **mới** từ user-service để lọc `active && discoverable && cùng nhóm tuổi`.
 - Sắp xếp: đang Boost → gần hơn → đang online → `publicId`.
@@ -149,16 +151,19 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.8 chat-service (8105, MongoDB + Redis)
 
-**Trách nhiệm**: hội thoại 1-1 giữa bạn bè, tin nhắn văn bản và ảnh, WebSocket thời gian thực.
+**Trách nhiệm**: hội thoại 1-1 giữa bạn bè, **chat bằng ký hiệu (glyph)** — mặc định là loại tin duy nhất được gửi mới —, tin văn bản/ảnh (tắt mặc định), từ điển glyph theo hội thoại, WebSocket thời gian thực. Kế hoạch chi tiết: [glyph-chat-implementation-plan/](glyph-chat-implementation-plan/).
 
-**Dữ liệu**: Mongo `conversations` (khoá duy nhất `a:b` theo thứ tự), `messages` (index `conversationId + createdAt desc`). Redis: pub/sub `chat:user:{id}`, `chat:conn:{id}`, `chat:rel:*`, `chat:rl:*`.
+**Dữ liệu**: Mongo `conversations` (khoá duy nhất `a:b` theo thứ tự), `messages` (index `conversationId + createdAt desc`), `conversation_glyphs` (từ điển glyph). Redis: pub/sub `chat:user:{id}`, `chat:conn:{id}`, `chat:rel:*`, `chat:rl:*`.
 
-**API**: REST (mở hội thoại, danh sách, lịch sử, gửi, đánh dấu đã đọc) và WebSocket `/ws/chat` ([06-api-reference.md](06-api-reference.md)).
+**API**: REST (mở hội thoại, danh sách, lịch sử, gửi, đánh dấu đã đọc), từ điển glyph `/chat/conversations/{id}/glyphs` (tạo, đồng bộ theo `afterRevision`, xem, archive) và WebSocket `/ws/chat` ([06-api-reference.md](06-api-reference.md)).
 
-**Event phát**: `MESSAGE_SENT` (topic `chat.events`, trực tiếp, không Outbox). **Event nhận** (group `chat-service`): `USER_BLOCKED` → đóng hội thoại và báo cả hai đầu; `FRIEND_ACCEPTED` → xoá cache quan hệ; `USER_DELETED` → xoá hội thoại và tin nhắn.
+**Event phát**: `MESSAGE_SENT` (topic `chat.events`, trực tiếp, không Outbox). **Event nhận** (group `chat-service`): `USER_BLOCKED` → đóng hội thoại và báo cả hai đầu; `FRIEND_ACCEPTED` → xoá cache quan hệ; `FRIEND_REMOVED` → đóng hội thoại (`UNFRIENDED`); `USER_DELETED` → xoá hội thoại và tin nhắn.
 
 **Quy tắc**
 - Chỉ mở/gửi khi `friends && !blocked` (cache 30 giây). Người lạ chỉ chat được sau khi **đã thành bạn** (lời mời được chấp nhận ≡ bạn bè).
+- Loại tin được gửi mới: `animal.chat.allowed-types` (`CHAT_ALLOWED_TYPES`, mặc định `GLYPH`); loại khác → `403 MESSAGE_TYPE_DISABLED`. Lịch sử TEXT/IMAGE vẫn đọc được.
+- Tin glyph: tối đa 12 glyph/tin, glyph phải `ACTIVE` trong từ điển của chính hội thoại; tin lưu kèm `dictionaryRevision` và trường `text` dự phòng (nghĩa các glyph nối bằng ` · `).
+- Từ điển glyph: glyph đã tạo **bất biến** (chỉ archive); hình được chuẩn hoá thành 64 điểm, trùng hình với glyph `ACTIVE` khác bị từ chối; tối đa 100 glyph `ACTIVE`/hội thoại, 20 lần tạo/người/ngày (UTC); màu thuộc bảng màu cấu hình. `revision` tăng dần mỗi hội thoại (max + 1, index unique, va chạm thì thử lại) để client đồng bộ delta. `GLYPH_WRITE_ENABLED=false` tắt tạo/archive/gửi glyph (rollback), vẫn đọc được.
 - Tin văn bản 1–2000 ký tự. Tin ảnh: `mediaId` phải của chính người gửi, `context=CHAT`, trạng thái `READY` (`INVALID_MEDIA`, `MEDIA_NOT_READY`).
 - Giới hạn 20 tin/10 giây/người (`CHAT_RATE_LIMIT`).
 - Xác thực WebSocket ngay lúc bắt tay: JWT (Spring Security) + `X-Public-Id` do gateway gắn; thiếu → `403`. Khung > 16 KB đóng kết nối.
@@ -170,13 +175,14 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 ## 4.9 billing-service (8106, PostgreSQL)
 
-**Trách nhiệm**: thuê bao Pro, mua lẻ (Boost, lời mời ưu tiên, gói con vật), ví/sổ cái vật phẩm, xác thực giao dịch với store, thu hồi khi hoàn tiền/hết hạn.
+**Trách nhiệm**: thuê bao Pro, mua lẻ (Boost, lời mời ưu tiên, gói con vật), ví/sổ cái vật phẩm, xác thực giao dịch với store (Apple/Google), **thanh toán web** (PayPal USD, VietQR/payOS VND), thu hồi khi hoàn tiền/hết hạn.
 
-**Dữ liệu**: `products` (seed 8 sản phẩm), `purchases`, `subscriptions`, `wallet_balances`, `wallet_ledger`, `webhook_events`, outbox/processed ([05-data-model.md](05-data-model.md)).
+**Dữ liệu**: `products` (seed 8 sản phẩm, kèm giá web `price_usd_cents`/`price_vnd`/`period_days`), `purchases`, `subscriptions`, `wallet_balances`, `wallet_ledger`, `webhook_events`, `checkout_sessions`, outbox/processed ([05-data-model.md](05-data-model.md)).
 
-**API công khai**: `GET /billing/products`, `GET /billing/me` (`plan`, `planExpiresAt`, `wallet`), `POST /billing/purchases/verify` (`{store, sku, token}`).
+**API công khai**: `GET /billing/products`, `GET /billing/me` (`plan`, `planExpiresAt`, `wallet`), `POST /billing/purchases/verify` (`{store, sku, token}`), `POST /billing/checkout-sessions` (`{sku}` → link trang thanh toán web).
+**Trang web** (không JWT, mã dùng một lần trên URL): `GET /pay/{token}`, `POST /pay/{token}/start` (PayPal), `POST /pay/{token}/payos` (VietQR), các đường `return`/`cancel` tương ứng.
 **API nội bộ**: `POST /internal/wallet/consume` (discovery trừ Boost), `GET /internal/wallet/{publicId}`.
-**Webhook** `POST /webhooks/apple`, `/webhooks/google`: cấu hình công khai (`animal.security.public-paths=/webhooks/**`) và hàm xử lý (`firstTimeWebhook`, `onSubscriptionUpdated/Ended`, `onRefund`) đã có trong `BillingService`, nhưng **controller nhận webhook chưa có trong code lúc viết tài liệu**.
+**Webhook** (công khai qua `animal.security.public-paths=/webhooks/**,/pay/**`, mỗi cái tự xác thực chữ ký, khử trùng lặp qua `webhook_events`): `POST /webhooks/apple` (JWS), `/webhooks/google` (OIDC Pub/Sub), `/webhooks/paypal` (`verify-webhook-signature`), `/webhooks/payos` (HMAC-SHA256). Chi tiết: `services/billing-service/STORES.md`, `PAYPAL.md`, `PAYOS.md`.
 
 **Event phát** (Outbox, topic `billing.events`): `SUBSCRIPTION_ACTIVATED` / `SUBSCRIPTION_EXPIRED` (theo trạng thái Pro hiện tại), `CONSUMABLE_GRANTED` (`BOOST`, `PRIORITY_INVITE`, `ANIMAL_PACK:<mã>`).
 **Event nhận** (group `billing-service`, topic `user.events`): chỉ `USER_DELETED` → xoá ví/sổ cái/thuê bao, ẩn danh `purchases`.
@@ -194,23 +200,27 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 **Cổng store (`StoreGateway`)**
 - `StoreRouter` chọn cổng theo `store`; store không có cổng (chưa cấu hình/tắt) → từ chối, không bao giờ cấp quyền.
 - `DevStoreGateway`: **chỉ khi `animal.billing.dev-store.enabled=true`** (mặc định tắt, biến `BILLING_DEV_STORE`); tin token do client khai (`dev:<tx>[:<orig>[:<expiresEpochSeconds>]]`). Tuyệt đối không bật ở production.
-- `AppleJwsVerifier`: xác thực JWS ES256 của Apple (chỉ chấp nhận `alg=ES256`, chuỗi `x5c` hợp lệ PKIX tới Apple Root CA đã cấu hình, OID đánh dấu của Apple, chữ ký hợp lệ; không có root cấu hình → từ chối). Không kiểm tra thu hồi chứng chỉ (OCSP/CRL). Cùng với `AppleProperties`, `GoogleProperties`, `StoreCaller` (retry/circuit breaker `store-apple`/`store-google`). **Cổng Apple/Google gọi API store thật chưa hoàn chỉnh trong code lúc viết, chưa thử sandbox.**
+- `AppleJwsVerifier`: xác thực JWS ES256 của Apple (chỉ chấp nhận `alg=ES256`, chuỗi `x5c` hợp lệ PKIX tới Apple Root CA đã cấu hình, OID đánh dấu của Apple, chữ ký hợp lệ; không có root cấu hình → từ chối). Không kiểm tra thu hồi chứng chỉ (OCSP/CRL). Cùng với `AppleProperties`, `GoogleProperties`, `StoreCaller` (retry/circuit breaker `store-apple`/`store-google`).
+- `AppleStoreGateway`, `GoogleStoreGateway` (+ `HttpGooglePlayClient`, `GoogleSubscriptionResolver`) chỉ được tạo khi đủ cấu hình (`StoreConfig`). Có code và test với chứng chỉ/HTTP giả; **chưa thử sandbox thật**.
+
+**Thanh toán web (`CheckoutService`)** — dành cho đồ án/bản web; app phát hành trên store vẫn phải dùng thanh toán trong ứng dụng cho hàng hoá số.
+1. App gọi `POST /billing/checkout-sessions {sku}` → `201 {url, expiresAt}`. Server sinh mã ngẫu nhiên 32 byte, chỉ lưu **SHA-256** của mã trong `checkout_sessions`, chốt `publicId` + `sku` + số tiền; phiên sống 30 phút. Không bật PayPal lẫn payOS → `503 PAYMENT_UNAVAILABLE`; sản phẩm không có giá web → `400 NOT_PURCHASABLE_ONLINE`.
+2. Trình duyệt mở `/pay/{token}` (Thymeleaf), chọn PayPal hoặc VietQR, được chuyển sang trang của nhà cung cấp.
+3. Khi quay về (hoặc khi webhook tới), server **hỏi lại trạng thái thật** ở PayPal/payOS, kiểm tra đúng đơn và đúng số tiền, rồi gọi `BillingService.grant` với `store = PAYPAL | PAYOS`. `publicId` luôn lấy từ phiên, không lấy từ URL. Capture và cấp quyền đều idempotent (F5, hai tab, webhook trùng).
+4. Thuê bao web là **trả trước theo kỳ** (`period_days`), không tự gia hạn. Hoàn tiền toàn phần/chargeback PayPal → `onRefund`; hoàn một phần giữ quyền lợi. Trả hai lần cho cùng phiên (PayPal rồi VietQR) → ghi log `ERROR` để hoàn tiền thủ công.
+5. Trạng thái phiên: `PENDING → APPROVING → COMPLETED`, hoặc `PAYMENT_HELD` (PayPal giữ tiền); huỷ trên trang nhà cung cấp đưa `APPROVING` về `PENDING`. Enum có `CANCELED` nhưng code hiện không gán; phiên quá hạn được nhận ra bằng `expires_at`.
+6. **payOS không có sandbox**: mọi giao dịch thử là tiền thật. Cả PayPal và payOS **chưa chạy với tài khoản thật** (test bằng HTTP giả).
 
 **Ví** (`WalletService`): `credit`/`debit` chạy bằng câu `UPDATE` nguyên tử, mỗi thay đổi có dòng sổ cái duy nhất theo `(reason, ref, item)` (`CHECK balance >= 0`). `consume` (nội bộ): `409 INSUFFICIENT_BALANCE` nếu không đủ; `400 UNKNOWN_ITEM`; `ref` là UUID ngẫu nhiên nên **không idempotent** theo yêu cầu gọi.
 
 **Hoàn tiền/hết hạn**: `onRefund` thu hồi tối đa số dư còn lại của vật phẩm mua lẻ, kết thúc thuê bao, giữ nguyên con vật của gói đã mở. `BillingMaintenance` mỗi 5 phút hạ thuê bao `ACTIVE` quá hạn **cộng thêm `animal.billing.expiry-grace` (1 giờ)** (chờ thông báo gia hạn đến muộn).
 
-**Cấu hình**: `animal.billing.expiry-grace` (1h), `expiry-interval-ms` (300000), `animal.billing.dev-store.enabled`, cấu hình Apple/Google (`AppleProperties`/`GoogleProperties`), `resilience4j.circuitbreaker.instances.store-apple|store-google`, `resilience4j.retry` (3 lần, 500 ms, luỹ thừa), `JPA_DDL_AUTO` (mặc định `validate`).
+**Cấu hình**: `animal.billing.expiry-grace` (1h), `expiry-interval-ms` (300000), `animal.billing.dev-store.enabled`, cấu hình Apple/Google (`AppleProperties`/`GoogleProperties`), PayPal (`PAYPAL_MODE` sandbox/live, `PAYPAL_CLIENT_ID/SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_RETURN_BASE_URL`, `PAYPAL_APP_RETURN_URL` mặc định `animallocket://checkout`), payOS (`PAYOS_CLIENT_ID/API_KEY/CHECKSUM_KEY`, `PAYOS_ORDER_CODE_BASE`) — để trống khoá = tắt kênh đó, `resilience4j.circuitbreaker.instances.store-apple|store-google`, `resilience4j.retry` (3 lần, 500 ms, luỹ thừa), `JPA_DDL_AUTO` (mặc định `validate`).
 
 **Khi lỗi**: fail closed — không xác minh được thì không cấp quyền; webhook xử lý lỗi nên trả 5xx để store gửi lại.
 
 ---
 
-## 4.10 face-worker (Python, không DB, cổng metrics 8110)
+## 4.10 face-worker — đã gỡ
 
-**Trách nhiệm**: biến `PHOTO_UPLOADED` thành ảnh đã ẩn mặt. Chi tiết ở [08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md).
-
-- Nhận `media.events` (group `face-worker`, commit thủ công sau khi xử lý xong), chỉ xử lý `PHOTO_UPLOADED`.
-- Phát `FACE_PROCESSED`/`FACE_FAILED` lên `media.results`; thông điệp lỗi hạ tầng sau 3 lần thử đi vào `media.events.dlq`.
-- Idempotent khi giao lại: nếu `pub/{mediaId}.jpg` đã tồn tại thì chỉ phát lại kết quả (đọc `method` và `faces` từ metadata object).
-- Cấu hình bằng biến môi trường (`KAFKA_BOOTSTRAP`, `MINIO_*`, `DETECTORS`, `AI_ENABLED`, ...).
+Worker Python ẩn mặt đã bị gỡ khỏi repo. media-service tự đánh dấu ảnh `READY` khi client báo upload xong (xem 4.4). Lịch sử thiết kế cũ ở [08-face-anonymization-pipeline.md](08-face-anonymization-pipeline.md).
