@@ -1,3 +1,9 @@
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
+import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:animal_locket/features/chat/domain/glyph_recognizer.dart';
 import 'package:animal_locket/features/chat/presentation/chat_controllers.dart';
@@ -85,208 +91,171 @@ class _GlyphComposerPanelState extends ConsumerState<GlyphComposerPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.album;
     final dictionary = ref.watch(
       conversationGlyphsProvider(widget.conversationId),
     );
     final composer = ref.watch(glyphComposerProvider(widget.conversationId));
-    return Material(
-      color: Theme.of(context).colorScheme.surface.withValues(alpha: .96),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        child: dictionary.when(
-          loading: () => const SizedBox(
-            height: 180,
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (_, _) => SizedBox(
-            height: 140,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(l10n.glyphDictionaryError),
-                  const SizedBox(height: 8),
-                  FilledButton.tonal(
-                    onPressed: () => ref.invalidate(
-                      conversationGlyphsProvider(widget.conversationId),
+    final notifier = ref.read(
+      glyphComposerProvider(widget.conversationId).notifier,
+    );
+    final canEdit = widget.enabled && !composer.busy;
+    // Tờ giấy đặt dưới đáy, mép trên răng cưa như giấy xé (spec §7.6).
+    return ClipPath(
+      clipper: const TornPaperClipper(),
+      child: Material(
+        color: p.paper,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+          child: dictionary.when(
+            loading: () => const SizedBox(
+              height: 180,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => SizedBox(
+              height: 140,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(l10n.glyphDictionaryError),
+                    const SizedBox(height: 8),
+                    PaperButton.tape(
+                      label: l10n.retry,
+                      onPressed: () => ref.invalidate(
+                        conversationGlyphsProvider(widget.conversationId),
+                      ),
                     ),
-                    child: Text(l10n.retry),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          data: (glyphs) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GlyphDrawingPad(
-                semanticsLabel: l10n.glyphDrawLabel,
-                hint: l10n.glyphDrawHint,
-                clearLabel: l10n.glyphClearStroke,
-                onStrokeComplete: (stroke) => _recognize(stroke, glyphs),
-              ),
-              const SizedBox(height: 8),
-              _RecognitionResult(
-                recognition: _recognition,
-                onAdd: (glyph) => ref
-                    .read(glyphComposerProvider(widget.conversationId).notifier)
-                    .add(glyph),
-              ),
-              if (glyphs.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(l10n.glyphDictionaryEmpty),
-                )
-              else ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    l10n.glyphQuickPick,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
+            data: (glyphs) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GlyphDrawingPad(
+                  semanticsLabel: l10n.glyphDrawLabel,
+                  hint: l10n.glyphDrawHint,
+                  clearLabel: l10n.glyphClearStroke,
+                  onStrokeComplete: (stroke) => _recognize(stroke, glyphs),
                 ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  height: 52,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: glyphs.take(12).length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 6),
-                    itemBuilder: (_, index) {
-                      final glyph = glyphs[index];
-                      return Semantics(
-                        button: true,
-                        label: glyph.meaning,
-                        child: IconButton.filledTonal(
-                          constraints: const BoxConstraints.tightFor(
-                            width: 48,
-                            height: 48,
-                          ),
-                          tooltip: glyph.meaning,
-                          onPressed: widget.enabled && !composer.busy
-                              ? () => ref
-                                    .read(
-                                      glyphComposerProvider(
-                                        widget.conversationId,
-                                      ).notifier,
-                                    )
-                                    .add(glyph)
-                              : null,
-                          icon: GlyphIcon(glyph: glyph, size: 28),
-                        ),
-                      );
-                    },
-                  ),
+                const SizedBox(height: 8),
+                _RecognitionResult(
+                  recognition: _recognition,
+                  onAdd: notifier.add,
                 ),
-              ],
-              if (composer.selected.isEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                if (glyphs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(l10n.glyphDictionaryEmpty),
+                  )
+                else ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
                     child: Text(
-                      l10n.glyphComposerEmpty,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      l10n.glyphQuickPick,
+                      style: TextStyle(
+                        color: p.muted,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                )
-              else
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (var i = 0; i < composer.selected.length; i++)
-                        GlyphToken(
-                          glyph: composer.selected[i],
-                          removeLabel: l10n.glyphRemoveToken(
-                            composer.selected[i].meaning,
-                          ),
-                          onRemove: widget.enabled && !composer.busy
-                              ? () => ref
-                                    .read(
-                                      glyphComposerProvider(
-                                        widget.conversationId,
-                                      ).notifier,
-                                    )
-                                    .removeAt(i)
-                              : null,
-                        ),
-                    ],
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 60,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: glyphs.take(12).length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (_, index) {
+                        final glyph = glyphs[index];
+                        return PaperTileButton(
+                          label: glyph.meaning,
+                          size: 52,
+                          onPressed: canEdit ? () => notifier.add(glyph) : null,
+                          child: GlyphIcon(glyph: glyph, size: 30),
+                        );
+                      },
+                    ),
                   ),
-                ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Semantics(
-                    button: true,
-                    label: l10n.glyphDictionary,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(
-                        width: 44,
-                        height: 44,
+                ],
+                if (composer.selected.isEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        l10n.glyphComposerEmpty,
+                        style: TextStyle(color: p.muted, fontSize: 13),
                       ),
-                      tooltip: l10n.glyphDictionary,
+                    ),
+                  )
+                else
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (var i = 0; i < composer.selected.length; i++)
+                            GlyphToken(
+                              glyph: composer.selected[i],
+                              removeLabel: l10n.glyphRemoveToken(
+                                composer.selected[i].meaning,
+                              ),
+                              onRemove: canEdit
+                                  ? () => notifier.removeAt(i)
+                                  : null,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    PaperTileButton(
+                      icon: AlbumIcons.book,
+                      label: l10n.glyphDictionary,
+                      size: 48,
                       onPressed: () => _openDictionary(glyphs),
-                      icon: const Icon(Icons.menu_book_outlined),
                     ),
-                  ),
-                  Semantics(
-                    button: true,
-                    label: l10n.glyphCreate,
-                    child: IconButton(
-                      constraints: const BoxConstraints.tightFor(
-                        width: 44,
-                        height: 44,
-                      ),
-                      tooltip: l10n.glyphCreate,
+                    const SizedBox(width: 8),
+                    PaperTileButton(
+                      icon: AlbumIcons.plus,
+                      label: l10n.glyphCreate,
+                      size: 48,
                       onPressed: widget.enabled
                           ? () => _openBuilder(glyphs)
                           : null,
-                      icon: const Icon(Icons.add_rounded),
                     ),
-                  ),
-                  const Spacer(),
-                  if (composer.selected.isNotEmpty)
-                    Semantics(
-                      button: true,
-                      label: l10n.glyphClearComposer,
-                      child: IconButton(
-                        constraints: const BoxConstraints.tightFor(
-                          width: 44,
-                          height: 44,
-                        ),
-                        tooltip: l10n.glyphClearComposer,
-                        onPressed: composer.busy
-                            ? null
-                            : ref
-                                  .read(
-                                    glyphComposerProvider(widget.conversationId)
-                                        .notifier,
-                                  )
-                                  .clear,
-                        icon: const Icon(Icons.delete_outline_rounded),
+                    if (composer.selected.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      PaperTileButton(
+                        icon: AlbumIcons.trash,
+                        label: l10n.glyphClearComposer,
+                        size: 48,
+                        onPressed: composer.busy ? null : notifier.clear,
+                      ),
+                    ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: PaperButton(
+                        label: l10n.glyphSend,
+                        icon: AlbumIcons.send,
+                        onPressed: canEdit && composer.selected.isNotEmpty
+                            ? () => _send(composer.selected)
+                            : null,
                       ),
                     ),
-                  FilledButton.icon(
-                    onPressed:
-                        widget.enabled &&
-                            composer.selected.isNotEmpty &&
-                            !composer.busy
-                        ? () => _send(composer.selected)
-                        : null,
-                    icon: composer.busy
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
-                    label: Text(l10n.glyphSend),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -309,14 +278,14 @@ class _RecognitionResult extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(l10n.glyphAmbiguous),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 6,
+            runSpacing: 6,
             children: recognition!.alternatives
                 .map(
-                  (candidate) => ActionChip(
-                    avatar: GlyphIcon(glyph: candidate.glyph, size: 24),
-                    label: Text(candidate.glyph.meaning),
+                  (candidate) => _GlyphLabel(
+                    glyph: candidate.glyph,
                     onPressed: () => onAdd(candidate.glyph),
                   ),
                 )
@@ -335,12 +304,59 @@ class _RecognitionResult extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: Text(l10n.glyphMatched(glyph.meaning))),
-        TextButton.icon(
+        const SizedBox(width: 8),
+        PaperButton.tape(
+          label: l10n.glyphAddToComposer,
+          icon: AlbumIcons.plus,
           onPressed: () => onAdd(glyph),
-          icon: const Icon(Icons.add_rounded),
-          label: Text(l10n.glyphAddToComposer),
         ),
       ],
+    );
+  }
+}
+
+/// Nhãn giấy gồm glyph và nghĩa (lựa chọn khi nhận dạng mơ hồ).
+class _GlyphLabel extends StatelessWidget {
+  const _GlyphLabel({required this.glyph, required this.onPressed});
+  final GlyphDefinition glyph;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.album;
+    return Semantics(
+      button: true,
+      label: glyph.meaning,
+      excludeSemantics: true,
+      onTap: onPressed,
+      child: Material(
+        color: p.paper,
+        elevation: 1,
+        shadowColor: const Color(0x665A3C1E),
+        borderRadius: BorderRadius.circular(3),
+        child: InkWell(
+          onTap: onPressed,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(6, 4, 12, 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GlyphIcon(glyph: glyph, size: 28),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      glyph.meaning,
+                      style: TextStyle(color: p.ink, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -416,6 +432,9 @@ class _GlyphBuilderSheetState extends ConsumerState<_GlyphBuilderSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.album;
+    UnderlineInputBorder line(Color color) =>
+        UnderlineInputBorder(borderSide: BorderSide(color: color, width: 1.5));
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -446,23 +465,40 @@ class _GlyphBuilderSheetState extends ConsumerState<_GlyphBuilderSheet> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   l10n.glyphCollisionWarning,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: p.danger),
                 ),
               ),
             const SizedBox(height: 12),
+            // Ô nghĩa như dòng kẻ viết tay.
             TextField(
               controller: _meaning,
               maxLength: 64,
+              style: TextStyle(
+                fontFamily: AppFonts.hand,
+                fontSize: 20,
+                color: p.ink,
+              ),
               decoration: InputDecoration(
                 labelText: l10n.glyphMeaningLabel,
                 hintText: l10n.glyphMeaningHint,
+                hintStyle: TextStyle(
+                  fontFamily: AppFonts.hand,
+                  fontSize: 20,
+                  color: p.muted,
+                ),
+                filled: false,
+                isDense: true,
+                border: line(p.fold2),
+                enabledBorder: line(p.fold2),
+                focusedBorder: line(p.accent),
               ),
               onChanged: (_) => setState(() {}),
             ),
             Text(l10n.glyphColorLabel),
             const SizedBox(height: 6),
+            // Chấm mực: màu glyph là dữ liệu người dùng nên bảng màu giữ nguyên.
             Wrap(
-              spacing: 10,
+              spacing: 4,
               children: _palette
                   .map(
                     (color) => Semantics(
@@ -470,20 +506,28 @@ class _GlyphBuilderSheetState extends ConsumerState<_GlyphBuilderSheet> {
                       selected: color == _color,
                       label:
                           '${l10n.glyphColorLabel} ${_palette.indexOf(color) + 1}',
-                      child: InkWell(
+                      child: InkResponse(
                         onTap: () => setState(() => _color = color),
-                        borderRadius: BorderRadius.circular(22),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Color(color),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: color == _color
-                                  ? Colors.black
-                                  : Colors.transparent,
-                              width: 3,
+                        radius: 24,
+                        child: SizedBox.square(
+                          dimension: 48,
+                          child: Center(
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Color(color),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: p.paper, width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color == _color
+                                        ? p.ink
+                                        : const Color(0x00000000),
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -493,18 +537,15 @@ class _GlyphBuilderSheetState extends ConsumerState<_GlyphBuilderSheet> {
                   .toList(growable: false),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed:
-                    !_saving &&
-                        _stroke.length >= 5 &&
-                        _meaning.text.trim().isNotEmpty &&
-                        _collision < .85
-                    ? _save
-                    : null,
-                child: Text(l10n.glyphSave),
-              ),
+            PaperButton(
+              label: l10n.glyphSave,
+              onPressed:
+                  !_saving &&
+                      _stroke.length >= 5 &&
+                      _meaning.text.trim().isNotEmpty &&
+                      _collision < .85
+                  ? _save
+                  : null,
             ),
           ],
         ),
@@ -525,109 +566,123 @@ class _GlyphDictionarySheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.album;
     final groups = [
       glyphs.where((item) => item.kind == GlyphKind.system).toList(),
       glyphs.where((item) => item.kind == GlyphKind.personal).toList(),
       glyphs.where((item) => item.kind == GlyphKind.conversation).toList(),
     ];
+
+    Future<void> edit(GlyphDefinition glyph) async {
+      final saved = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _GlyphBuilderSheet(
+          initialStroke: glyph.points,
+          dictionary: glyphs,
+          editing: glyph,
+        ),
+      );
+      if (saved == true) {
+        ref.invalidate(personalGlyphsProvider);
+        ref.invalidate(conversationGlyphsProvider(conversationId));
+      }
+    }
+
+    Future<void> delete(GlyphDefinition glyph) async {
+      await ref.read(personalGlyphsProvider.notifier).deactivate(glyph.id);
+      ref.invalidate(conversationGlyphsProvider(conversationId));
+    }
+
     return DefaultTabController(
       length: 3,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * .72,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                l10n.glyphDictionary,
-                style: Theme.of(context).textTheme.titleLarge,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  l10n.glyphDictionary,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
-            ),
-            TabBar(
-              tabs: [
-                Tab(text: l10n.glyphSystemTab),
-                Tab(text: l10n.glyphPersonalTab),
-                Tab(text: l10n.glyphConversationTab),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  for (final group in groups)
-                    group.isEmpty
-                        ? Center(child: Text(l10n.glyphDictionaryEmpty))
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: group.length,
-                            itemBuilder: (_, index) {
-                              final glyph = group[index];
-                              return ListTile(
-                                minTileHeight: 56,
-                                leading: GlyphIcon(glyph: glyph),
-                                title: Text(glyph.meaning),
-                                onTap: glyph.kind == GlyphKind.personal
-                                    ? () async {
-                                        final saved =
-                                            await showModalBottomSheet<bool>(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              useSafeArea: true,
-                                              builder: (_) =>
-                                                  _GlyphBuilderSheet(
-                                                    initialStroke: glyph.points,
-                                                    dictionary: glyphs,
-                                                    editing: glyph,
-                                                  ),
-                                            );
-                                        if (saved == true) {
-                                          ref.invalidate(
-                                            personalGlyphsProvider,
-                                          );
-                                          ref.invalidate(
-                                            conversationGlyphsProvider(
-                                              conversationId,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    : null,
-                                trailing: glyph.kind == GlyphKind.personal
-                                    ? Semantics(
-                                        button: true,
-                                        label: l10n.glyphDelete,
-                                        child: IconButton(
-                                          constraints:
-                                              const BoxConstraints.tightFor(
-                                                width: 44,
-                                                height: 44,
-                                              ),
-                                          tooltip: l10n.glyphDelete,
-                                          onPressed: () async {
-                                            await ref
-                                                .read(
-                                                  personalGlyphsProvider
-                                                      .notifier,
-                                                )
-                                                .deactivate(glyph.id);
-                                            ref.invalidate(
-                                              conversationGlyphsProvider(
-                                                conversationId,
-                                              ),
-                                            );
-                                          },
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                        ),
-                                      )
-                                    : null,
-                              );
-                            },
-                          ),
+              PaperTabBar(
+                tabs: [
+                  l10n.glyphSystemTab,
+                  l10n.glyphPersonalTab,
+                  l10n.glyphConversationTab,
                 ],
               ),
-            ),
-          ],
+              Expanded(
+                child: PaperSheet(
+                  child: TabBarView(
+                    children: [
+                      for (final group in groups)
+                        group.isEmpty
+                            ? Center(
+                                child: Text(
+                                  l10n.glyphDictionaryEmpty,
+                                  style: TextStyle(color: p.muted),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                itemCount: group.length,
+                                separatorBuilder: (_, _) =>
+                                    const DashedDivider(),
+                                itemBuilder: (_, index) {
+                                  final glyph = group[index];
+                                  final personal =
+                                      glyph.kind == GlyphKind.personal;
+                                  return ListTile(
+                                    minTileHeight: 60,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    leading: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: p.paper,
+                                        border: Border.all(color: p.fold1),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Color(0x1F5A3C1E),
+                                            blurRadius: 4,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: GlyphIcon(glyph: glyph, size: 40),
+                                    ),
+                                    title: Text(
+                                      glyph.meaning,
+                                      style: TextStyle(color: p.ink),
+                                    ),
+                                    onTap: personal ? () => edit(glyph) : null,
+                                    trailing: personal
+                                        ? PaperTileButton(
+                                            icon: AlbumIcons.trash,
+                                            label: l10n.glyphDelete,
+                                            size: 48,
+                                            onPressed: () => delete(glyph),
+                                          )
+                                        : null,
+                                  );
+                                },
+                              ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

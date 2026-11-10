@@ -1,7 +1,10 @@
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:animal_locket/features/chat/presentation/widgets/glyph_drawing_pad.dart';
 import 'package:flutter/material.dart';
 
+/// Ký hiệu đã chọn: mẩu giấy nhỏ chứa glyph và nút × (spec §7.6).
 class GlyphToken extends StatelessWidget {
   const GlyphToken({
     super.key,
@@ -15,36 +18,50 @@ class GlyphToken extends StatelessWidget {
   final VoidCallback? onRemove;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: glyph.meaning,
-    child: Container(
-      constraints: const BoxConstraints(minHeight: 44),
-      decoration: BoxDecoration(
-        color: Color(glyph.colorArgb).withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Color(glyph.colorArgb).withValues(alpha: .4)),
-      ),
-      padding: const EdgeInsets.only(left: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GlyphIcon(glyph: glyph, size: 30, strokeWidth: 3.5),
-          if (onRemove != null)
-            Semantics(
-              button: true,
-              label: removeLabel,
-              child: IconButton(
-                constraints: const BoxConstraints.tightFor(
-                  width: 44,
-                  height: 44,
-                ),
-                tooltip: removeLabel,
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
-              ),
+  Widget build(BuildContext context) {
+    final p = context.album;
+    return Semantics(
+      label: glyph.meaning,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        decoration: BoxDecoration(
+          color: p.paper,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: p.fold1),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F5A3C1E),
+              blurRadius: 5,
+              offset: Offset(0, 2),
             ),
-        ],
+          ],
+        ),
+        padding: const EdgeInsets.only(left: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GlyphIcon(glyph: glyph, size: 30, strokeWidth: 3.5),
+            if (onRemove != null)
+              Semantics(
+                button: true,
+                label: removeLabel,
+                excludeSemantics: true,
+                onTap: onRemove,
+                child: IconButton(
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
+                  ),
+                  tooltip: removeLabel,
+                  onPressed: onRemove,
+                  icon: AlbumIcon(AlbumIcons.close, size: 18, color: p.muted),
+                ),
+              )
+            else
+              const SizedBox(width: 8),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

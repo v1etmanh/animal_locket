@@ -79,6 +79,40 @@ class MiniPolaroidAvatar extends StatelessWidget {
   );
 }
 
+/// Tab giấy như mép sổ: tab đang chọn cùng màu trang giấy bên dưới.
+/// Dùng trong một [DefaultTabController].
+class PaperTabBar extends StatelessWidget {
+  const PaperTabBar({super.key, required this.tabs});
+  final List<String> tabs;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.album;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.fold1,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      child: TabBar(
+        // Cuộn ngang khi chữ to để chữ trên tab không bị cắt.
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: p.paper,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        ),
+        labelColor: p.accent,
+        unselectedLabelColor: p.muted,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        tabs: [for (final t in tabs) Tab(text: t)],
+      ),
+    );
+  }
+}
+
 /// Trang giấy có bóng mềm làm nền cho một danh sách.
 class PaperSheet extends StatelessWidget {
   const PaperSheet({super.key, required this.child});

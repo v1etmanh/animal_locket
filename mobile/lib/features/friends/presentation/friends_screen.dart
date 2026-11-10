@@ -20,7 +20,6 @@ class FriendsScreen extends ConsumerWidget {
   const FriendsScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final p = context.album;
     final value = ref.watch(friendsControllerProvider);
     return AppPage(
       title: 'Bạn bè và lời mời',
@@ -39,39 +38,12 @@ class FriendsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Tab giấy như mép sổ: tab đang chọn cùng màu trang giấy bên dưới.
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: p.fold1,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
-                  ),
-                ),
-                child: TabBar(
-                  // Cuộn ngang khi chữ to để số đếm trên tab không bị mờ mất.
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-                  dividerColor: Colors.transparent,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: p.paper,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(8),
-                    ),
-                  ),
-                  labelColor: p.accent,
-                  unselectedLabelColor: p.muted,
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                  tabs: [
-                    Tab(text: 'Bạn bè ${data.friends.length}'),
-                    Tab(text: 'Lời mời ${data.incoming.length}'),
-                    Tab(text: 'Đã gửi ${data.outgoing.length}'),
-                  ],
-                ),
+              PaperTabBar(
+                tabs: [
+                  'Bạn bè ${data.friends.length}',
+                  'Lời mời ${data.incoming.length}',
+                  'Đã gửi ${data.outgoing.length}',
+                ],
               ),
               Expanded(
                 child: PaperSheet(

@@ -1,3 +1,9 @@
+import 'dart:math' as math;
+
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:flutter/material.dart';
 
@@ -8,7 +14,7 @@ class GlyphDrawingPad extends StatefulWidget {
     required this.hint,
     required this.clearLabel,
     required this.onStrokeComplete,
-    this.color = const Color(0xFF818CF8),
+    this.color,
     this.initialPoints = const [],
     this.height = 170,
   });
@@ -17,7 +23,9 @@ class GlyphDrawingPad extends StatefulWidget {
   final String hint;
   final String clearLabel;
   final ValueChanged<List<GlyphPoint>> onStrokeComplete;
-  final Color color;
+
+  /// Màu nét; mặc định `accent` của theme.
+  final Color? color;
   final List<GlyphPoint> initialPoints;
   final double height;
 
@@ -64,14 +72,12 @@ class _GlyphDrawingPadState extends State<GlyphDrawingPad> {
     child: SizedBox(
       height: widget.height,
       width: double.infinity,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant,
-            width: 1.4,
-          ),
+      // Trang giấy chấm lưới, viền gạch đứt (spec §7.6).
+      child: CustomPaint(
+        painter: _DotGridPainter(
+          paper: context.album.paper,
+          dot: context.album.fold2,
+          border: context.album.fold3,
         ),
         child: Stack(
           children: [
@@ -82,12 +88,19 @@ class _GlyphDrawingPadState extends State<GlyphDrawingPad> {
                 onPanUpdate: _update,
                 onPanEnd: _end,
                 child: CustomPaint(
-                  painter: GlyphStrokePainter(_points, widget.color),
+                  painter: GlyphStrokePainter(
+                    _points,
+                    widget.color ?? context.album.accent,
+                  ),
                   child: _points.isEmpty
                       ? Center(
                           child: Text(
                             widget.hint,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: TextStyle(
+                              fontFamily: AppFonts.hand,
+                              fontSize: 17,
+                              color: context.album.muted,
+                            ),
                           ),
                         )
                       : null,
@@ -95,20 +108,13 @@ class _GlyphDrawingPadState extends State<GlyphDrawingPad> {
               ),
             ),
             Positioned(
-              right: 4,
-              top: 4,
-              child: Semantics(
-                button: true,
+              right: 6,
+              top: 6,
+              child: PaperTileButton(
+                icon: AlbumIcons.refresh,
                 label: widget.clearLabel,
-                child: IconButton(
-                  constraints: const BoxConstraints.tightFor(
-                    width: 44,
-                    height: 44,
-                  ),
-                  tooltip: widget.clearLabel,
-                  onPressed: _points.isEmpty ? null : _clear,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
+                size: 48,
+                onPressed: _points.isEmpty ? null : _clear,
               ),
             ),
           ],
@@ -116,6 +122,52 @@ class _GlyphDrawingPadState extends State<GlyphDrawingPad> {
       ),
     ),
   );
+}
+
+class _DotGridPainter extends CustomPainter {
+  const _DotGridPainter({
+    required this.paper,
+    required this.dot,
+    required this.border,
+  });
+  final Color paper;
+  final Color dot;
+  final Color border;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..color = paper);
+    final dots = Paint()..color = dot;
+    for (double y = 12; y < size.height; y += 16) {
+      for (double x = 12; x < size.width; x += 16) {
+        canvas.drawCircle(Offset(x, y), 1.4, dots);
+      }
+    }
+    // Viền gạch đứt quanh trang.
+    final line = Paint()
+      ..color = border
+      ..strokeWidth = 1.4;
+    void dash(Offset a, Offset b) {
+      final length = (b - a).distance;
+      final step = (b - a) / length;
+      for (double d = 0; d < length; d += 10) {
+        canvas.drawLine(a + step * d, a + step * math.min(d + 6, length), line);
+      }
+    }
+
+    final r = rect.deflate(.7);
+    dash(r.topLeft, r.topRight);
+    dash(r.topRight, r.bottomRight);
+    dash(r.bottomRight, r.bottomLeft);
+    dash(r.bottomLeft, r.topLeft);
+  }
+
+  @override
+  bool shouldRepaint(_DotGridPainter oldDelegate) =>
+      oldDelegate.paper != paper ||
+      oldDelegate.dot != dot ||
+      oldDelegate.border != border;
 }
 
 class GlyphStrokePainter extends CustomPainter {
