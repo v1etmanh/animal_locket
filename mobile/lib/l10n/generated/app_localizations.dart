@@ -1646,11 +1646,11 @@ abstract class AppLocalizations {
   /// **'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.'**
   String get collectionNote;
 
-  /// No description provided for @discoverPro.
+  /// No description provided for @upgradePro.
   ///
   /// In vi, this message translates to:
-  /// **'Khám phá Animal Locket Pro'**
-  String get discoverPro;
+  /// **'Nâng cấp Pro'**
+  String get upgradePro;
 
   /// No description provided for @friendsCount.
   ///
@@ -1927,6 +1927,12 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Xem'**
   String get view;
+
+  /// No description provided for @unfriendQ.
+  ///
+  /// In vi, this message translates to:
+  /// **'Huỷ kết bạn với {name}?'**
+  String unfriendQ(String name);
 }
 
 class _AppLocalizationsDelegate

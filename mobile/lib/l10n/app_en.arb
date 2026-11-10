@@ -258,7 +258,7 @@
   "noMyPhotos": "You haven't posted any photos.",
   "collection": "Collection",
   "collectionNote": "Each avatar belongs only to you — nobody else can have it.",
-  "discoverPro": "Discover Animal Locket Pro",
+  "upgradePro": "Upgrade Pro",
   "friendsCount": "Friends ({count})",
   "seeAll": "See all",
   "friendsLoadFailed": "Couldn't load friends · Retry",
@@ -304,5 +304,6 @@
   "glyphSysCoffee": "Coffee?",
   "glyphSysHungry": "Hungry",
   "glyphSysComing": "On my way",
-  "view": "View"
+  "view": "View",
+  "unfriendQ": "Unfriend {name}?"
 }

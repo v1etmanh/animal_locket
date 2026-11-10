@@ -888,7 +888,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Each avatar belongs only to you — nobody else can have it.';
 
   @override
-  String get discoverPro => 'Discover Animal Locket Pro';
+  String get upgradePro => 'Upgrade Pro';
 
   @override
   String friendsCount(int count) {
@@ -1037,4 +1037,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get view => 'View';
+
+  @override
+  String unfriendQ(String name) {
+    return 'Unfriend $name?';
+  }
 }

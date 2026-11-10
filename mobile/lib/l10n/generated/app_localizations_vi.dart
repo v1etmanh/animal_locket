@@ -849,7 +849,7 @@ class AppLocalizationsVi extends AppLocalizations {
       'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.';
 
   @override
-  String get discoverPro => 'Khám phá Animal Locket Pro';
+  String get upgradePro => 'Nâng cấp Pro';
 
   @override
   String friendsCount(int count) {
@@ -999,4 +999,9 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get view => 'Xem';
+
+  @override
+  String unfriendQ(String name) {
+    return 'Huỷ kết bạn với $name?';
+  }
 }

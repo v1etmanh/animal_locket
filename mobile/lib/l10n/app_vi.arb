@@ -418,7 +418,7 @@
   "noMyPhotos": "Bạn chưa đăng ảnh nào.",
   "collection": "Bộ sưu tập",
   "collectionNote": "Mỗi avatar chỉ thuộc về bạn, không ai khác có được.",
-  "discoverPro": "Khám phá Animal Locket Pro",
+  "upgradePro": "Nâng cấp Pro",
   "friendsCount": "Bạn bè ({count})",
   "@friendsCount": {
     "placeholders": {
@@ -492,5 +492,13 @@
   "glyphSysCoffee": "Đi cà phê không?",
   "glyphSysHungry": "Đói bụng",
   "glyphSysComing": "Đang tới",
-  "view": "Xem"
+  "view": "Xem",
+  "unfriendQ": "Huỷ kết bạn với {name}?",
+  "@unfriendQ": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }

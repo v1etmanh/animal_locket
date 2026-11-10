@@ -5,7 +5,6 @@ import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_list.dart';
-import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
@@ -14,6 +13,7 @@ import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
+import 'package:animal_locket/features/profile/presentation/upgrade_pro_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -52,11 +52,10 @@ class _ProfileContent extends ConsumerWidget {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: PaperTileButton(
-            icon: AlbumIcons.settings,
-            label: context.l10n.settings,
-            size: 48,
+          child: IconButton(
+            tooltip: context.l10n.settings,
             onPressed: () => context.push('/settings'),
+            icon: AlbumIcon(AlbumIcons.settings, color: context.album.ink),
           ),
         ),
         const SizedBox(height: 8),
@@ -86,12 +85,15 @@ class _ProfileContent extends ConsumerWidget {
                           style: Theme.of(context).textTheme.headlineLarge,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      PaperTileButton(
-                        icon: AlbumIcons.edit,
-                        label: context.l10n.changeNickname,
-                        size: 48,
+                      IconButton(
+                        tooltip: context.l10n.changeNickname,
+                        visualDensity: VisualDensity.compact,
                         onPressed: () => _editAlias(context, ref),
+                        icon: AlbumIcon(
+                          AlbumIcons.edit,
+                          size: 20,
+                          color: p.muted,
+                        ),
                       ),
                     ],
                   ),
@@ -168,9 +170,8 @@ class _ProfileContent extends ConsumerWidget {
         const SizedBox(height: 24),
         if (data.profile.ageGroup == AgeGroup.adult &&
             data.profile.plan != AccountPlan.pro)
-          PaperButton(
-            label: context.l10n.discoverPro,
-            icon: AlbumIcons.bolt,
+          UpgradeProButton(
+            label: context.l10n.upgradePro,
             onPressed: () => context.push('/pro'),
           ),
       ],
