@@ -4,6 +4,7 @@ import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/double_tap_like.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
@@ -215,19 +216,24 @@ class _PostCard extends ConsumerWidget {
     final caption = post.caption?.trim();
     Widget card(double t) => WashiPhotoCard(
       tiltDegrees: tilt * t,
-      photo: image.when(
-        loading: () => placeholder(const CircularProgressIndicator()),
-        error: (_, _) =>
-            placeholder(AlbumIcon(AlbumIcons.imageBroken, color: p.muted)),
-        data: (url) => url == null
-            ? placeholder(AlbumIcon(AlbumIcons.image, color: p.muted))
-            : Image.network(
-                url,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => placeholder(
-                  AlbumIcon(AlbumIcons.imageBroken, color: p.muted),
+      photo: DoubleTapLike(
+        liked: post.likedByMe,
+        onLike: () =>
+            ref.read(feedControllerProvider.notifier).toggleLike(post.id),
+        child: image.when(
+          loading: () => placeholder(const CircularProgressIndicator()),
+          error: (_, _) =>
+              placeholder(AlbumIcon(AlbumIcons.imageBroken, color: p.muted)),
+          data: (url) => url == null
+              ? placeholder(AlbumIcon(AlbumIcons.image, color: p.muted))
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => placeholder(
+                    AlbumIcon(AlbumIcons.imageBroken, color: p.muted),
+                  ),
                 ),
-              ),
+        ),
       ),
       header: InkWell(
         onTap: () => context.push('/user/${post.author.publicId}'),

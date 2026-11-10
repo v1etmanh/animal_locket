@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/double_tap_like.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
@@ -308,7 +309,11 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
             AspectRatio(
               aspectRatio: 4 / 5,
               child: post.status == PostStatus.published
-                  ? _PostImage(mediaId: post.mediaId)
+                  ? DoubleTapLike(
+                      liked: _liked,
+                      onLike: _toggleLike,
+                      child: _PostImage(mediaId: post.mediaId),
+                    )
                   : ColoredBox(
                       color: p.fold2,
                       child: Center(
