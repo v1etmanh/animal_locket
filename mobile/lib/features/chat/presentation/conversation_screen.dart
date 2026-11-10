@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_background.dart';
@@ -82,9 +83,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
                   if (data.closedReason != null)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: _TapedLabel(
-                        text:
-                            '${l10n.conversationClosed}: ${data.closedReason}',
+                      child: TapedNote(
+                        child: Text(
+                          '${l10n.conversationClosed}: ${data.closedReason}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: context.album.danger,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   Expanded(
@@ -221,41 +228,6 @@ class _MessageBubble extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Nhãn giấy dán washi, chữ màu `danger` (hội thoại đã đóng).
-class _TapedLabel extends StatelessWidget {
-  const _TapedLabel({required this.text});
-  final String text;
-  @override
-  Widget build(BuildContext context) {
-    final p = context.album;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-          decoration: BoxDecoration(
-            color: p.paper,
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1F5A3C1E),
-                blurRadius: 8,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: p.danger, fontWeight: FontWeight.w600),
-          ),
-        ),
-        const Positioned(left: -6, top: -8, child: _Tape(angle: -14)),
-      ],
     );
   }
 }

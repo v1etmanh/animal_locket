@@ -40,7 +40,10 @@ enum AlbumIcons {
   eyeOff,
   book,
   plus,
-  refresh;
+  refresh,
+  settings,
+  edit,
+  logout;
 
   /// Tên file trong assets/icons (snake_case), ví dụ emptyAlbum → empty_album.
   String get asset =>

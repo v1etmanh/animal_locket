@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/gold_badge.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
@@ -226,46 +228,7 @@ class _CardPolaroid extends StatelessWidget {
               Positioned(
                 right: -14,
                 top: -14,
-                child: Transform.rotate(
-                  angle: 12 * math.pi / 180,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: const BoxDecoration(
-                      color: _boostGold,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    // Co lại khi chữ to để vừa huy hiệu tròn.
-                    child: const FittedBox(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AlbumIcon(
-                            AlbumIcons.bolt,
-                            size: 16,
-                            color: _boostInk,
-                          ),
-                          Text(
-                            'Boost',
-                            style: TextStyle(
-                              color: _boostInk,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                child: GoldBadge(label: 'Boost'),
               ),
           ],
         ),
@@ -276,7 +239,7 @@ class _CardPolaroid extends StatelessWidget {
           runSpacing: 8,
           children: [
             if (card.online)
-              const _PaperChip(label: 'Đang online', dot: _onlineGreen),
+              const _PaperChip(label: 'Đang online', dot: onlineGreen),
             if (card.distanceLabel != null)
               _PaperChip(label: card.distanceLabel!),
             const _PaperChip(label: 'Con vật ẩn danh'),
@@ -286,10 +249,6 @@ class _CardPolaroid extends StatelessWidget {
     );
   }
 }
-
-const _boostGold = Color(0xFFF2C14E);
-const _boostInk = Color(0xFF5C3F00);
-const _onlineGreen = Color(0xFF2F6B3A);
 
 /// Nhãn giấy nhỏ dưới thẻ.
 class _PaperChip extends StatelessWidget {

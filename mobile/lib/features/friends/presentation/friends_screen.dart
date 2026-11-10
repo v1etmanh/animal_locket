@@ -12,9 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Xanh lá sẫm cho "Đang online" (đạt AA trên nền giấy).
-const _onlineGreen = Color(0xFF2F6B3A);
-
 /// Bạn bè và lời mời như một cuốn sổ địa chỉ: tab giấy + trang kẻ (spec §7.5).
 class FriendsScreen extends ConsumerWidget {
   const FriendsScreen({super.key});
@@ -89,7 +86,7 @@ class _FriendList extends ConsumerWidget {
           person: person,
           index: index,
           subtitle: online ? 'Đang online' : 'Ngoại tuyến',
-          subtitleColor: online ? _onlineGreen : p.muted,
+          subtitleColor: online ? onlineGreen : p.muted,
           online: online,
           onTap: open,
           trailing: Semantics(
@@ -251,7 +248,7 @@ class _PersonTile extends StatelessWidget {
                       if (online) ...[
                         const DecoratedBox(
                           decoration: BoxDecoration(
-                            color: _onlineGreen,
+                            color: onlineGreen,
                             shape: BoxShape.circle,
                           ),
                           child: SizedBox.square(dimension: 7),

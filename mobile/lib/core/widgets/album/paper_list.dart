@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:flutter/material.dart';
 
@@ -132,4 +133,58 @@ class PaperSheet extends StatelessWidget {
     ),
     child: Material(type: MaterialType.transparency, child: child),
   );
+}
+
+/// Xanh lá sẫm cho "Đang online" (đạt AA trên nền giấy).
+const onlineGreen = Color(0xFF2F6B3A);
+
+/// Mẩu giấy có bóng mềm, dán một mẩu washi ở góc trái trên.
+class TapedNote extends StatelessWidget {
+  const TapedNote({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(14, 14, 14, 10),
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.album;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: p.paper,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1F5A3C1E),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+        Positioned(
+          left: -6,
+          top: -8,
+          child: Transform.rotate(
+            angle: -14 * math.pi / 180,
+            child: Opacity(
+              opacity: .85,
+              child: CustomPaint(
+                size: const Size(42, 14),
+                painter: WashiTapePainter(p.tape1, p.tape2),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
