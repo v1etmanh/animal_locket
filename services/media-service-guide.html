@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>media-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>media-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#luong">4. Luồng upload ảnh</a>
+  <a href="#api">5. API</a>
+  <a href="#quy-tac">6. Quy tắc và giới hạn</a>
+  <a href="#luu-tru">7. Lưu trữ ảnh (R2)</a>
+  <a href="#du-lieu">8. Dữ liệu</a>
+  <a href="#su-kien">9. Sự kiện phát / nhận</a>
+  <a href="#nen">10. Tác vụ nền</a>
+  <a href="#cau-hinh">11. Cấu hình</a>
+  <a href="#test">12. Test</a>
+  <a href="#luu-y">13. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>media-service</h1>
+<p class="sub">Nhận ảnh người dùng tải lên, kiểm tra, lưu trên Cloudflare R2 và cấp URL xem ngắn hạn. Cổng <code>8103</code>. Tài liệu lập từ mã nguồn tại <code>services/media-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Service <strong>không nhận file qua chính nó</strong>: client tải ảnh thẳng lên kho đối tượng (R2) bằng URL đã ký, còn media-service chỉ cấp URL, kiểm tra lại sau khi tải xong và theo dõi trạng thái từng ảnh. Ảnh được dùng cho bài đăng (<code>POST</code>) và tin nhắn chat (<code>CHAT</code>).</p>
+<div class="grid">
+  <div class="card"><h3>Cấp URL upload</h3><p>Ký URL <code>PUT</code> sống 5 phút cho từng ảnh, sau khi kiểm loại tệp, cỡ và tần suất.</p></div>
+  <div class="card"><h3>Xác nhận và phát hành</h3><p>Khi client báo xong, kiểm tra object thật, loại, cỡ rồi đánh dấu <code>READY</code> và phát <code>PHOTO_READY</code>.</p></div>
+  <div class="card"><h3>Cấp URL xem</h3><p>Chỉ chủ ảnh hoặc bạn bè (không bị chặn) được lấy URL xem, sống 10 phút.</p></div>
+  <div class="card"><h3>Dọn dẹp</h3><p>Xoá yêu cầu upload bị bỏ dở; xoá toàn bộ ảnh khi chủ tài khoản bị xoá.</p></div>
+</div>
+<div class="box info">Theo CLAUDE.md: không còn face-worker. Ảnh upload xong được chuyển thẳng sang trạng thái sẵn sàng và phát <code>PHOTO_READY</code>. EXIF/GPS do <strong>client</strong> xoá (<code>ImagePreparationService</code>, <code>keepExif: false</code>); server không kiểm tra.</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Gateway</td><td>gateway → media</td><td>Route <code>/api/v1/media/**</code>. Gateway gắn <code>X-Public-Id</code>.</td></tr>
+  <tr><td>Cloudflare R2</td><td>media ↔ R2 (qua client S3 của MinIO), client → R2</td><td>Một bucket riêng tư. Client PUT/GET trực tiếp bằng URL ký sẵn.</td></tr>
+  <tr><td>user-service</td><td>media → user</td><td><code>GET /internal/relationship</code> để biết bạn bè/chặn khi cấp URL xem (có circuit breaker).</td></tr>
+  <tr><td>chat-service</td><td>chat → media</td><td><code>GET /internal/media/{id}</code> để kiểm tra ảnh trong tin nhắn.</td></tr>
+  <tr><td>post-service, notification-service</td><td>media → (Kafka) → họ</td><td>Nhận <code>PHOTO_READY</code> / <code>PHOTO_REJECTED</code>.</td></tr>
+  <tr><td>user-service</td><td>user → (Kafka) → media</td><td>Media nghe <code>user.events</code> (đăng ký, đổi con vật, xoá tài khoản).</td></tr>
+  <tr><td>MySQL <code>media_db</code></td><td>media → DB</td><td>DB riêng, Flyway.</td></tr>
+</table>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<pre><code>services/media-service/src/main/
+├─ java/com/animallocket/media/
+│  ├─ MediaServiceApplication.java
+│  ├─ web/        MediaController
+│  ├─ dto/        MediaDtos (UploadRequest, UploadTicket, MediaStatus, ViewUrl, InternalMedia)
+│  ├─ service/    MediaService (nghiệp vụ), MediaJanitor (dọn định kỳ)
+│  ├─ storage/    ObjectStorage (interface), S3ObjectStorage (R2/MinIO)
+│  ├─ client/     UserClient (gọi user-service, có circuit breaker)
+│  ├─ messaging/  MediaEventsListener (nghe user.events)
+│  ├─ domain/     MediaJob, OwnerAnimal
+│  └─ repo/       MediaJobRepository, OwnerAnimalRepository
+└─ resources/
+   ├─ application.yml
+   └─ db/migration/V1__init.sql</code></pre>
+<p>Dùng <a href="../libs/common-guide.html">common</a> (<code>Headers</code>, <code>ApiException</code>, event, circuit breaker mặc định) và <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a>. Phụ thuộc đáng chú ý trong <a href="media-service/pom.xml">pom.xml</a>: <code>minio</code> (client S3), Spring Cloud LoadBalancer + Resilience4j, JPA, Flyway + MySQL.</p>
+<p>Tách <code>ObjectStorage</code> thành interface để test không cần kho thật.</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="luong">4. Luồng upload ảnh</h2>
+<div class="flow">
+  <span class="n">1. Client <code>POST /media/uploads</code></span><span class="ar">→</span>
+  <span class="n">2. Server tạo <code>MediaJob</code> (PENDING_UPLOAD) + ký URL PUT</span><span class="ar">→</span>
+  <span class="n">3. Client <code>PUT</code> file thẳng lên R2</span><span class="ar">→</span>
+  <span class="n">4. Client <code>POST /media/{id}/complete</code></span><span class="ar">→</span>
+  <span class="n">5. Server kiểm tra object trên R2</span><span class="ar">→</span>
+  <span class="n">6. READY + phát <code>PHOTO_READY</code></span>
+</div>
+<ol>
+  <li><strong>Xin upload</strong> (<code>requestUpload</code>): kiểm Content-Type thuộc <code>image/jpeg, png, webp, heic</code>; kiểm <code>sizeBytes</code> không vượt giới hạn; kiểm số lần upload trong 1 giờ. Tạo <code>MediaJob</code> với <code>id</code> là UUID và <code>rawKey = id + đuôi tệp</code>, rồi trả <code>UploadTicket</code> gồm URL, header <code>Content-Type</code> bắt buộc và thời hạn 300 giây.</li>
+  <li><strong>Client tải lên R2</strong> bằng <code>PUT</code> kèm đúng header đã cho (media-service không thấy file).</li>
+  <li><strong>Hoàn tất</strong> (<code>complete</code>): lấy thông tin object trên R2. Chưa thấy → <code>409 NOT_UPLOADED</code>. Quá cỡ hoặc sai Content-Type → xoá object, đánh dấu <code>REJECTED</code>, phát <code>PHOTO_REJECTED</code>. Hợp lệ → <code>READY</code>, <code>publicKey = rawKey</code>, phát <code>PHOTO_READY</code>.</li>
+  <li><strong>Xem ảnh</strong>: client xin URL xem (<code>GET /media/{id}/url</code>), tải trực tiếp từ R2 trong 10 phút.</li>
+</ol>
+<p><code>complete</code> là <strong>idempotent</strong>: gọi lại khi job không còn <code>PENDING_UPLOAD</code> chỉ trả trạng thái hiện tại, không phát lại event.</p>
+<div class="box">Vì sao phải kiểm tra lại ở bước 5: URL PUT ký sẵn <strong>không ràng buộc Content-Type và kích thước</strong> trong chữ ký (R2 không hỗ trợ presigned POST), nên client có thể gửi tệp khác với khai báo. Server chỉ chặn được sau khi tệp đã nằm trên R2, bằng cách xoá nó ở bước <code>complete</code>.</div>
+
+<h3>Trạng thái của <code>MediaJob</code></h3>
+<pre><code>PENDING_UPLOAD ──(complete hợp lệ)──► READY
+       │
+       ├──(complete sai loại/quá cỡ)──► REJECTED   (đã xoá object)
+       └──(quá 1 giờ không complete)──► bị xoá hẳn  (MediaJanitor)</code></pre>
+
+<!-- ============ 5 ============ -->
+<h2 id="api">5. API</h2>
+<p><a href="media-service/src/main/java/com/animallocket/media/web/MediaController.java">MediaController</a>. Người gọi dựa trên <code>X-Public-Id</code>.</p>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th><th>Trả về</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/api/v1/media/uploads</code></td><td>Xin upload. Body: <code>context</code> (POST|CHAT), <code>refId</code> (≤64), <code>contentType</code>, <code>sizeBytes</code> (1–50 000 000).</td><td>201 <code>UploadTicket</code></td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/api/v1/media/{id}/complete</code></td><td>Báo đã tải xong.</td><td><code>MediaStatus</code></td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/api/v1/media/{id}</code></td><td>Trạng thái ảnh của tôi.</td><td><code>MediaStatus</code>: <code>status, method, rejectReason</code></td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/api/v1/media/{id}/url</code></td><td>URL xem (chủ ảnh hoặc bạn bè).</td><td><code>ViewUrl</code>: <code>url, expiresInSeconds</code></td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/internal/media/{id}</code></td><td>Nội bộ (chat gọi). Cần <code>X-Internal-Token</code>.</td><td><code>InternalMedia</code>: chủ, context, trạng thái, <code>publicKey</code></td></tr>
+</table>
+<p>Với ảnh không phải của mình, các API <code>complete</code> và trạng thái trả <code>404</code> (không lộ việc ảnh tồn tại).</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="quy-tac">6. Quy tắc và giới hạn</h2>
+<table>
+  <tr><th>Quy tắc</th><th>Giá trị</th><th>Lỗi khi vi phạm</th></tr>
+  <tr><td>Loại tệp</td><td><code>image/jpeg</code>, <code>image/png</code>, <code>image/webp</code>, <code>image/heic</code></td><td><code>400 UNSUPPORTED_MEDIA_TYPE</code></td></tr>
+  <tr><td>Cỡ tối đa</td><td><code>animal.media.max-bytes</code>, mặc định 10 485 760 (10 MB). Kiểm ở lúc xin (khai báo) và lúc <code>complete</code> (cỡ thật).</td><td>Lúc xin: <code>400 FILE_TOO_LARGE</code>. Lúc complete: job <code>REJECTED</code> + xoá object.</td></tr>
+  <tr><td>Tần suất</td><td><code>animal.media.max-uploads-per-hour</code>, mặc định 60 mỗi người mỗi giờ</td><td><code>429 UPLOAD_LIMIT</code></td></tr>
+  <tr><td>Hạn URL upload</td><td>5 phút (hằng <code>UPLOAD_TTL</code>)</td><td>—</td></tr>
+  <tr><td>Hạn URL xem</td><td>10 phút (hằng <code>VIEW_TTL</code>)</td><td>—</td></tr>
+  <tr><td>Quyền xem</td><td>Chủ ảnh; hoặc là bạn và không bị chặn (hỏi user-service)</td><td><code>404</code> (không lộ ảnh tồn tại)</td></tr>
+  <tr><td>Chưa hoàn tất</td><td>Chỉ ảnh <code>READY</code> có <code>publicKey</code> mới xem được</td><td><code>404</code></td></tr>
+</table>
+<p>Nếu user-service không trả lời (hoặc mạch hở) khi kiểm tra quan hệ, <code>UserClient</code> ném <code>503 USER_SERVICE_UNAVAILABLE</code> thay vì cho xem: không xác minh được thì không cấp.</p>
+
+<!-- ============ 7 ============ -->
+<h2 id="luu-tru">7. Lưu trữ ảnh (R2)</h2>
+<p><a href="media-service/src/main/java/com/animallocket/media/storage/S3ObjectStorage.java">S3ObjectStorage</a> dùng <code>MinioClient</code> với endpoint dạng <code>https://&lt;account-id&gt;.r2.cloudflarestorage.com</code>, region <code>auto</code>. Bốn thao tác của <code>ObjectStorage</code>:</p>
+<table>
+  <tr><th>Phương thức</th><th>Việc làm</th></tr>
+  <tr><td><code>presignUpload(key, contentType, ttl)</code></td><td>Ký URL <code>PUT</code>; trả kèm header <code>Content-Type</code> client phải gửi.</td></tr>
+  <tr><td><code>presignDownload(key, ttl)</code></td><td>Ký URL <code>GET</code> ngắn hạn.</td></tr>
+  <tr><td><code>stat(key)</code></td><td>Trả kích thước, Content-Type, thời điểm sửa; không có object → rỗng.</td></tr>
+  <tr><td><code>delete(key)</code></td><td>Xoá object; lỗi chỉ ghi log cảnh báo, không ném.</td></tr>
+</table>
+<ul>
+  <li>Bucket là <strong>riêng tư</strong>; ảnh chỉ xem được qua URL ký ngắn hạn.</li>
+  <li>Service <strong>không tạo bucket</strong> vì token R2 chỉ có quyền trên object.</li>
+  <li>Hiện <code>publicKey = rawKey</code>: không còn bước copy từ vùng raw sang vùng public.</li>
+</ul>
+<div class="box warn">Theo CLAUDE.md, R2 <strong>chưa được chạy thử với R2 thật</strong>. <code>S3ObjectStorageLiveTest</code> chỉ chạy khi có biến môi trường <code>R2_ENDPOINT</code>.</div>
+
+<!-- ============ 8 ============ -->
+<h2 id="du-lieu">8. Dữ liệu</h2>
+<p>MySQL <code>media_db</code> (<a href="media-service/src/main/resources/db/migration/V1__init.sql">V1__init.sql</a>).</p>
+<table>
+  <tr><th>Bảng</th><th>Nội dung</th></tr>
+  <tr><td><code>media_jobs</code></td><td>Mỗi ảnh một dòng: <code>id</code> (UUID), <code>owner_public_id</code>, <code>context</code> (POST|CHAT), <code>ref_id</code> (tham chiếu tới bài/hội thoại), <code>raw_key</code>, <code>public_key</code>, <code>status</code>, <code>reject_reason</code>, <code>created_at</code>, <code>updated_at</code>. Chỉ mục theo chủ ảnh và theo <code>(status, updated_at)</code>.</td></tr>
+  <tr><td><code>owner_animals</code></td><td><code>public_id</code> → <code>lead_animal</code>, cập nhật từ event của user-service.</td></tr>
+  <tr><td><code>outbox_events</code>, <code>processed_events</code></td><td>Của <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a>.</td></tr>
+</table>
+<p>Các cột <code>lead_animal</code>, <code>method</code>, <code>faces_detected</code> trong <code>media_jobs</code> là di sản của bước ẩn mặt cũ; hiện <code>method</code> luôn được đặt <code>"NONE"</code> và <code>faces_detected = 0</code>.</p>
+<div class="box warn"><code>ddl-auto</code> mặc định <code>none</code>; test dùng H2 <code>create-drop</code> nên entity khớp SQL không được test bắt. Đổi entity thì phải sửa SQL.</div>
+
+<!-- ============ 9 ============ -->
+<h2 id="su-kien">9. Sự kiện phát / nhận</h2>
+<h3>Phát (qua outbox, topic <code>media.events</code>, khoá = <code>mediaId</code>)</h3>
+<table>
+  <tr><th>Event</th><th>Khi nào</th><th>Payload</th><th>Nơi nhận</th></tr>
+  <tr><td><code>PHOTO_READY</code></td><td><code>complete</code> hợp lệ</td><td><code>PhotoReady(mediaId, owner, publicKey, method="NONE", faces=0, context, refId)</code></td><td>post</td></tr>
+  <tr><td><code>PHOTO_REJECTED</code></td><td><code>complete</code> sai loại hoặc quá cỡ</td><td><code>PhotoRejected(mediaId, owner, reason, context, refId)</code></td><td>post, notification</td></tr>
+</table>
+<h3>Nhận</h3>
+<p><a href="media-service/src/main/java/com/animallocket/media/messaging/MediaEventsListener.java">MediaEventsListener</a> nghe <code>user.events</code> (nhóm <code>media-service</code>), khử trùng lặp bằng <code>idempotency.firstTime</code>:</p>
+<table>
+  <tr><th>Event</th><th>Xử lý</th></tr>
+  <tr><td><code>USER_REGISTERED</code>, <code>LEAD_ANIMAL_CHANGED</code></td><td><code>setOwnerAnimal</code>: lưu con vật chủ đạo vào <code>owner_animals</code>.</td></tr>
+  <tr><td><code>USER_DELETED</code></td><td><code>onUserDeleted</code>: với mọi ảnh của người đó xoá object trên R2 và xoá dòng <code>media_jobs</code>, rồi xoá <code>owner_animals</code>.</td></tr>
+  <tr><td>khác</td><td>Bỏ qua.</td></tr>
+</table>
+
+<!-- ============ 10 ============ -->
+<h2 id="nen">10. Tác vụ nền</h2>
+<p><a href="media-service/src/main/java/com/animallocket/media/service/MediaJanitor.java">MediaJanitor</a> (<code>@Scheduled</code> kiểu <code>fixedDelay</code>, mặc định mỗi 60 giây) gọi <code>expireAbandoned()</code>: tìm job ở <code>PENDING_UPLOAD</code> có <code>updated_at</code> cũ hơn 1 giờ, xoá object (nếu có) và xoá dòng. Tắt bằng <code>animal.media.janitor.enabled=false</code>; chỉnh nhịp bằng <code>animal.media.janitor.interval-ms</code>. Lỗi được bắt và ghi log, không làm dừng lịch.</p>
+<p>Ngoài ra <code>OutboxRelay</code> của <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a> chạy nền để đẩy event lên Kafka.</p>
+
+<!-- ============ 11 ============ -->
+<h2 id="cau-hinh">11. Cấu hình</h2>
+<p><a href="media-service/src/main/resources/application.yml">application.yml</a>.</p>
+<table>
+  <tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>server.port</code></td><td>8103</td><td>Cổng.</td></tr>
+  <tr><td><code>storage.endpoint</code> (<code>R2_ENDPOINT</code>)</td><td><code>http://localhost:9000</code></td><td>Endpoint S3/R2.</td></tr>
+  <tr><td><code>storage.access-key</code> / <code>secret-key</code> (<code>R2_ACCESS_KEY</code>, <code>R2_SECRET_KEY</code>)</td><td><code>changeme</code></td><td>Khoá truy cập. Phải đặt qua biến môi trường khi triển khai.</td></tr>
+  <tr><td><code>storage.bucket</code> (<code>R2_BUCKET</code>)</td><td><code>animal-photos</code></td><td>Tên bucket.</td></tr>
+  <tr><td><code>storage.region</code></td><td><code>auto</code></td><td>Vùng của R2.</td></tr>
+  <tr><td><code>animal.media.max-bytes</code></td><td>10485760</td><td>Cỡ ảnh tối đa.</td></tr>
+  <tr><td><code>animal.media.max-uploads-per-hour</code></td><td>60 (mặc định trong code)</td><td>Giới hạn upload/giờ/người.</td></tr>
+  <tr><td><code>animal.media.janitor.enabled</code> / <code>interval-ms</code></td><td>true / 60000</td><td>Dọn yêu cầu bỏ dở.</td></tr>
+  <tr><td><code>animal.user-service-url</code></td><td><code>http://user-service</code></td><td>Địa chỉ user-service (qua load balancer).</td></tr>
+  <tr><td><code>spring.servlet.multipart.enabled</code></td><td>false</td><td>Tắt multipart vì file không đi qua service này.</td></tr>
+  <tr><td><code>resilience4j.*</code></td><td>cửa sổ 20 lời gọi, ≥50% lỗi mở mạch, chờ 10 giây, timeout 3 giây</td><td>Cấu hình circuit breaker. Lưu ý các khoá này không áp dụng cho <code>CircuitBreakerFactory</code>; common đặt mặc định riêng (<code>animal.resilience.*</code>), xem <a href="../libs/common-guide.html">common</a>.</td></tr>
+  <tr><td>Kafka, DB, Keycloak, Eureka</td><td>như user-service</td><td>Cùng cách cấu hình (<code>KAFKA_BOOTSTRAP</code>, <code>DB_URL</code>, <code>KEYCLOAK_JWK_URI</code>, <code>EUREKA_URL</code>).</td></tr>
+</table>
+
+<!-- ============ 12 ============ -->
+<h2 id="test">12. Test</h2>
+<ul>
+  <li><strong>MediaFlowIntegrationTest</strong>: từ chối loại tệp/quá cỡ, <code>complete</code> khi chưa có object → conflict, người khác không đụng được upload của mình, đường đi đầy đủ upload → READY → xem, người lạ/bị chặn không xem được, object quá cỡ hoặc sai loại bị từ chối và xoá, job bỏ dở bị xoá, <code>USER_DELETED</code> xoá ảnh và object, giới hạn upload theo giờ (cấu hình test: 5/giờ, tối đa 1 MB).</li>
+  <li><strong>S3PresignTest</strong>: URL upload là PUT kèm header Content-Type; URL tải có ký và ngắn hạn.</li>
+  <li><strong>S3ObjectStorageLiveTest</strong>: put / stat / get / delete với R2 thật; chỉ chạy khi có <code>R2_ENDPOINT</code>.</li>
+</ul>
+<pre><code>mvn -q -B -pl services/media-service install
+# kết quả: services/media-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 13 ============ -->
+<h2 id="luu-y">13. Lưu ý</h2>
+<div class="box warn"><strong>Chưa chạy thử với R2 thật</strong> (CLAUDE.md). Kiểm tra trước khi lên môi trường thật: CORS của bucket cho phép <code>PUT</code> từ app, và R2 trả đúng <code>Content-Type</code> trong <code>stat</code>.</div>
+<div class="box warn"><strong>Kiểm tra loại tệp dựa vào Content-Type do client khai</strong> (lưu trên object), không đọc nội dung/magic bytes. Một tệp không phải ảnh nhưng gắn nhãn <code>image/jpeg</code> vẫn qua được bước <code>complete</code>.</div>
+<div class="box warn"><strong>Ảnh quá cỡ vẫn nằm trên R2 cho tới khi <code>complete</code></strong> (cỡ khai báo lúc xin không bị ràng buộc trong chữ ký). Khoảng thời gian đó giới hạn bởi hạn URL 5 phút và janitor dọn job bỏ dở sau 1 giờ.</div>
+<div class="box"><strong>Dữ liệu di sản:</strong> bảng <code>owner_animals</code> được ghi và xoá nhưng mình không thấy chỗ nào đọc nó trong <code>src/main</code>; <code>UserClient.user()</code> cũng không được <code>MediaService</code> gọi (chỉ dùng <code>relationship</code>). Các cột <code>method</code>, <code>faces_detected</code>, <code>lead_animal</code> còn từ bước ẩn mặt cũ.</div>
+<div class="box">Với <code>USER_DELETED</code>, nếu xoá object lỗi thì chỉ ghi log (hàm <code>delete</code> không ném) rồi vẫn xoá dòng DB, nên có thể còn object mồ côi trên R2.</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test.</div>
+
+</main>
+</div>
+</body>
+</html>

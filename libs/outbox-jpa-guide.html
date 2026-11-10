@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>libs/outbox-jpa — Tài liệu thư viện Outbox</title>
+<style>
+  :root {
+    --bg: #fafaf7; --fg: #1d2330; --muted: #5d6676; --line: #dfe2e8; --card: #ffffff;
+    --accent: #1f6feb; --accent-bg: #e8f0fe; --ok: #1a7f37; --ok-bg: #e6f4ea;
+    --warn: #9a6700; --warn-bg: #fff4d6; --bad: #b42318; --bad-bg: #fde7e4; --code-bg: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --fg: #e6e9ef; --muted: #98a2b3; --line: #2a3140; --card: #1a1f2a;
+      --accent: #6ea8fe; --accent-bg: #1d2a44; --ok: #56d364; --ok-bg: #12301c;
+      --warn: #e3b341; --warn-bg: #3a2f10; --bad: #ff8a80; --bad-bg: #3d1a17; --code-bg: #222a38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.65 system-ui, "Segoe UI", sans-serif; }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 28px 16px; border-right: 1px solid var(--line); }
+  nav b { display: block; margin-bottom: 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  nav a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; font-size: 14px; }
+  nav a:hover { background: var(--accent-bg); color: var(--accent); }
+  main { padding: 32px 40px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 21px; margin: 44px 0 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font: 13px ui-monospace, Consolas, monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow: auto; font: 13px/1.55 ui-monospace, Consolas, monospace; margin: 10px 0; }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 14px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.c, th.c { text-align: center; }
+  .yes { color: var(--ok); font-weight: 700; }
+  .no { color: var(--muted); }
+  a { color: var(--accent); }
+  .box { padding: 12px 16px; border-radius: 8px; margin: 14px 0; border: 1px solid var(--line); background: var(--card); }
+  .box.info { background: var(--accent-bg); border-color: transparent; }
+  .box.warn { background: var(--warn-bg); border-color: transparent; }
+  .box.bad { background: var(--bad-bg); border-color: transparent; }
+  .box.ok { background: var(--ok-bg); border-color: transparent; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card h3 { margin-top: 0; }
+  .card p { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+  .lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+  .lane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .lane h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .step { background: var(--code-bg); border-radius: 6px; padding: 6px 9px; margin: 6px 0; font-size: 13.5px; }
+  .step b { color: var(--accent); }
+  .tx { border: 2px dashed var(--accent); border-radius: 8px; padding: 4px 8px 8px; margin: 6px 0; }
+  .tx > span { font-size: 12px; color: var(--accent); font-weight: 600; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } main { padding: 24px 18px 60px; } .lanes { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>Mục lục</b>
+  <a href="#van-de">1. Vấn đề cần giải quyết</a>
+  <a href="#tong-quan">2. Tổng quan</a>
+  <a href="#luong">3. Luồng hoạt động</a>
+  <a href="#cau-truc">4. Cách tổ chức</a>
+  <a href="#chi-tiet">5. Chi tiết từng lớp</a>
+  <a href="#auto-config">6. Auto-configuration</a>
+  <a href="#bang">7. Bảng dữ liệu</a>
+  <a href="#cau-hinh">8. Cấu hình</a>
+  <a href="#metric">9. Metric và cảnh báo</a>
+  <a href="#import">10. Cách import</a>
+  <a href="#ban-do">11. Ai dùng ở đâu</a>
+  <a href="#vi-du">12. Ví dụ dùng</a>
+  <a href="#luu-y">13. Lưu ý và rủi ro</a>
+</nav>
+<main>
+
+<h1>libs/outbox-jpa</h1>
+<p class="sub">Thư viện Transactional Outbox và khử trùng lặp event cho các service dùng JPA. Tài liệu viết dựa trên mã nguồn tại <code>libs/outbox-jpa</code>; xem thêm <a href="common-guide.html">common-guide.html</a> cho thư viện <code>common</code> mà nó phụ thuộc.</p>
+
+<!-- ===================== 1 ===================== -->
+<h2 id="van-de">1. Vấn đề cần giải quyết</h2>
+<p>Một service vừa phải <strong>ghi dữ liệu vào DB</strong> vừa phải <strong>báo cho service khác qua Kafka</strong> (ví dụ user-service tạo tài khoản rồi phát <code>USER_REGISTERED</code>). Hai việc này nằm ở hai hệ thống khác nhau nên không thể cùng một transaction. Nếu làm tuần tự sẽ có hai kiểu lỗi:</p>
+<table>
+  <tr><th>Cách làm</th><th>Lỗi có thể xảy ra</th></tr>
+  <tr><td>Lưu DB xong mới gửi Kafka</td><td>DB đã commit nhưng gửi Kafka thất bại (hoặc service chết ngay giữa chừng) → <strong>mất event</strong>; các service khác không bao giờ biết.</td></tr>
+  <tr><td>Gửi Kafka trước rồi mới lưu DB</td><td>Kafka đã nhận nhưng DB rollback → <strong>event ma</strong> về một thay đổi chưa từng xảy ra.</td></tr>
+</table>
+<p><strong>Giải pháp Transactional Outbox:</strong> thay vì gửi Kafka ngay, ghi event vào một bảng <code>outbox_events</code> <em>cùng transaction</em> với dữ liệu nghiệp vụ. Một tiến trình nền (relay) đọc bảng này và đẩy lên Kafka. Hoặc cả hai (dữ liệu và event) cùng được lưu, hoặc cả hai cùng không.</p>
+<p>Phía nhận, Kafka có thể giao cùng một message nhiều lần, nên thư viện cũng cung cấp <strong>khử trùng lặp</strong> bằng bảng <code>processed_events</code>.</p>
+
+<!-- ===================== 2 ===================== -->
+<h2 id="tong-quan">2. Tổng quan</h2>
+<div class="grid">
+  <div class="card"><h3>Phía phát</h3><p><code>OutboxService.publish(...)</code> ghi event vào bảng outbox, bắt buộc nằm trong transaction.</p></div>
+  <div class="card"><h3>Relay nền</h3><p><code>OutboxRelay</code> cứ 500 ms đọc tối đa 100 dòng chưa đẩy và gửi lên Kafka theo thứ tự.</p></div>
+  <div class="card"><h3>Phía nhận</h3><p><code>IdempotencyService.firstTime(eventId)</code> cho biết event này đã xử lý chưa.</p></div>
+  <div class="card"><h3>Quan sát</h3><p><code>OutboxMetrics</code> xuất số dòng chờ và tuổi dòng cũ nhất, phục vụ cảnh báo "Outbox kẹt".</p></div>
+</div>
+<div class="box info">
+  Module Maven <code>com.animallocket:outbox-jpa</code>, phụ thuộc <code>common</code> (dùng <code>EventEnvelope</code> và <code>EventJson</code>), <code>spring-boot-starter-data-jpa</code>, <code>spring-kafka</code> và <code>micrometer-core</code>. Dùng được cho service <strong>có JPA</strong>; service không dùng JPA (discovery, chat, notification) không import thư viện này.
+</div>
+
+<!-- ===================== 3 ===================== -->
+<h2 id="luong">3. Luồng hoạt động</h2>
+<div class="lanes">
+  <div class="lane">
+    <h4>Service phát</h4>
+    <div class="tx"><span>Một transaction DB</span>
+      <div class="step"><b>1</b> Lưu dữ liệu nghiệp vụ</div>
+      <div class="step"><b>2</b> <code>outbox.publish(topic, type, key, payload)</code> → thêm dòng vào <code>outbox_events</code></div>
+    </div>
+    <div class="step"><b>3</b> Commit: cả hai cùng được lưu</div>
+  </div>
+  <div class="lane">
+    <h4>OutboxRelay (nền)</h4>
+    <div class="step"><b>4</b> Mỗi 500 ms lấy ≤100 dòng <code>published_at IS NULL</code>, cũ nhất trước</div>
+    <div class="step"><b>5</b> <code>kafka.send(...).get(5s)</code> từng dòng</div>
+    <div class="step"><b>6</b> Thành công → đánh dấu <code>published_at</code>. Lỗi → <strong>dừng cả lô</strong>, lần sau thử lại</div>
+    <div class="step"><b>7</b> Mỗi giờ xoá dòng đã đẩy quá 1 ngày</div>
+  </div>
+  <div class="lane">
+    <h4>Service nhận</h4>
+    <div class="tx"><span>Một transaction DB</span>
+      <div class="step"><b>8</b> <code>EventJson.read(json)</code></div>
+      <div class="step"><b>9</b> <code>idempotency.firstTime(eventId)</code>: đã có → bỏ qua</div>
+      <div class="step"><b>10</b> Xử lý nghiệp vụ</div>
+    </div>
+    <div class="step"><b>11</b> Commit: dấu vết <code>processed_events</code> và kết quả xử lý cùng được lưu</div>
+  </div>
+</div>
+<p><strong>Ý nghĩa bảo đảm:</strong> event không bị mất (đã nằm trong DB) và không bị ghi đôi do lỗi giữa DB và Kafka. Tuy nhiên đây là <strong>giao ít nhất một lần</strong> (at-least-once): nếu relay gửi Kafka xong mà chưa kịp commit việc đánh dấu, dòng đó sẽ được gửi lại. Vì vậy phía nhận bắt buộc phải khử trùng lặp bằng <code>eventId</code>.</p>
+
+<!-- ===================== 4 ===================== -->
+<h2 id="cau-truc">4. Cách tổ chức</h2>
+<pre><code>libs/outbox-jpa/
+├─ pom.xml
+└─ src/
+   ├─ main/java/com/animallocket/outbox/
+   │  ├─ OutboxAutoConfiguration.java   đăng ký bean + entity + bật scheduling
+   │  ├─ OutboxService.java             PHÁT: ghi event vào outbox
+   │  ├─ OutboxEvent.java               entity bảng outbox_events
+   │  ├─ OutboxRepository.java          truy vấn outbox (có SKIP LOCKED)
+   │  ├─ OutboxRelay.java               đẩy outbox lên Kafka + dọn dẹp
+   │  ├─ OutboxMetrics.java             gauge outbox.pending, outbox.oldest.pending.age
+   │  ├─ IdempotencyService.java        NHẬN: khử trùng lặp
+   │  ├─ ProcessedEvent.java            entity bảng processed_events
+   │  └─ ProcessedEventRepository.java
+   ├─ main/resources/META-INF/spring/
+   │  └─ org.springframework.boot.autoconfigure.AutoConfiguration.imports
+   └─ test/java/com/animallocket/outbox/
+      ├─ OutboxAutoConfigurationOrderingTest.java
+      └─ OutboxMetricsTest.java</code></pre>
+<p>Hai nhóm chức năng độc lập nhau: <strong>nhóm phát</strong> (<code>OutboxService</code>, <code>OutboxEvent</code>, <code>OutboxRepository</code>, <code>OutboxRelay</code>, <code>OutboxMetrics</code>) và <strong>nhóm nhận</strong> (<code>IdempotencyService</code>, <code>ProcessedEvent</code>, <code>ProcessedEventRepository</code>).</p>
+
+<!-- ===================== 5 ===================== -->
+<h2 id="chi-tiet">5. Chi tiết từng lớp</h2>
+
+<h3>5.1 <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxService.java"><code>OutboxService</code></a></h3>
+<pre><code>@Transactional(propagation = Propagation.MANDATORY)
+public EventEnvelope publish(String topic, String type, String key, Object payload)</code></pre>
+<ol>
+  <li>Tạo phong bì bằng <code>EventEnvelope.of(type, producer, key, payload)</code> (sinh <code>eventId</code> UUID, ghi tên service phát vào <code>producer</code>).</li>
+  <li>Tuần tự hoá bằng <code>EventJson.write(envelope)</code>.</li>
+  <li>Lưu một <code>OutboxEvent</code> với <code>id = eventId</code>.</li>
+</ol>
+<p><code>MANDATORY</code> nghĩa là nếu gọi <code>publish</code> khi <strong>chưa có transaction</strong> thì Spring ném lỗi. Đây là chủ ý: ép bạn luôn gọi trong cùng transaction với thay đổi dữ liệu. Tên <code>producer</code> lấy từ <code>spring.application.name</code>.</p>
+
+<h3>5.2 <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxEvent.java"><code>OutboxEvent</code></a> và <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxRepository.java"><code>OutboxRepository</code></a></h3>
+<table>
+  <tr><th>Trường</th><th>Cột</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>id</code></td><td><code>id</code> (36)</td><td>Chính là <code>eventId</code> của phong bì.</td></tr>
+  <tr><td><code>topic</code></td><td><code>topic</code> (100)</td><td>Kafka topic đích.</td></tr>
+  <tr><td><code>key</code></td><td><code>event_key</code> (100)</td><td>Khoá message Kafka (thường là <code>publicId</code>), giữ thứ tự theo thực thể.</td></tr>
+  <tr><td><code>type</code></td><td><code>type</code> (60)</td><td>Loại event (để tiện gỡ lỗi).</td></tr>
+  <tr><td><code>payload</code></td><td><code>payload</code> (TEXT)</td><td>Cả phong bì đã tuần tự hoá thành JSON.</td></tr>
+  <tr><td><code>createdAt</code></td><td><code>created_at</code></td><td>Thời điểm ghi; dùng để sắp thứ tự.</td></tr>
+  <tr><td><code>publishedAt</code></td><td><code>published_at</code></td><td><code>NULL</code> = chưa đẩy; có giá trị = đã đẩy.</td></tr>
+</table>
+<p>Cột <code>key</code> được đặt tên <code>event_key</code> vì <code>key</code> là từ khoá trong SQL. Truy vấn của repository:</p>
+<ul>
+  <li><code>findTop100ByPublishedAtIsNullOrderByCreatedAtAsc()</code>: lấy 100 dòng chưa đẩy, cũ nhất trước, có khoá <code>PESSIMISTIC_WRITE</code> với <code>lock.timeout = -2</code> (<strong>SKIP LOCKED</strong>). Nhờ vậy nhiều instance của cùng một service chạy relay song song mà không giẫm lên nhau: instance nào khoá dòng nào thì instance khác bỏ qua dòng đó.</li>
+  <li><code>countByPublishedAtIsNull()</code> và <code>oldestUnpublishedCreatedAt()</code>: phục vụ metric.</li>
+  <li><code>deletePublishedBefore(before)</code>: dọn dòng đã đẩy.</li>
+</ul>
+
+<h3>5.3 <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxRelay.java"><code>OutboxRelay</code></a></h3>
+<table>
+  <tr><th>Phương thức</th><th>Lịch</th><th>Việc làm</th></tr>
+  <tr><td><code>relay()</code></td><td><code>fixedDelay</code> = <code>animal.outbox.relay.interval-ms</code> (mặc định 500 ms), <code>@Transactional</code></td><td>Lấy lô ≤100 dòng; với mỗi dòng gọi <code>kafka.send(topic, key, payload).get(5, SECONDS)</code> rồi <code>markPublished()</code>. Gặp lỗi đầu tiên thì ghi log cảnh báo và <code>break</code>.</td></tr>
+  <tr><td><code>cleanup()</code></td><td>Mỗi 3 600 000 ms (1 giờ)</td><td>Xoá dòng đã đẩy cách đây hơn 1 ngày.</td></tr>
+</table>
+<p><strong>Vì sao dừng ở lỗi đầu tiên:</strong> nếu bỏ qua dòng lỗi và gửi tiếp các dòng sau thì thứ tự event bị đảo. Dừng lại giữ đúng thứ tự, đổi lại một dòng lỗi kéo dài sẽ chặn các dòng sau nó (đó là lý do có cảnh báo "Outbox kẹt").</p>
+
+<h3>5.4 <a href="outbox-jpa/src/main/java/com/animallocket/outbox/IdempotencyService.java"><code>IdempotencyService</code></a></h3>
+<pre><code>@Transactional(propagation = Propagation.MANDATORY)
+public boolean firstTime(String eventId)</code></pre>
+<p>Nếu <code>processed_events</code> đã có <code>eventId</code> → trả <code>false</code> (bỏ qua). Nếu chưa → lưu rồi trả <code>true</code>. Cũng bắt buộc có transaction, và phải gọi <strong>cùng transaction với phần xử lý</strong>: nếu xử lý lỗi và rollback thì dấu vết cũng rollback, nên lần giao lại sau đó sẽ được xử lý lại thay vì bị bỏ qua nhầm.</p>
+
+<h3>5.5 <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxMetrics.java"><code>OutboxMetrics</code></a></h3>
+<p>Hai Micrometer gauge: <code>outbox.pending</code> (số dòng chưa đẩy) và <code>outbox.oldest.pending.age</code> (tuổi dòng chưa đẩy cũ nhất, tính bằng giây; 0 nếu không có dòng nào). Nếu đọc DB lỗi thì trả <code>NaN</code> thay vì làm hỏng lần scrape.</p>
+
+<!-- ===================== 6 ===================== -->
+<h2 id="auto-config">6. Auto-configuration</h2>
+<p>Khai báo trong <code>AutoConfiguration.imports</code> nên service chỉ cần có thư viện trên classpath. Lớp <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxAutoConfiguration.java"><code>OutboxAutoConfiguration</code></a>:</p>
+<table>
+  <tr><th>Thành phần</th><th>Tác dụng</th></tr>
+  <tr><td><code>@AutoConfigurationPackage</code></td><td>Thêm package <code>com.animallocket.outbox</code> vào danh sách quét entity và repository của JPA trong service. Nhờ đó <code>OutboxEvent</code>, <code>ProcessedEvent</code> và hai repository được nhận dạng mà service không cần cấu hình thêm.</td></tr>
+  <tr><td><code>@EnableScheduling</code></td><td>Bật <code>@Scheduled</code> trong service để relay chạy được.</td></tr>
+  <tr><td><code>after = KafkaAutoConfiguration</code></td><td>Chạy sau auto-config Kafka của Spring Boot. Nếu không, <code>@ConditionalOnBean(KafkaTemplate)</code> có thể được đánh giá trước khi <code>KafkaTemplate</code> tồn tại, và <code>OutboxRelay</code> âm thầm không bao giờ được tạo (event kẹt trong bảng outbox). Có test hồi quy riêng cho lỗi này.</td></tr>
+</table>
+<table>
+  <tr><th>Bean</th><th>Điều kiện</th></tr>
+  <tr><td><code>OutboxService</code></td><td>Luôn tạo</td></tr>
+  <tr><td><code>IdempotencyService</code></td><td>Luôn tạo</td></tr>
+  <tr><td><code>OutboxMetrics</code></td><td>Có bean <code>MeterRegistry</code></td></tr>
+  <tr><td><code>OutboxRelay</code></td><td>Có bean <code>KafkaTemplate</code> <strong>và</strong> <code>animal.outbox.relay.enabled</code> khác <code>false</code> (mặc định bật)</td></tr>
+</table>
+
+<!-- ===================== 7 ===================== -->
+<h2 id="bang">7. Bảng dữ liệu</h2>
+<p>Mỗi service dùng thư viện có <strong>DB riêng</strong>, nên mỗi service có bản sao hai bảng này trong migration Flyway <code>V1__init.sql</code>. Theo CLAUDE.md, test dùng H2 <code>create-drop</code> nên entity khớp SQL không được test bắt: đổi entity thì phải sửa SQL.</p>
+<pre><code>CREATE TABLE outbox_events (
+    id VARCHAR(36) NOT NULL,
+    topic VARCHAR(100) NOT NULL,
+    event_key VARCHAR(100) NOT NULL,
+    type VARCHAR(60) NOT NULL,
+    payload TEXT NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    published_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    INDEX idx_outbox_unpublished (published_at, created_at)
+);
+
+CREATE TABLE processed_events (
+    event_id VARCHAR(36) NOT NULL,
+    processed_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (event_id)
+);</code></pre>
+<p>Chỉ mục <code>idx_outbox_unpublished (published_at, created_at)</code> phục vụ truy vấn "lấy dòng chưa đẩy, cũ nhất trước".</p>
+<p>Các file migration: <a href="../services/user-service/src/main/resources/db/migration/V1__init.sql">user</a>, <a href="../services/media-service/src/main/resources/db/migration/V1__init.sql">media</a>, <a href="../services/post-service/src/main/resources/db/migration/V1__init.sql">post</a>, <a href="../services/billing-service/src/main/resources/db/migration/V1__init.sql">billing</a>.</p>
+
+<!-- ===================== 8 ===================== -->
+<h2 id="cau-hinh">8. Cấu hình</h2>
+<table>
+  <tr><th>Thuộc tính</th><th>Mặc định</th><th>Tác dụng</th></tr>
+  <tr><td><code>animal.outbox.relay.enabled</code></td><td><code>true</code></td><td><code>false</code> → không tạo <code>OutboxRelay</code>. Các test cấp service đặt <code>false</code> để không cần Kafka.</td></tr>
+  <tr><td><code>animal.outbox.relay.interval-ms</code></td><td><code>500</code></td><td>Khoảng nghỉ giữa hai lần relay quét.</td></tr>
+  <tr><td><code>spring.application.name</code></td><td><code>unknown</code></td><td>Giá trị ghi vào trường <code>producer</code> của mọi event.</td></tr>
+</table>
+<p>Các hằng số trong code (không cấu hình được): lô 100 dòng, timeout gửi 5 giây, giữ dòng đã đẩy 1 ngày, chu kỳ dọn 1 giờ.</p>
+
+<!-- ===================== 9 ===================== -->
+<h2 id="metric">9. Metric và cảnh báo</h2>
+<table>
+  <tr><th>Metric (Micrometer)</th><th>Tên trên Prometheus</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>outbox.pending</code></td><td><code>outbox_pending</code></td><td>Số event chưa đẩy lên Kafka.</td></tr>
+  <tr><td><code>outbox.oldest.pending.age</code></td><td><code>outbox_oldest_pending_age_seconds</code></td><td>Tuổi (giây) của event chưa đẩy cũ nhất.</td></tr>
+</table>
+<p>Hai luật cảnh báo trong <a href="../deploy/observability/prometheus/alerts.yml">deploy/observability/prometheus/alerts.yml</a>:</p>
+<table>
+  <tr><th>Cảnh báo</th><th>Điều kiện</th><th>Mức</th><th>Gợi ý nguyên nhân</th></tr>
+  <tr><td><code>OutboxStuck</code></td><td><code>outbox_oldest_pending_age_seconds &gt; 120</code> trong 2 phút</td><td>critical</td><td>Relay dừng hoặc Kafka lỗi, hoặc một dòng lỗi chặn hàng đợi.</td></tr>
+  <tr><td><code>OutboxBacklogHigh</code></td><td><code>outbox_pending &gt; 1000</code> trong 5 phút</td><td>warning</td><td>Phát nhanh hơn khả năng đẩy.</td></tr>
+</table>
+
+<!-- ===================== 10 ===================== -->
+<h2 id="import">10. Cách import</h2>
+<h3>Bước 1 — khai báo trong pom của service (không ghi version)</h3>
+<pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;com.animallocket&lt;/groupId&gt;
+    &lt;artifactId&gt;outbox-jpa&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+<p>Phiên bản đã được quản lý trong <code>dependencyManagement</code> của POM gốc. Thư viện kéo theo <code>common</code>, JPA và Spring Kafka.</p>
+<h3>Bước 2 — service cần có</h3>
+<ul>
+  <li>Một DataSource và JPA (đã có nếu là service dùng MySQL/JPA).</li>
+  <li>Cấu hình Kafka (<code>spring.kafka.bootstrap-servers</code>) để relay có <code>KafkaTemplate</code>.</li>
+  <li>Hai bảng <code>outbox_events</code> và <code>processed_events</code> trong migration Flyway của service (sao chép từ mục 7).</li>
+</ul>
+<h3>Bước 3 — import trong code</h3>
+<pre><code>import com.animallocket.outbox.OutboxService;
+import com.animallocket.outbox.IdempotencyService;</code></pre>
+<p>Chỉ cần inject hai bean này; các lớp còn lại do auto-config xử lý.</p>
+<h3>Build</h3>
+<pre><code>mvn -q -B -pl libs/outbox-jpa install
+mvn -q -B -pl services/user-service -am install   # -am: build luôn common và outbox-jpa</code></pre>
+<p>Kết quả test: <code>libs/outbox-jpa/target/surefire-reports/*.txt</code>.</p>
+
+<!-- ===================== 11 ===================== -->
+<h2 id="ban-do">11. Ai dùng ở đâu</h2>
+<table>
+  <tr><th>Service</th><th class="c">Dependency <code>outbox-jpa</code></th><th class="c">Phát (<code>outbox.publish</code>)</th><th class="c">Nhận (<code>firstTime</code>)</th></tr>
+  <tr><td>user-service</td><td class="c yes">✔</td><td class="c yes">✔ (9 chỗ)</td><td class="c yes">✔</td></tr>
+  <tr><td>post-service</td><td class="c yes">✔</td><td class="c yes">✔ (4 chỗ)</td><td class="c yes">✔</td></tr>
+  <tr><td>billing-service</td><td class="c yes">✔</td><td class="c yes">✔ (4 chỗ)</td><td class="c yes">✔</td></tr>
+  <tr><td>media-service</td><td class="c yes">✔</td><td class="c yes">✔ (2 chỗ)</td><td class="c yes">✔</td></tr>
+  <tr><td>chat-service, discovery-service, notification-service</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+</table>
+<p>Ba service không dùng thư viện vì không có JPA (theo CLAUDE.md); chat phát event trực tiếp qua <code>KafkaTemplate</code> và các thao tác của nhóm này phải tự bảo đảm idempotent.</p>
+
+<h3>Vị trí cụ thể</h3>
+<table>
+  <tr><th>Service</th><th>Chỗ phát event</th><th>Chỗ nhận (khử trùng lặp)</th></tr>
+  <tr>
+    <td>user</td>
+    <td>
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/AccountService.java">AccountService</a> (USER_REGISTERED, DISCOVERY_DISABLED, USER_DELETED),
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/AvatarService.java">AvatarService</a> (AVATAR_CHANGED, LEAD_ANIMAL_CHANGED),
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/FriendService.java">FriendService</a> (FRIEND_REQUEST_RECEIVED, FRIEND_ACCEPTED, FRIEND_REMOVED),
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/SafetyService.java">SafetyService</a> (USER_BLOCKED)
+    </td>
+    <td><a href="../services/user-service/src/main/java/com/animallocket/user/messaging/BillingEventsListener.java">BillingEventsListener</a></td>
+  </tr>
+  <tr>
+    <td>post</td>
+    <td><a href="../services/post-service/src/main/java/com/animallocket/post/service/PostService.java">PostService</a> (POST_PUBLISHED, POST_LIKED, POST_COMMENTED)</td>
+    <td><a href="../services/post-service/src/main/java/com/animallocket/post/messaging/PostEventsListener.java">PostEventsListener</a></td>
+  </tr>
+  <tr>
+    <td>billing</td>
+    <td><a href="../services/billing-service/src/main/java/com/animallocket/billing/service/BillingService.java">BillingService</a> (CONSUMABLE_GRANTED, SUBSCRIPTION_ACTIVATED, SUBSCRIPTION_EXPIRED)</td>
+    <td><a href="../services/billing-service/src/main/java/com/animallocket/billing/service/BillingMaintenance.java">BillingMaintenance</a> (chỉ với USER_DELETED)</td>
+  </tr>
+  <tr>
+    <td>media</td>
+    <td><a href="../services/media-service/src/main/java/com/animallocket/media/service/MediaService.java">MediaService</a> (PHOTO_READY, PHOTO_REJECTED)</td>
+    <td><a href="../services/media-service/src/main/java/com/animallocket/media/messaging/MediaEventsListener.java">MediaEventsListener</a></td>
+  </tr>
+</table>
+<p>Thư viện cũng được nhắc đến trong tài liệu kiến trúc: <a href="../docs/architecture/01-libs-and-infra.md">docs/architecture/01-libs-and-infra.md</a> (mục 2, có sơ đồ lớp).</p>
+
+<!-- ===================== 12 ===================== -->
+<h2 id="vi-du">12. Ví dụ dùng</h2>
+
+<h3>Phát event cùng transaction với dữ liệu</h3>
+<pre><code>@Service
+public class FriendService {
+    private final OutboxService outbox;
+    // ...
+
+    @Transactional                                   // BẮT BUỘC có transaction
+    public void accept(String me, String other) {
+        friendships.save(...);                        // 1) thay đổi dữ liệu
+        outbox.publish(Topics.FRIEND,                 // 2) ghi event vào outbox
+                EventTypes.FRIEND_ACCEPTED,
+                min(me, other),                       //    khoá message Kafka
+                new Events.FriendAccepted(me, other));
+    }                                                 // commit: cả hai cùng lưu, hoặc cùng huỷ
+}</code></pre>
+<p>Gọi ngoài transaction sẽ lỗi vì <code>Propagation.MANDATORY</code>. Nếu việc lưu hoặc <code>publish</code> ném exception thì cả hai cùng rollback, không có event ma.</p>
+
+<h3>Nhận event có khử trùng lặp</h3>
+<pre><code>@KafkaListener(topics = Topics.USER)
+@Transactional                                       // BẮT BUỘC: firstTime cần transaction
+public void onMessage(String json) {
+    EventEnvelope e = EventJson.read(json);          // JSON sai → IllegalArgumentException → DLQ
+    if (!idempotency.firstTime(e.eventId())) {
+        return;                                      // đã xử lý rồi, bỏ qua
+    }
+    switch (e.type()) {
+        case EventTypes.USER_DELETED -> service.onUserDeleted(
+                e.payloadAs(Events.UserDeleted.class).publicId());
+        default -> { }
+    }
+}</code></pre>
+<p>Dạng này đúng như <a href="../services/media-service/src/main/java/com/animallocket/media/messaging/MediaEventsListener.java">MediaEventsListener</a>. Thứ tự "kiểm tra <code>firstTime</code> trước, xử lý sau" trong cùng transaction là điều giúp event không bị mất khi xử lý lỗi (rollback cả dấu vết).</p>
+
+<h3>Tắt relay trong test</h3>
+<pre><code># src/test/resources/application.yml
+animal:
+  outbox:
+    relay:
+      enabled: false</code></pre>
+
+<!-- ===================== 13 ===================== -->
+<h2 id="luu-y">13. Lưu ý và rủi ro</h2>
+<div class="box bad">
+  <strong>Bảng <code>processed_events</code> không có cơ chế dọn.</strong> Mình không thấy code nào xoá dữ liệu bảng này, trong khi <code>outbox_events</code> thì có <code>cleanup()</code>. Mỗi event nhận được thêm một dòng vĩnh viễn, nên bảng sẽ lớn dần theo thời gian ở user, post, billing và media.
+</div>
+<div class="box warn">
+  <strong>Giao ít nhất một lần.</strong> Relay gửi Kafka rồi mới đánh dấu <code>published_at</code> trong cùng transaction, nên nếu service chết đúng giữa hai bước, event được gửi lại. Mọi consumer phải khử trùng lặp bằng <code>eventId</code> (hoặc tự bảo đảm idempotent).
+</div>
+<div class="box warn">
+  <strong>Một dòng lỗi chặn cả hàng đợi.</strong> Relay dừng ở lỗi đầu tiên để giữ thứ tự. Nếu một dòng không bao giờ gửi được (ví dụ topic bị cấm, message quá lớn), các dòng sau nó không được đẩy. Cảnh báo <code>OutboxStuck</code> có tác dụng báo trường hợp này.
+</div>
+<div class="box warn">
+  <strong>Giữ khoá dòng khi gửi.</strong> <code>relay()</code> giữ khoá <code>PESSIMISTIC_WRITE</code> trên lô đang xử lý trong suốt thời gian gọi Kafka (mỗi lần chờ tối đa 5 giây). Kafka chậm sẽ giữ khoá và transaction lâu hơn.
+</div>
+<div class="box">
+  <strong>Cài đặt này giả định nhiều instance.</strong> Nhờ SKIP LOCKED nên nhiều instance chạy relay cùng lúc không giẫm nhau; tuy vậy khi đó thứ tự toàn cục giữa các lô do các instance khác nhau không còn được bảo đảm tuyệt đối. Mình chưa kiểm tra bằng thực nghiệm; thứ tự theo từng khoá message còn phụ thuộc vào việc dòng nào được khoá trước.
+</div>
+<div class="box">
+  <strong>Tài liệu cũ.</strong> <a href="../deploy/README.md">deploy/README.md</a> (mục quan sát) vẫn ghi "chưa có cảnh báo backlog outbox", trong khi <code>OutboxMetrics</code> và hai luật <code>OutboxStuck</code>/<code>OutboxBacklogHigh</code> đã có trong code và <code>alerts.yml</code>. Nên sửa đoạn đó cho khớp.
+</div>
+<div class="box">
+  <strong>Chưa kiểm chứng.</strong> Tài liệu lập từ việc đọc mã nguồn, chưa chạy build hay test. Theo CLAUDE.md, <code>ddl-auto=validate</code> với MySQL thật cũng chưa được kiểm chứng; hiện user, media và post mặc định <code>ddl-auto: none</code>, nên việc entity và SQL khớp nhau phụ thuộc vào việc bạn tự đối chiếu.
+</div>
+
+</main>
+</div>
+</body>
+</html>

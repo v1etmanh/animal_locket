@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animal Locket — Tài liệu các service</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>Animal Locket</b>
+  <a href="#tong-quan">Tổng quan</a>
+  <a href="#danh-sach">Các service</a>
+  <a href="#thu-vien">Thư viện chung</a>
+  <a href="#kafka">Luồng event Kafka</a>
+  <a href="#goi">Gọi đồng bộ giữa service</a>
+  <a href="#luu-y">Lưu ý</a>
+</nav>
+<main>
+
+<h1>Tài liệu các service</h1>
+<p class="sub">Mục lục các trang mô tả chi tiết từng service và thư viện dùng chung. Mọi trang được lập từ việc đọc mã nguồn, chưa chạy build hay test.</p>
+
+<h2 id="tong-quan">Tổng quan</h2>
+<p>Hệ thống gồm 7 service nghiệp vụ (Java 17, Spring Boot 3.3) cùng gateway, Config Server và Eureka. Người dùng được tham chiếu giữa các service bằng <code>publicId</code> (20 ký tự), <strong>không có khoá ngoại chéo giữa các cơ sở dữ liệu</strong>. Service nói chuyện với nhau bằng hai cách: <strong>event Kafka</strong> (bất đồng bộ) và <strong>HTTP nội bộ</strong> <code>/internal/**</code> bảo vệ bằng <code>X-Internal-Token</code>.</p>
+
+<h2 id="danh-sach">Các service</h2>
+<table>
+  <tr><th>Service</th><th>Cổng</th><th>Lưu trữ</th><th>Làm gì</th><th class="c">Dùng outbox</th></tr>
+  <tr><td><a href="user-service-guide.html"><strong>user-service</strong></a></td><td>8101</td><td>MySQL + Flyway</td><td>Hồ sơ, danh tính, bạn bè, chặn/báo cáo, thiết bị, avatar duy nhất, bản sao quyền lợi Pro</td><td class="c yes">✔</td></tr>
+  <tr><td><a href="post-service-guide.html"><strong>post-service</strong></a></td><td>8102</td><td>MySQL + Flyway, Redis</td><td>Bài đăng ảnh, bảng tin, thích, bình luận, hạn mức ảnh/ngày</td><td class="c yes">✔</td></tr>
+  <tr><td><a href="media-service-guide.html"><strong>media-service</strong></a></td><td>8103</td><td>MySQL + Flyway, Cloudflare R2</td><td>Cấp URL upload/xem ảnh, kiểm tra ảnh, dọn upload bỏ dở</td><td class="c yes">✔</td></tr>
+  <tr><td><a href="discovery-service-guide.html"><strong>discovery-service</strong></a></td><td>8104</td><td>Redis (không có DB quan hệ)</td><td>Bộ thẻ gần bạn / đang online, quẹt, Boost, online, làm nhiễu vị trí</td><td class="c no">—</td></tr>
+  <tr><td><a href="chat-service-guide.html"><strong>chat-service</strong></a></td><td>8105</td><td>MongoDB, Redis</td><td>Nhắn tin 1-1 bằng WebSocket, từ điển glyph theo hội thoại</td><td class="c no">—</td></tr>
+  <tr><td><a href="billing-service-guide.html"><strong>billing-service</strong></a></td><td>8106</td><td>PostgreSQL + Flyway</td><td>Xác thực mua Apple/Google, thanh toán web PayPal/payOS, ví vật phẩm, quyền lợi Pro</td><td class="c yes">✔</td></tr>
+  <tr><td><a href="notification-service-guide.html"><strong>notification-service</strong></a></td><td>8107</td><td>Không có</td><td>Đổi event thành thông báo đẩy qua FCM</td><td class="c no">—</td></tr>
+</table>
+<p>Các service không dùng outbox (discovery, chat, notification) không có JPA; thao tác khi nhận event của chúng được viết để idempotent. Chat phát <code>MESSAGE_SENT</code> trực tiếp qua <code>KafkaTemplate</code>.</p>
+
+<h2 id="thu-vien">Thư viện chung</h2>
+<table>
+  <tr><th>Trang</th><th>Nội dung</th></tr>
+  <tr><td><a href="../libs/common-guide.html">libs/common</a></td><td>Header, topic, event, lỗi RFC 7807, bảo mật chung, KV, circuit breaker, DLQ Kafka. Cả 7 service đều dùng.</td></tr>
+  <tr><td><a href="../libs/outbox-jpa-guide.html">libs/outbox-jpa</a></td><td>Transactional Outbox và khử trùng lặp. Dùng bởi user, post, media, billing.</td></tr>
+</table>
+
+<h2 id="kafka">Luồng event Kafka</h2>
+<table>
+  <tr><th>Topic</th><th>Bên phát</th><th>Bên nhận</th><th>Event chính</th></tr>
+  <tr><td><code>user.events</code></td><td>user</td><td>media, post, chat, discovery, billing, notification</td><td><code>USER_REGISTERED</code>, <code>USER_DELETED</code>, <code>USER_BLOCKED</code>, <code>DISCOVERY_DISABLED</code>, <code>LEAD_ANIMAL_CHANGED</code>, <code>AVATAR_CHANGED</code></td></tr>
+  <tr><td><code>friend.events</code></td><td>user</td><td>chat, post, notification</td><td><code>FRIEND_REQUEST_RECEIVED</code>, <code>FRIEND_ACCEPTED</code>, <code>FRIEND_REMOVED</code></td></tr>
+  <tr><td><code>media.events</code></td><td>media</td><td>post, notification</td><td><code>PHOTO_READY</code>, <code>PHOTO_REJECTED</code></td></tr>
+  <tr><td><code>post.events</code></td><td>post</td><td>notification</td><td><code>POST_PUBLISHED</code>, <code>POST_LIKED</code>, <code>POST_COMMENTED</code></td></tr>
+  <tr><td><code>chat.events</code></td><td>chat</td><td>notification</td><td><code>MESSAGE_SENT</code></td></tr>
+  <tr><td><code>billing.events</code></td><td>billing</td><td>user, post, discovery, notification</td><td><code>SUBSCRIPTION_ACTIVATED</code>, <code>SUBSCRIPTION_EXPIRED</code>, <code>CONSUMABLE_GRANTED</code></td></tr>
+</table>
+<p>Cột "Bên nhận" lấy từ các <code>@KafkaListener</code> trong mã nguồn. Mình không thấy bên xử lý cho <code>AVATAR_CHANGED</code>.</p>
+
+<h2 id="goi">Gọi đồng bộ giữa service (<code>/internal/**</code>)</h2>
+<table>
+  <tr><th>Bên gọi</th><th>Gọi tới</th><th>Để làm gì</th></tr>
+  <tr><td>gateway</td><td>user</td><td>Đổi <code>sub</code> Keycloak thành <code>publicId</code>.</td></tr>
+  <tr><td>discovery</td><td>user</td><td>Hồ sơ, danh sách loại trừ, quẹt phải.</td></tr>
+  <tr><td>discovery</td><td>billing</td><td>Trừ Boost.</td></tr>
+  <tr><td>post</td><td>user</td><td>Danh sách bạn, hồ sơ hiển thị.</td></tr>
+  <tr><td>chat</td><td>user</td><td>Quan hệ bạn bè / chặn.</td></tr>
+  <tr><td>chat</td><td>media</td><td>Kiểm tra ảnh trong tin nhắn.</td></tr>
+  <tr><td>media</td><td>user</td><td>Quan hệ bạn bè / chặn khi cấp URL xem.</td></tr>
+  <tr><td>notification</td><td>user</td><td>Token thiết bị, danh sách bạn, gỡ token chết.</td></tr>
+</table>
+
+<h2 id="luu-y">Lưu ý</h2>
+<div class="box warn">Theo CLAUDE.md, các mục sau <strong>chưa được kiểm chứng</strong>: <code>ddl-auto=validate</code>, Redis GEO, profile <code>obs</code>, Apple/Google thật. Mình cũng không thấy FCM thật và R2 thật được test. Các trang chỉ ghi nhận điều mã nguồn làm, không khẳng định chúng chạy được trên môi trường thật.</div>
+<div class="box">Mỗi trang service có cùng bố cục: vai trò, vị trí trong hệ thống, cách tổ chức, API, nghiệp vụ, dữ liệu, sự kiện, cấu hình, test và lưu ý. Phần "Lưu ý" ghi các điểm đáng cân nhắc phát hiện khi đọc mã.</div>
+
+</main>
+</div>
+</body>
+</html>

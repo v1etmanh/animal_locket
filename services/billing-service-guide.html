@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>billing-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>billing-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#nguyen-tac">4. Nguyên tắc an toàn</a>
+  <a href="#san-pham">5. Sản phẩm</a>
+  <a href="#api">6. API</a>
+  <a href="#mua-ung-dung">7. Mua trong ứng dụng</a>
+  <a href="#mua-web">8. Thanh toán web</a>
+  <a href="#webhook">9. Webhook</a>
+  <a href="#vi">10. Ví vật phẩm</a>
+  <a href="#nen">11. Tác vụ nền</a>
+  <a href="#du-lieu">12. Dữ liệu</a>
+  <a href="#su-kien">13. Sự kiện</a>
+  <a href="#cau-hinh">14. Cấu hình</a>
+  <a href="#test">15. Test</a>
+  <a href="#luu-y">16. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>billing-service</h1>
+<p class="sub">Xác thực giao dịch mua, cấp quyền lợi Pro, ví vật phẩm và thanh toán web (PayPal, VietQR/payOS). Cổng <code>8106</code>, cơ sở dữ liệu PostgreSQL. Tài liệu lập từ mã nguồn tại <code>services/billing-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Đây là service duy nhất <strong>chạm tới tiền</strong>. Nó quyết định ai đang là Pro, ai có bao nhiêu <em>Boost</em> / <em>Lời mời ưu tiên</em>, và gói con vật nào đã mua. Các service khác không gọi billing để hỏi mỗi request; họ nhận <strong>sự kiện</strong> rồi giữ bản sao (user-service giữ <code>entitlements</code>, post-service giữ cờ PRO trong Redis).</p>
+<div class="grid">
+  <div class="card"><h3>Mua trong app</h3><p>Apple App Store và Google Play: client gửi mã giao dịch, server hỏi lại store rồi mới cấp quyền.</p></div>
+  <div class="card"><h3>Thanh toán web</h3><p>Trang <code>/pay/{mã}</code> dùng PayPal (USD) hoặc VietQR qua payOS (VND).</p></div>
+  <div class="card"><h3>Webhook</h3><p>Apple, Google, PayPal, payOS báo gia hạn, hết hạn, hoàn tiền, chargeback.</p></div>
+  <div class="card"><h3>Ví vật phẩm</h3><p>Số dư <code>BOOST</code>, <code>PRIORITY_INVITE</code> có sổ cái; discovery gọi nội bộ để tiêu.</p></div>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Gateway</td><td>gateway → billing</td><td>Route <code>/api/v1/billing/**</code>, <code>/webhooks/**</code>, <code>/pay/**</code>.</td></tr>
+  <tr><td>Apple, Google</td><td>billing ↔ store</td><td>Xác thực giao dịch (App Store Server API, Google Play Developer API) và nhận thông báo.</td></tr>
+  <tr><td>PayPal, payOS</td><td>billing ↔ nhà cung cấp</td><td>Tạo đơn, chốt khoản thu, nhận webhook.</td></tr>
+  <tr><td>discovery-service</td><td>discovery → billing</td><td><code>/internal/wallet/consume</code> khi dùng Boost.</td></tr>
+  <tr><td>user, post (Kafka)</td><td>billing → họ</td><td>Phát <code>SUBSCRIPTION_ACTIVATED/EXPIRED</code>, <code>CONSUMABLE_GRANTED</code>.</td></tr>
+  <tr><td>user-service (Kafka)</td><td>user → billing</td><td>Nhận <code>USER_DELETED</code> để xoá dữ liệu cá nhân.</td></tr>
+  <tr><td>PostgreSQL <code>billing_db</code></td><td>billing → DB</td><td>DB riêng, Flyway (V1–V4).</td></tr>
+</table>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<pre><code>services/billing-service/src/main/
+├─ java/com/animallocket/billing/
+│  ├─ BillingServiceApplication.java
+│  ├─ web/      BillingController, CheckoutController, CheckoutPageController,
+│  │            WebhookController (Apple, Google), PayPalWebhookController, PayOsWebhookController,
+│  │            AppleWebhookHandler, GoogleWebhookHandler, PayPalWebhookHandler, PayOsWebhookHandler,
+│  │            WebhookProcessor, WebhookSecurityConfig
+│  ├─ service/  BillingService (cấp quyền), PurchaseFlow (mua trong app), CheckoutService (mua web),
+│  │            WalletService, BillingMaintenance, BillingDtos
+│  ├─ store/    StoreGateway + StoreRouter; Apple* ; Google* ; PayPal* ; PayOs* ;
+│  │            StoreCaller (retry + circuit breaker), StoreConfig, DevStoreGateway
+│  ├─ domain/   Product, Purchase, Subscription, WalletBalance, LedgerEntry,
+│  │            CheckoutSession, WebhookEvent, Store
+│  └─ repo/     một repository cho mỗi entity
+└─ resources/
+   ├─ application.yml
+   ├─ db/migration/  V1__init.sql … V4__payos.sql
+   ├─ templates/pay/ checkout.html, result.html, fragments.html   (Thymeleaf)
+   └─ static/pay/    phông chữ Fraunces, Plus Jakarta Sans</code></pre>
+<p>Dùng <a href="../libs/common-guide.html">common</a> và <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a>. Khác các service MySQL: billing dùng <strong>PostgreSQL</strong> (<code>postgresql</code>, <code>flyway-database-postgresql</code>), <strong>Thymeleaf</strong> cho trang thanh toán, <code>google-auth-library-oauth2-http</code> cho Google và <code>bcpkix-jdk18on</code> cho xác thực chứng chỉ Apple (<a href="billing-service/pom.xml">pom.xml</a>).</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="nguyen-tac">4. Nguyên tắc an toàn</h2>
+<p>Các nguyên tắc này lặp lại ở nhiều lớp trong mã (xem chú thích đầu từng lớp):</p>
+<ol>
+  <li><strong>Fail closed.</strong> Thiếu cấu hình, store lỗi hay trạng thái lạ thì <strong>không cấp quyền</strong>. Bean của từng store chỉ tồn tại khi cấu hình đủ (<code>StoreConfig</code>), nếu không <code>StoreRouter</code> từ chối.</li>
+  <li><strong>Tin store, không tin client.</strong> Client chỉ gửi mã giao dịch (<code>transactionId</code> của Apple, <code>purchaseToken</code> của Google). Mọi dữ liệu cấp quyền lấy từ <code>VerifiedPurchase</code> do chính store trả.</li>
+  <li><strong>Hỏi store trước, ghi DB sau, không giữ transaction trong lúc chờ mạng.</strong> <code>PurchaseFlow</code> và <code>CheckoutService</code> cố ý <em>không</em> <code>@Transactional</code>; chỉ <code>BillingService.grant</code> mở một transaction ngắn.</li>
+  <li><strong>Cấp quyền và phát event cùng một transaction</strong> (outbox), nên không có quyền lợi mà thiếu event hay ngược lại.</li>
+  <li><strong>Idempotent mọi nơi:</strong> cùng giao dịch gọi lại không cấp hai lần (ràng buộc duy nhất <code>(store, store_transaction_id)</code>, sổ cái <code>(reason, ref, item)</code>, bảng <code>webhook_events</code>).</li>
+  <li><strong>Webhook không quyết định quyền lợi:</strong> nội dung chỉ cho biết "cái gì vừa đổi"; trạng thái thật luôn hỏi lại store.</li>
+</ol>
+
+<!-- ============ 5 ============ -->
+<h2 id="san-pham">5. Sản phẩm</h2>
+<p>Seed ở <code>V1__init.sql</code>; giá thêm ở V2 (USD) và V4 (VND).</p>
+<table>
+  <tr><th>SKU</th><th>Loại</th><th>Vật phẩm</th><th>Số lượng</th><th>USD (cent)</th><th>VND</th><th>Kỳ (ngày)</th></tr>
+  <tr><td><code>animallocket.pro.month</code></td><td>SUBSCRIPTION</td><td>PRO</td><td>1</td><td>299</td><td>79 000</td><td>30</td></tr>
+  <tr><td><code>animallocket.pro.year</code></td><td>SUBSCRIPTION</td><td>PRO</td><td>1</td><td>2 499</td><td>649 000</td><td>365</td></tr>
+  <tr><td><code>animallocket.boost.1</code></td><td>CONSUMABLE</td><td>BOOST</td><td>1</td><td>99</td><td>25 000</td><td>—</td></tr>
+  <tr><td><code>animallocket.boost.5</code></td><td>CONSUMABLE</td><td>BOOST</td><td>5</td><td>399</td><td>99 000</td><td>—</td></tr>
+  <tr><td><code>animallocket.invite.1</code></td><td>CONSUMABLE</td><td>PRIORITY_INVITE</td><td>1</td><td>99</td><td>25 000</td><td>—</td></tr>
+  <tr><td><code>animallocket.invite.5</code></td><td>CONSUMABLE</td><td>PRIORITY_INVITE</td><td>5</td><td>399</td><td>99 000</td><td>—</td></tr>
+  <tr><td><code>animallocket.pack.safari</code></td><td>PACK</td><td>SAFARI</td><td>1</td><td>199</td><td>49 000</td><td>—</td></tr>
+  <tr><td><code>animallocket.pack.ocean</code></td><td>PACK</td><td>OCEAN</td><td>1</td><td>199</td><td>49 000</td><td>—</td></tr>
+</table>
+<div class="box warn">Chính file migration ghi chú: <strong>giá trong V2 và V4 là giá tạm, phải sửa trước khi bán thật</strong>. Giá <code>NULL</code> nghĩa là sản phẩm không bán qua kênh đó (fail closed). Vật phẩm tiêu thụ hợp lệ chỉ gồm <code>BOOST</code> và <code>PRIORITY_INVITE</code> (<code>CONSUMABLE_ITEMS</code>).</div>
+<ul>
+  <li><strong>SUBSCRIPTION</strong>: thuê bao Pro, có hạn. <strong>CONSUMABLE</strong>: cộng vào ví. <strong>PACK</strong>: mở gói con vật (chỉ phát event, user-service mở gói).</li>
+</ul>
+
+<!-- ============ 6 ============ -->
+<h2 id="api">6. API</h2>
+<h3>Cho app (có JWT, người gọi dựa trên <code>X-Public-Id</code>)</h3>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/api/v1/billing/products</code></td><td>Danh mục sản phẩm đang bán: SKU, loại, vật phẩm, số lượng, giá USD/VND, kỳ.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/api/v1/billing/me</code></td><td><code>plan</code> (FREE/PRO), hạn Pro, số dư ví.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/api/v1/billing/purchases/verify</code></td><td>Gửi giao dịch vừa mua (hoặc "khôi phục giao dịch"). Client chỉ kết thúc giao dịch với store <em>sau khi nhận 200</em>.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/api/v1/billing/checkout-sessions</code></td><td>Xin liên kết thanh toán web cho một SKU (201): trả <code>url</code> và <code>expiresAt</code>.</td></tr>
+</table>
+<h3>Công khai về JWT (đường dẫn <code>/webhooks/**</code> và <code>/pay/**</code>)</h3>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/webhooks/apple</code>, <code>/webhooks/google</code>, <code>/webhooks/paypal</code>, <code>/webhooks/payos</code></td><td>Thông báo từ nhà cung cấp; mỗi handler tự xác thực chữ ký.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/pay/{token}</code></td><td>Trang tóm tắt đơn (HTML).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/pay/{token}/start</code></td><td>Bấm thanh toán PayPal → chuyển sang PayPal.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/pay/{token}/return</code>, <code>/cancel</code></td><td>PayPal đưa người dùng về / huỷ.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/pay/{token}/payos</code></td><td>Bấm "Chuyển khoản VietQR" → chuyển sang payOS.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/pay/{token}/payos/return</code>, <code>/payos/cancel</code></td><td>payOS đưa người dùng về / huỷ.</td></tr>
+</table>
+<h3>Nội bộ (<code>X-Internal-Token</code>)</h3>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Ai gọi</th><th>Việc làm</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/internal/wallet/consume</code></td><td>discovery</td><td>Trừ 1 đơn vị <code>item</code> của <code>publicId</code> (204). Không đủ số dư → <code>409 INSUFFICIENT_BALANCE</code>; vật phẩm lạ → <code>400 UNKNOWN_ITEM</code>.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/internal/wallet/{publicId}</code></td><td>discovery</td><td>Số dư theo vật phẩm.</td></tr>
+</table>
+
+<!-- ============ 7 ============ -->
+<h2 id="mua-ung-dung">7. Mua trong ứng dụng (Apple, Google)</h2>
+<div class="flow">
+  <span class="n">1. App mua qua store</span><span class="ar">→</span>
+  <span class="n">2. <code>POST /purchases/verify</code> {store, sku, token}</span><span class="ar">→</span>
+  <span class="n">3. Server hỏi store (retry + circuit breaker)</span><span class="ar">→</span>
+  <span class="n">4. Kiểm tra SKU, chưa bị thu hồi</span><span class="ar">→</span>
+  <span class="n">5. <code>grant</code> trong 1 transaction</span><span class="ar">→</span>
+  <span class="n">6. 200 → app kết thúc giao dịch</span>
+</div>
+<p><a href="billing-service/src/main/java/com/animallocket/billing/service/PurchaseFlow.java">PurchaseFlow.verifyAndGrant</a>:</p>
+<ol>
+  <li>SKU phải có trong danh mục và đang <code>active</code> → nếu không <code>400 UNKNOWN_PRODUCT</code>.</li>
+  <li>Hỏi <code>StoreRouter.verify(store, sku, token)</code>. Biên lai sai (<code>INVALID</code>) → <code>400 INVALID_RECEIPT</code>. Store không trả lời (<code>UNAVAILABLE</code>) → <code>503 STORE_UNAVAILABLE</code> với thông điệp "bạn sẽ không bị mất quyền lợi" (client giữ giao dịch để thử lại).</li>
+  <li>SKU trong biên lai khác SKU yêu cầu → <code>400 SKU_MISMATCH</code>. Giao dịch đã bị hoàn/thu hồi → <code>400 RECEIPT_REVOKED</code>.</li>
+  <li><code>BillingService.grant</code>: nếu <code>(store, transactionId)</code> đã có — cùng người thì trả lại <code>me</code>, khác người thì <code>409 RECEIPT_ALREADY_USED</code>. Chưa có thì ghi <code>Purchase</code> rồi cấp theo loại sản phẩm.</li>
+</ol>
+<table>
+  <tr><th>Loại</th><th>Cách cấp</th></tr>
+  <tr><td>SUBSCRIPTION</td><td>Tìm/tạo <code>Subscription</code> theo <code>(store, originalTransactionId)</code>, đặt hạn và trạng thái (ACTIVE nếu còn hạn), rồi <code>refreshEntitlement</code>. Thiếu hạn → <code>400 INVALID_RECEIPT</code>; thuê bao thuộc người khác → <code>409</code>.</td></tr>
+  <tr><td>CONSUMABLE</td><td>Cộng ví (<code>reason=PURCHASE</code>, <code>ref=purchase:&lt;id&gt;</code>) và phát <code>CONSUMABLE_GRANTED</code>.</td></tr>
+  <tr><td>PACK</td><td>Chỉ phát <code>CONSUMABLE_GRANTED</code> với <code>item = "ANIMAL_PACK:&lt;mã gói&gt;"</code>; user-service mở các con vật.</td></tr>
+</table>
+<p><code>refreshEntitlement</code> không "cộng dồn" mà xem lại <em>tất cả</em> thuê bao của người dùng (có thể ở nhiều store): còn thuê bao ACTIVE chưa hết hạn → phát <code>SUBSCRIPTION_ACTIVATED</code> (kèm hạn dài nhất); không còn → phát <code>SUBSCRIPTION_EXPIRED</code>.</p>
+
+<h3>Các cổng store</h3>
+<table>
+  <tr><th>Lớp</th><th>Cách xác thực</th></tr>
+  <tr><td><a href="billing-service/src/main/java/com/animallocket/billing/store/AppleStoreGateway.java">AppleStoreGateway</a> + <a href="billing-service/src/main/java/com/animallocket/billing/store/AppleJwsVerifier.java">AppleJwsVerifier</a></td><td>Client gửi <code>transactionId</code>; server tự gọi App Store Server API (kèm JWT ES256 ký bằng khoá <code>.p8</code>) rồi kiểm tra chữ ký JWS của Apple: <code>alg = ES256</code>, chuỗi chứng chỉ <code>x5c</code> hợp lệ theo PKIX và kết thúc tại Apple Root CA đã cấu hình, leaf mang OID của Apple (mặc định bắt buộc), chữ ký hợp lệ. Thiếu root CA → UNAVAILABLE. <strong>Không kiểm tra thu hồi chứng chỉ (OCSP/CRL).</strong></td></tr>
+  <tr><td><a href="billing-service/src/main/java/com/animallocket/billing/store/GoogleStoreGateway.java">GoogleStoreGateway</a></td><td>Client gửi <code>purchaseToken</code> (chỉ chữ, số, <code>. - _</code>); server hỏi Google Play Developer API. <code>originalTransactionId</code> = SHA-256 (hex) của token gốc sau khi lần theo <code>linkedPurchaseToken</code> (tối đa 5 bước) để webhook và verify tính cùng một khoá. Ánh xạ trạng thái: ACTIVE / IN_GRACE_PERIOD / CANCELED → còn quyền đến hết hạn đã trả; ON_HOLD / PAUSED / EXPIRED → không; PENDING → UNAVAILABLE; trạng thái lạ → INVALID (không bao giờ cấp).</td></tr>
+  <tr><td><a href="billing-service/src/main/java/com/animallocket/billing/store/DevStoreGateway.java">DevStoreGateway</a></td><td><strong>Chỉ dev/test.</strong> Tin biên lai tự khai dạng <code>dev:&lt;tx&gt;[:&lt;orig&gt;[:&lt;hết hạn epoch&gt;]]</code>. Tắt mặc định; bật bằng <code>animal.billing.dev-store.enabled=true</code>.</td></tr>
+  <tr><td><a href="billing-service/src/main/java/com/animallocket/billing/store/StoreCaller.java">StoreCaller</a></td><td>Bọc mọi lời gọi ra ngoài bằng Retry (backoff luỹ thừa) bên trong CircuitBreaker. Chỉ lỗi <code>UNAVAILABLE</code> được thử lại và tính vào ngắt mạch; <code>INVALID</code> trả thẳng. Mạch mở → UNAVAILABLE ngay, không gọi store.</td></tr>
+</table>
+<p><code>PAYPAL</code> và <code>PAYOS</code> cũng là giá trị của enum <code>Store</code> nhưng <strong>không đi qua <code>StoreRouter</code></strong> và không dùng được ở API <code>verify</code> công khai; chúng chỉ dùng cho thanh toán web.</p>
+
+<!-- ============ 8 ============ -->
+<h2 id="mua-web">8. Thanh toán web (PayPal, VietQR/payOS)</h2>
+<p><a href="billing-service/src/main/java/com/animallocket/billing/service/CheckoutService.java">CheckoutService</a> xử lý mua qua trình duyệt. Cũng không <code>@Transactional</code>: gọi nhà cung cấp xong mới cấp quyền.</p>
+<ol>
+  <li><strong>App xin liên kết</strong> (<code>create</code>): cần ít nhất một kênh bật (PayPal hoặc payOS), nếu không <code>503 PAYMENT_UNAVAILABLE</code>. SKU phải đang bán và có giá ở ít nhất một kênh (thuê bao còn cần <code>period_days &gt; 0</code>), nếu không <code>400 NOT_PURCHASABLE_ONLINE</code>. Sinh mã ngẫu nhiên 32 byte (Base64 URL), <strong>chỉ lưu băm SHA-256</strong> trong <code>checkout_sessions</code> cùng <code>publicId</code>, <code>sku</code>, số tiền chốt lúc tạo; hạn mặc định 30 phút (<code>sessionTtl</code>). Trả <code>&lt;baseUrl&gt;/pay/&lt;mã&gt;</code>.</li>
+  <li><strong>Trình duyệt</strong> mở <code>/pay/{mã}</code>. Mã là thứ duy nhất xác định phiên; <code>publicId</code> lấy từ phiên chứ không từ URL.</li>
+  <li><strong>PayPal:</strong> <code>start</code> tạo đơn PayPal và chuyển sang duyệt; PayPal đưa về <code>/return</code>; <code>complete</code> chốt (capture) khoản thu. Chỉ cấp quyền khi PayPal báo khoản thu <code>COMPLETED</code> đúng số tiền/đơn gắn với phiên.</li>
+  <li><strong>payOS (VND):</strong> <code>startPayOs</code> tạo link; mỗi link là một <code>orderCode = orderCodeBase + sessionId × 100 + lần thử</code> (tối đa 99 lần/phiên). Khi quay về, tham số URL <em>không được ký</em> nên <code>orderCode</code> chỉ là gợi ý và service hỏi lại payOS trạng thái thật rồi đối chiếu số tiền. Báo đã trả nhưng không khớp thì <strong>tuyệt đối không cấp</strong> và ghi lỗi để xử lý thủ công. Nếu phiên đã xong mà một link khác cũng bị trả tiền (trả hai lần) thì cảnh báo để hoàn tiền thủ công.</li>
+</ol>
+<table>
+  <tr><th>Trạng thái hiển thị (<code>State</code>)</th><th>Mã HTTP trang</th></tr>
+  <tr><td><code>READY</code>, <code>COMPLETED</code>, <code>HELD</code></td><td>200</td></tr>
+  <tr><td><code>NOT_FOUND</code></td><td>404</td></tr>
+  <tr><td><code>EXPIRED</code></td><td>410</td></tr>
+  <tr><td><code>FAILED</code></td><td>422</td></tr>
+  <tr><td><code>UNAVAILABLE</code></td><td>503</td></tr>
+</table>
+<ul>
+  <li>Trạng thái phiên (<code>CheckoutSession.Status</code>): <code>PENDING</code>, <code>APPROVING</code>, <code>COMPLETED</code>, <code>PAYMENT_HELD</code>, <code>CANCELED</code>.</li>
+  <li>Mọi trang đặt <code>Cache-Control: no-store</code> và <code>Referrer-Policy: no-referrer</code> vì mã nằm trên URL.</li>
+  <li>Capture và cấp quyền đều idempotent nên F5, hai tab hay lỗi giữa chừng không thu hoặc cấp hai lần. Thuê bao mua qua web là <strong>trả trước theo kỳ, không tự gia hạn</strong>.</li>
+  <li>Chỉ hiện phương thức đã bật <em>và</em> có giá cho sản phẩm đó (<code>paypalEnabled</code>, <code>payosEnabled</code>).</li>
+</ul>
+
+<!-- ============ 9 ============ -->
+<h2 id="webhook">9. Webhook</h2>
+<p>Các đường dẫn <code>/webhooks/**</code> nằm trong <code>animal.security.public-paths</code> (nhà cung cấp không có JWT Keycloak), nên <strong>mỗi handler tự xác thực</strong>. Quy ước phản hồi: 2xx = đã xử lý hoặc bỏ qua có chủ đích (trùng); 401 = xác thực sai; 5xx = lỗi tạm thời để nhà cung cấp gửi lại. Giá trị trả về: <code>{"status": "processed | duplicate | ignored"}</code>.</p>
+<div class="box">Lưu ý kỹ thuật: bộ lọc bearer token của resource server cố giải mã mọi header <code>Authorization: Bearer</code>, kể cả ở đường dẫn công khai, và trả 401 nếu không phải JWT Keycloak. Token OIDC của Google Pub/Sub chính là trường hợp đó, nên <a href="billing-service/src/main/java/com/animallocket/billing/web/WebhookSecurityConfig.java">WebhookSecurityConfig</a> bỏ qua bearer ở <code>/webhooks/</code>; chữ ký được kiểm tra riêng.</div>
+<table>
+  <tr><th>Nhà cung cấp</th><th>Xác thực</th><th>Sự kiện xử lý</th></tr>
+  <tr><td><strong>Apple</strong> (App Store Server Notifications V2)</td><td>Kiểm JWS (chuỗi <code>x5c</code> → Apple Root CA) <em>trước mọi xử lý</em>; sai → 401, không đổi trạng thái</td><td><code>SUBSCRIBED</code>, <code>DID_RENEW</code>, <code>RENEWAL_EXTENDED</code> → gia hạn; <code>EXPIRED</code>, <code>GRACE_PERIOD_EXPIRED</code>, <code>REVOKE</code> → kết thúc; <code>REFUND</code> → hoàn tiền; còn lại bỏ qua</td></tr>
+  <tr><td><strong>Google</strong> (RTDN qua Pub/Sub push)</td><td>Token OIDC: chữ ký khớp JWKS Google, issuer <code>accounts.google.com</code>, chưa hết hạn, audience khớp, email đúng service account, <code>email_verified</code></td><td>Nội dung chỉ cho biết token nào vừa đổi; trạng thái thật được hỏi lại Google. UNAVAILABLE → 503 để Pub/Sub gửi lại; token đã bị xoá (INVALID) → bỏ qua</td></tr>
+  <tr><td><strong>PayPal</strong></td><td>Nhờ PayPal xác minh chữ ký (các header <code>PAYPAL-*</code>) trước khi làm gì</td><td><code>PAYMENT.CAPTURE.COMPLETED</code> → chốt nốt phiên nếu người dùng không quay về; <code>PAYMENT.CAPTURE.REFUNDED</code> → thu hồi nếu hoàn toàn phần (hoàn một phần thì giữ); <code>PAYMENT.CAPTURE.REVERSED</code> (chargeback) → thu hồi</td></tr>
+  <tr><td><strong>payOS</strong></td><td>HMAC-SHA256 trên <code>data</code> bằng checksum key (so sánh thời gian hằng)</td><td>Chỉ lấy <code>orderCode</code> để tìm phiên, rồi hỏi lại payOS trạng thái thật và đối chiếu số tiền</td></tr>
+</table>
+<p><a href="billing-service/src/main/java/com/animallocket/billing/web/WebhookProcessor.java">WebhookProcessor</a> làm hai việc <em>trong cùng một transaction</em>: ghi dấu "đã nhận" vào <code>webhook_events</code> và chạy hành động. Nếu hành động lỗi thì dấu cũng rollback, nên khi nhà cung cấp gửi lại sẽ được xử lý lại — đó chính là hàng đợi thử lại. Mọi lời gọi mạng phải xong <em>trước</em> khi vào đây. PayPal COMPLETED và payOS không dùng bảng này vì việc chốt phiên đã idempotent.</p>
+<h3>Hệ quả của thu hồi (<code>BillingService</code>)</h3>
+<table>
+  <tr><th>Sự kiện</th><th>Hành động</th></tr>
+  <tr><td><code>onSubscriptionUpdated</code></td><td>Đặt hạn mới và trạng thái, rồi <code>refreshEntitlement</code>. Không có thuê bao khớp thì bỏ qua (app sẽ xác thực lại khi mở).</td></tr>
+  <tr><td><code>onSubscriptionEnded</code></td><td>Đặt <code>EXPIRED</code>, hạn = bây giờ, <code>refreshEntitlement</code>.</td></tr>
+  <tr><td><code>onRefund</code> — SUBSCRIPTION</td><td>Đánh dấu <code>Purchase.REFUNDED</code> và kết thúc thuê bao liên quan.</td></tr>
+  <tr><td><code>onRefund</code> — CONSUMABLE</td><td>Thu hồi tối đa số dư còn lại: thử trừ toàn bộ số lượng, giảm dần cho tới khi trừ được. Phần đã dùng không lấy lại.</td></tr>
+  <tr><td><code>onRefund</code> — PACK</td><td>Chỉ ghi log; <strong>giữ nguyên con vật đã mở</strong>.</td></tr>
+</table>
+
+<!-- ============ 10 ============ -->
+<h2 id="vi">10. Ví vật phẩm</h2>
+<p><a href="billing-service/src/main/java/com/animallocket/billing/service/WalletService.java">WalletService</a>:</p>
+<ul>
+  <li>Số dư đổi bằng câu <code>UPDATE</code> nguyên tử, không đọc-rồi-ghi. Cột <code>balance</code> có <code>CHECK (balance &gt;= 0)</code> ở DB.</li>
+  <li>Mọi thay đổi có một dòng sổ cái, khoá duy nhất <code>(reason, ref, item)</code> nên cùng một sự kiện không thể cộng/trừ hai lần.</li>
+  <li><code>credit</code> trả <code>false</code> nếu <code>(reason, ref, item)</code> đã ghi. <code>debit</code> trả <code>true</code> nếu đã trừ (hoặc đã trừ từ trước), <code>false</code> nếu không đủ số dư.</li>
+  <li>Cả hai bắt buộc có transaction (<code>MANDATORY</code>).</li>
+  <li><code>reason</code> thấy trong mã: <code>PURCHASE</code>, <code>CONSUME</code>, <code>REFUND</code>.</li>
+</ul>
+
+<!-- ============ 11 ============ -->
+<h2 id="nen">11. Tác vụ nền</h2>
+<p><a href="billing-service/src/main/java/com/animallocket/billing/service/BillingMaintenance.java">BillingMaintenance</a>:</p>
+<ul>
+  <li><strong><code>expire()</code></strong> (mặc định mỗi 5 phút, <code>animal.billing.expiry-interval-ms</code>): hạ thuê bao ACTIVE đã quá hạn <em>cộng thời gian ân hạn</em> (<code>animal.billing.expiry-grace</code>, mặc định 1 giờ) về EXPIRED và <code>refreshEntitlement</code>. Có ân hạn vì thông báo gia hạn từ store có thể đến trễ vài phút sau hạn cũ.</li>
+  <li><strong><code>onUserEvent</code></strong>: nghe <code>user.events</code> (nhóm <code>billing-service</code>), chỉ xử lý <code>USER_DELETED</code> (có khử trùng lặp): xoá số dư và sổ cái ví, xoá thuê bao, <strong>ẩn danh</strong> các giao dịch (<code>purchases.anonymize</code>) thay vì xoá, để giữ chứng từ.</li>
+</ul>
+<p>Ngoài ra <code>OutboxRelay</code> của <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a> chạy nền.</p>
+
+<!-- ============ 12 ============ -->
+<h2 id="du-lieu">12. Dữ liệu</h2>
+<p>PostgreSQL <code>billing_db</code>; thời gian dùng <code>TIMESTAMP WITH TIME ZONE</code>.</p>
+<table>
+  <tr><th>Bảng</th><th>Nội dung</th><th>Ràng buộc đáng chú ý</th></tr>
+  <tr><td><code>products</code></td><td>Danh mục + giá USD/VND + kỳ</td><td>khoá chính <code>sku</code></td></tr>
+  <tr><td><code>purchases</code></td><td>Giao dịch mua: store, id giao dịch, id gốc, người mua, SKU, trạng thái (có REFUNDED)</td><td>duy nhất <code>(store, store_transaction_id)</code></td></tr>
+  <tr><td><code>subscriptions</code></td><td>Thuê bao: người dùng, SKU, store, id gốc, trạng thái, hạn</td><td>duy nhất <code>(store, original_transaction_id)</code>; chỉ mục <code>(status, expires_at)</code></td></tr>
+  <tr><td><code>wallet_balances</code></td><td>Số dư <code>(public_id, item)</code></td><td><code>CHECK balance &gt;= 0</code></td></tr>
+  <tr><td><code>wallet_ledger</code></td><td>Sổ cái: <code>delta</code>, <code>reason</code>, <code>ref</code></td><td>duy nhất <code>(reason, ref, item)</code></td></tr>
+  <tr><td><code>webhook_events</code></td><td>Dấu "đã nhận" để khử trùng lặp webhook</td><td>khoá chính <code>id</code></td></tr>
+  <tr><td><code>checkout_sessions</code></td><td>Phiên thanh toán web: băm mã, người dùng, SKU, số tiền chốt (USD cent, VND), trạng thái, id đơn/capture PayPal, thông tin link payOS, số lần thử</td><td>duy nhất <code>token_hash</code>; chỉ mục theo người dùng, capture, order</td></tr>
+  <tr><td><code>outbox_events</code>, <code>processed_events</code></td><td>Của <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a></td><td>—</td></tr>
+</table>
+<p>Lịch sử migration: V1 khởi tạo; V2 giá USD + <code>checkout_sessions</code>; V3 thêm <code>paypal_capture_id</code>; V4 thêm payOS (giá VND, số tiền/lần thử/link/mã đơn đã trả, và bỏ ràng buộc NOT NULL của <code>amount_cents</code> vì sản phẩm có thể chỉ bán qua payOS).</p>
+<div class="box info">Khác user/media/post, <code>ddl-auto</code> mặc định ở đây là <strong><code>validate</code></strong> (<code>JPA_DDL_AUTO</code>), tức Hibernate kiểm entity với schema lúc khởi động. Theo CLAUDE.md, <code>validate</code> chưa được kiểm chứng với MySQL thật; billing dùng PostgreSQL nên đó là một ngoại lệ cần chạy thử.</div>
+
+<!-- ============ 13 ============ -->
+<h2 id="su-kien">13. Sự kiện</h2>
+<h3>Phát (qua outbox, topic <code>billing.events</code>, khoá = <code>publicId</code>)</h3>
+<table>
+  <tr><th>Event</th><th>Khi nào</th><th>Payload</th><th>Nơi nhận</th></tr>
+  <tr><td><code>SUBSCRIPTION_ACTIVATED</code></td><td>Còn thuê bao ACTIVE chưa hết hạn sau mua/gia hạn/webhook/cron</td><td><code>SubscriptionChanged(publicId, "PRO", hạn)</code></td><td>user, post</td></tr>
+  <tr><td><code>SUBSCRIPTION_EXPIRED</code></td><td>Không còn thuê bao hiệu lực</td><td><code>SubscriptionChanged(publicId, "FREE", null)</code></td><td>user, post</td></tr>
+  <tr><td><code>CONSUMABLE_GRANTED</code></td><td>Mua vật phẩm hoặc gói</td><td><code>ConsumableGranted(publicId, item, quantity)</code>; gói có <code>item = "ANIMAL_PACK:&lt;mã&gt;"</code></td><td>user (mở gói)</td></tr>
+</table>
+<p>Lưu ý: <code>refreshEntitlement</code> phát event ở <em>mỗi</em> lần được gọi, kể cả khi trạng thái không đổi (ví dụ gia hạn). Consumer đã idempotent theo <code>eventId</code> và việc lưu cờ/bản sao là ghi đè nên không sai, nhưng số event có thể nhiều hơn số lần "thật sự đổi".</p>
+<h3>Nhận</h3>
+<p>Chỉ <code>USER_DELETED</code> từ <code>user.events</code> (mục 11).</p>
+
+<!-- ============ 14 ============ -->
+<h2 id="cau-hinh">14. Cấu hình</h2>
+<p><a href="billing-service/src/main/resources/application.yml">application.yml</a>. Mọi bí mật qua biến môi trường.</p>
+<table>
+  <tr><th>Nhóm</th><th>Khoá (biến môi trường)</th><th>Ý nghĩa</th></tr>
+  <tr><td>Chung</td><td><code>server.port</code> 8106; <code>DB_URL / DB_USER / DB_PASSWORD</code> (PostgreSQL); <code>JPA_DDL_AUTO</code> (<code>validate</code>)</td><td>Cổng, DB.</td></tr>
+  <tr><td>Bảo mật</td><td><code>animal.security.public-paths: /webhooks/**,/pay/**</code></td><td>Không cần JWT ở hai nhóm đường dẫn này.</td></tr>
+  <tr><td>Thời gian</td><td><code>animal.billing.expiry-grace</code> (1h), <code>expiry-interval-ms</code> (300000)</td><td>Ân hạn và nhịp hạ thuê bao quá hạn.</td></tr>
+  <tr><td>Dev</td><td><code>animal.billing.dev-store.enabled</code> (<code>BILLING_DEV_STORE</code>, false)</td><td>Tin biên lai tự khai. <strong>Không bật ở production.</strong></td></tr>
+  <tr><td>Apple</td><td><code>APPLE_BUNDLE_ID, APPLE_ISSUER_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY_FILE, APPLE_ROOT_CERT_FILES, APPLE_ENVIRONMENT</code> (PRODUCTION|SANDBOX), <code>APPLE_ALLOW_SANDBOX_FALLBACK</code> (false), <code>APPLE_REQUIRE_OID</code> (true)</td><td>Cần đủ cả năm khoá đầu (bundle, issuer, key, file .p8, root CA) thì cổng Apple mới tồn tại.</td></tr>
+  <tr><td>Google</td><td><code>GOOGLE_PACKAGE_NAME, GOOGLE_SERVICE_ACCOUNT_FILE</code> (cổng + client), <code>GOOGLE_PUSH_AUDIENCE, GOOGLE_PUSH_SERVICE_ACCOUNT</code> (xác thực webhook), <code>GOOGLE_SERVER_ACKNOWLEDGE</code> (false)</td><td>Hai cặp độc lập: có cặp đầu mới verify được; có cặp sau mới nhận được webhook.</td></tr>
+  <tr><td>PayPal</td><td><code>PAYPAL_MODE</code> (sandbox|live), <code>PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID</code>, <code>PAYPAL_RETURN_BASE_URL</code>, <code>PAYPAL_APP_RETURN_URL</code></td><td>Trống <code>WEBHOOK_ID</code> → <code>/webhooks/paypal</code> từ chối (503). Địa chỉ công khai production phải HTTPS. Chế độ <code>live</code> thu tiền thật (có log cảnh báo).</td></tr>
+  <tr><td>payOS</td><td><code>PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY</code>, <code>PAYOS_ORDER_CODE_BASE</code> (100000000000)</td><td>Cần đủ ba khoá. <strong>payOS không có sandbox</strong>: mọi giao dịch là tiền thật. Đặt <code>ORDER_CODE_BASE</code> khác nhau cho mỗi môi trường dùng chung kênh payOS.</td></tr>
+  <tr><td>Chịu lỗi</td><td><code>resilience4j.circuitbreaker/retry</code> cho <code>store-apple</code>, <code>store-google</code></td><td>Retry tối đa 3 lần, backoff luỹ thừa từ 500 ms; cửa sổ 20 lời gọi, ≥50% lỗi mở mạch, chờ 30 giây.</td></tr>
+  <tr><td>Tĩnh</td><td><code>spring.web.resources.cache.cachecontrol</code></td><td>Cache công khai 7 ngày cho tài nguyên tĩnh (phông chữ trang thanh toán).</td></tr>
+</table>
+
+<!-- ============ 15 ============ -->
+<h2 id="test">15. Test</h2>
+<ul>
+  <li><strong>BillingFlowIntegrationTest</strong>: luồng mua và cấp quyền cơ bản.</li>
+  <li><strong>web/</strong>: <code>AppleWebhookIntegrationTest</code>, <code>GoogleWebhookIntegrationTest</code>, <code>PayPalWebhookIntegrationTest</code>, <code>CheckoutFlowIntegrationTest</code> (PayPal), <code>PayOsCheckoutIntegrationTest</code>.</li>
+  <li><strong>store/</strong>: <code>AppleJwsVerifierTest</code> (với hạ tầng khoá giả <code>AppleTestPki</code>), <code>AppleStoreGatewayTest</code>, <code>GoogleStoreGatewayTest</code>, <code>HttpGooglePlayClientTest</code>, <code>HttpPayPalClientTest</code>, <code>HttpPayOsClientTest</code>, <code>OidcGooglePushAuthTest</code>, <code>PayOsSignatureTest</code> (đối chiếu với bộ dữ liệu mẫu chính thức của payOS), <code>StoreCallerTest</code>, <code>StoreRouterConfigTest</code>.</li>
+</ul>
+<pre><code>mvn -q -B -pl services/billing-service install
+# kết quả: services/billing-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 16 ============ -->
+<h2 id="luu-y">16. Lưu ý</h2>
+<div class="box bad"><strong>Chưa kiểm chứng với dịch vụ thật.</strong> CLAUDE.md liệt kê "Apple/Google thật" là chưa chạy thử. Các test dùng khoá/PKI giả và máy chủ giả; đừng khẳng định luồng Apple, Google, PayPal hay payOS "chạy được" khi chưa thử với tài khoản thật.</div>
+<div class="box warn"><strong>Giá là giá tạm</strong> (V2, V4) và <strong>payOS không có sandbox</strong>: thử payOS nghĩa là tiền thật.</div>
+<div class="box warn"><strong>Hoàn tiền không thu hồi con vật:</strong> khi hoàn tiền gói PACK, con vật đã mở được giữ nguyên (theo thiết kế ghi trong mã). Hoàn tiền vật phẩm chỉ thu hồi phần còn lại trong ví.</div>
+<div class="box warn"><strong>Apple: không kiểm tra thu hồi chứng chỉ</strong> (OCSP/CRL) ở <code>AppleJwsVerifier</code>.</div>
+<div class="box">Nhà cung cấp trả tiền hai lần cho cùng một phiên (ví dụ hai link payOS) <strong>không tự hoàn</strong>: mã chỉ ghi cảnh báo để hoàn thủ công.</div>
+<div class="box">Dev store (<code>DevStoreGateway</code>) tin hoàn toàn biên lai do client khai: chỉ bật khi phát triển. Mặc định tắt.</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test.</div>
+
+</main>
+</div>
+</body>
+</html>

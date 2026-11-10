@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>notification-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>notification-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#luong">4. Luồng xử lý</a>
+  <a href="#bang-tb">5. Event nào thành thông báo</a>
+  <a href="#gui">6. Gửi push</a>
+  <a href="#chiu-loi">7. Chịu lỗi và khử trùng lặp</a>
+  <a href="#metric">8. Metric</a>
+  <a href="#cau-hinh">9. Cấu hình</a>
+  <a href="#test">10. Test</a>
+  <a href="#luu-y">11. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>notification-service</h1>
+<p class="sub">Biến sự kiện nghiệp vụ thành thông báo đẩy (push) gửi tới thiết bị qua Firebase Cloud Messaging. Cổng <code>8107</code>, <strong>không có cơ sở dữ liệu</strong>, <strong>không có API công khai</strong>. Tài liệu lập từ mã nguồn tại <code>services/notification-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Notification-service là service nhỏ nhất và <strong>chỉ phản ứng với event</strong>: nó nghe Kafka, quyết định ai cần được báo gì, rồi gửi push. Không có controller nào; người dùng không bao giờ gọi trực tiếp.</p>
+<div class="grid">
+  <div class="card"><h3>Nghe event</h3><p>Sáu topic: user, friend, post, chat, media, billing.</p></div>
+  <div class="card"><h3>Lập thông báo</h3><p><code>NotificationPlanner</code> đổi event thành danh sách thông báo cho từng người nhận.</p></div>
+  <div class="card"><h3>Gửi push</h3><p>Tới mọi thiết bị của người nhận qua FCM (Android và iOS qua APNs do FCM chuyển tiếp).</p></div>
+  <div class="card"><h3>Ẩn danh</h3><p>Nội dung thông báo cố ý chung chung, không nêu alias hay danh tính ai.</p></div>
+</div>
+<div class="box info">Service không dùng JPA nên <strong>không dùng outbox-jpa</strong>, không phát event nào. Dữ liệu duy nhất nó cần (token thiết bị, danh sách bạn) được hỏi từ user-service mỗi khi cần.</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Các service khác (Kafka)</td><td>→ notification</td><td>Topic <code>user.events</code>, <code>friend.events</code>, <code>post.events</code>, <code>chat.events</code>, <code>media.events</code>, <code>billing.events</code> (nhóm <code>notification-service</code>).</td></tr>
+  <tr><td>user-service</td><td>notification → user</td><td><code>GET /internal/devices/{id}</code> (token thiết bị), <code>GET /internal/friends/{id}</code> (danh sách bạn, cho thông báo bài mới), <code>DELETE /internal/devices/{token}</code> (gỡ token chết).</td></tr>
+  <tr><td>Firebase Cloud Messaging</td><td>notification → FCM</td><td>Gửi push thật khi cấu hình khoá dịch vụ.</td></tr>
+</table>
+<p>Gateway không có route tới notification-service. Người dùng đăng ký thiết bị qua <code>PUT /api/v1/devices</code> của <a href="user-service-guide.html">user-service</a>; notification-service chỉ đọc lại token đó.</p>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<p>Toàn bộ nằm trong một package <code>com.animallocket.notification</code> (11 file), không chia <code>web/ service/ repo/</code> vì không có tầng web hay dữ liệu:</p>
+<table>
+  <tr><th>Lớp</th><th>Việc làm</th></tr>
+  <tr><td><a href="notification-service/src/main/java/com/animallocket/notification/NotificationListener.java">NotificationListener</a></td><td>Nghe Kafka, khử trùng lặp, giao việc cho thread pool riêng.</td></tr>
+  <tr><td><a href="notification-service/src/main/java/com/animallocket/notification/NotificationPlanner.java">NotificationPlanner</a></td><td>Đổi <code>EventEnvelope</code> thành danh sách <code>Notification</code>.</td></tr>
+  <tr><td><a href="notification-service/src/main/java/com/animallocket/notification/NotificationDispatcher.java">NotificationDispatcher</a></td><td>Gửi một thông báo tới mọi thiết bị của người nhận, thử lại, gỡ token chết, đếm metric.</td></tr>
+  <tr><td><a href="notification-service/src/main/java/com/animallocket/notification/Notification.java">Notification</a></td><td>Bản ghi (record): người nhận, loại, tiêu đề, nội dung, dữ liệu kèm.</td></tr>
+  <tr><td><code>PushSender</code> → <a href="notification-service/src/main/java/com/animallocket/notification/FcmPushSender.java">FcmPushSender</a> / <a href="notification-service/src/main/java/com/animallocket/notification/LoggingPushSender.java">LoggingPushSender</a></td><td>Cổng gửi push. FCM thật khi có khoá; bản giả chỉ ghi log khi không có (dev).</td></tr>
+  <tr><td><code>DeviceDirectory</code> → <a href="notification-service/src/main/java/com/animallocket/notification/UserServiceDeviceDirectory.java">UserServiceDeviceDirectory</a></td><td>Cổng sang user-service (token, bạn bè, gỡ token).</td></tr>
+  <tr><td><a href="notification-service/src/main/java/com/animallocket/notification/ExecutorConfig.java">ExecutorConfig</a></td><td>Thread pool <code>pushExecutor</code> riêng cho push.</td></tr>
+</table>
+<p>Dùng <a href="../libs/common-guide.html">common</a> (<code>Headers</code>, event, DLQ Kafka). Phụ thuộc đáng chú ý trong <a href="notification-service/pom.xml">pom.xml</a>: Spring Kafka, <code>firebase-admin</code>, <code>caffeine</code>, Eureka client, LoadBalancer. <code>PushSender</code> và <code>DeviceDirectory</code> là interface nên test thay bằng bản giả.</p>
+<div class="box">Notification không khai báo <code>spring-boot-starter-web</code> và không có controller, nhưng common kéo web vào transitive nên service vẫn là ứng dụng servlet có actuator (<code>/actuator/health</code>, <code>/actuator/prometheus</code>) và cấu hình bảo mật chung — xem <a href="../libs/common-guide.html">common</a>.</div>
+
+<!-- ============ 4 ============ -->
+<h2 id="luong">4. Luồng xử lý</h2>
+<div class="flow">
+  <span class="n">Kafka message</span><span class="ar">→</span>
+  <span class="n"><code>EventJson.read</code> (hỏng → bỏ qua)</span><span class="ar">→</span>
+  <span class="n">khử trùng lặp theo <code>eventId</code> (cache 1 giờ)</span><span class="ar">→</span>
+  <span class="n"><code>planner.plan</code></span><span class="ar">→</span>
+  <span class="n">mỗi thông báo giao cho <code>pushExecutor</code></span><span class="ar">→</span>
+  <span class="n"><code>dispatcher.dispatch</code></span><span class="ar">→</span>
+  <span class="n">FCM</span>
+</div>
+<ol>
+  <li><code>NotificationListener.onMessage</code> đọc message. JSON không đọc được (<code>IllegalArgumentException</code>) thì <strong>ghi log và bỏ qua</strong>, không ném lại, nên không rơi vào DLQ.</li>
+  <li><strong>Khử trùng lặp</strong> theo <code>eventId</code> bằng cache Caffeine trong bộ nhớ (tối đa 200 000 mục, giữ 1 giờ). Event đã thấy thì bỏ qua.</li>
+  <li><code>planner.plan(e)</code> trả danh sách thông báo (có thể rỗng). Lỗi khi lập (ví dụ không gọi được user-service để lấy danh sách bạn) chỉ ghi log và <strong>bỏ event đó</strong>.</li>
+  <li>Mỗi thông báo được giao cho thread pool <code>pushExecutor</code> để push chậm <em>không làm nghẽn consumer Kafka</em>.</li>
+  <li><code>dispatcher.dispatch</code> hỏi token của người nhận và gửi lần lượt tới từng thiết bị.</li>
+</ol>
+
+<!-- ============ 5 ============ -->
+<h2 id="bang-tb">5. Event nào thành thông báo</h2>
+<table>
+  <tr><th>Event</th><th>Người nhận</th><th>Loại (<code>type</code>)</th><th>Tiêu đề</th><th>Nội dung</th><th>Dữ liệu kèm</th></tr>
+  <tr><td><code>FRIEND_REQUEST_RECEIVED</code></td><td>Người được mời</td><td><code>FRIEND_REQUEST</code></td><td>Lời mời kết bạn mới</td><td>Có một người bạn mới muốn làm quen với bạn 🐾</td><td>—</td></tr>
+  <tr><td><code>FRIEND_ACCEPTED</code></td><td><em>Cả hai</em> người</td><td><code>FRIEND_ACCEPTED</code></td><td>Đã thành bạn!</td><td>Bạn có thêm một người bạn mới 🎉</td><td>—</td></tr>
+  <tr><td><code>POST_PUBLISHED</code></td><td><em>Mọi bạn bè</em> của tác giả (không gồm tác giả)</td><td><code>NEW_POST</code></td><td>Ảnh mới</td><td>Một người bạn vừa đăng ảnh mới</td><td><code>postId</code></td></tr>
+  <tr><td><code>POST_LIKED</code></td><td>Tác giả bài</td><td><code>POST_LIKED</code></td><td>Có người thích ảnh của bạn</td><td>Mở app để xem 💛</td><td><code>postId</code></td></tr>
+  <tr><td><code>POST_COMMENTED</code></td><td>Tác giả bài</td><td><code>POST_COMMENTED</code></td><td>Bình luận mới</td><td>Có người vừa bình luận ảnh của bạn</td><td><code>postId</code></td></tr>
+  <tr><td><code>MESSAGE_SENT</code></td><td>Người nhận tin</td><td><code>MESSAGE</code></td><td>Tin nhắn mới</td><td>Bạn có tin nhắn mới</td><td><code>conversationId</code></td></tr>
+  <tr><td><code>PHOTO_REJECTED</code></td><td>Chủ ảnh</td><td><code>PHOTO_REJECTED</code></td><td>Ảnh chưa đăng được</td><td>Ảnh của bạn không xử lý được, hãy thử lại nhé</td><td><code>mediaId</code></td></tr>
+  <tr><td><code>SUBSCRIPTION_ACTIVATED</code></td><td>Người mua</td><td><code>SUBSCRIPTION</code></td><td>Chào mừng đến với Pro</td><td>Cảm ơn bạn đã ủng hộ Animal Locket 🐾</td><td>—</td></tr>
+  <tr><td>mọi event khác</td><td>—</td><td>—</td><td colspan="3">Không tạo thông báo.</td></tr>
+</table>
+<ul>
+  <li>Mọi thông báo đều gắn thêm <code>data.type</code> để app biết cách mở màn hình tương ứng.</li>
+  <li><strong>Nội dung cố ý chung chung:</strong> không bao giờ nêu alias hay danh tính (có test <code>notificationTextNeverContainsIdentities</code>).</li>
+  <li><code>POST_PUBLISHED</code> là trường hợp duy nhất cần gọi user-service để lấy danh sách bạn của tác giả; mỗi người bạn nhận một thông báo riêng (fan-out).</li>
+  <li><code>MESSAGE_SENT</code> chỉ đến khi chat-service thấy người nhận <em>không</em> có kết nối chat, nên người đang mở app không bị đẩy thừa.</li>
+</ul>
+
+<!-- ============ 6 ============ -->
+<h2 id="gui">6. Gửi push</h2>
+<h3>Chọn bộ gửi</h3>
+<table>
+  <tr><th>Điều kiện</th><th>Bean được dùng</th><th>Hành vi</th></tr>
+  <tr><td><code>animal.push.fcm.credentials-file</code> (<code>FCM_CREDENTIALS_FILE</code>) <strong>có giá trị</strong></td><td><code>FcmPushSender</code></td><td>Đọc file khoá dịch vụ Google, khởi tạo FirebaseApp, gửi bằng <code>FirebaseMessaging</code>. Khoá lấy từ file, <em>không đưa vào Git</em>.</td></tr>
+  <tr><td>để trống (mặc định)</td><td><code>LoggingPushSender</code></td><td>Chỉ ghi log: 6 ký tự cuối của token, tiêu đề, nội dung, dữ liệu. Không gửi gì ra ngoài.</td></tr>
+</table>
+<h3>Kết quả một lần gửi (<code>PushSender.Result</code>)</h3>
+<table>
+  <tr><th>Kết quả</th><th>Khi nào</th><th>Xử lý</th></tr>
+  <tr><td><code>OK</code></td><td>Gửi thành công</td><td>Đếm <code>push.sent</code>, dừng.</td></tr>
+  <tr><td><code>INVALID_TOKEN</code></td><td>FCM báo <code>UNREGISTERED</code>, <code>INVALID_ARGUMENT</code> hoặc <code>SENDER_ID_MISMATCH</code></td><td>Đếm <code>push.invalid_token</code>, <strong>gọi user-service gỡ token</strong> (<code>DELETE /internal/devices/{token}</code>), <em>không thử lại</em>.</td></tr>
+  <tr><td><code>TRANSIENT_ERROR</code></td><td>Lỗi FCM khác, hoặc ngoại lệ bất ngờ</td><td>Thử lại, xem mục 7.</td></tr>
+</table>
+
+<!-- ============ 7 ============ -->
+<h2 id="chiu-loi">7. Chịu lỗi và khử trùng lặp</h2>
+<p>Nguyên tắc: <strong>push là "fail soft"</strong> — không bao giờ làm hỏng nghiệp vụ, và thà mất một thông báo còn hơn nghẽn hệ thống.</p>
+<table>
+  <tr><th>Tình huống</th><th>Hành vi</th></tr>
+  <tr><td>Lỗi tạm thời khi gửi</td><td>Thử lại tối đa <code>animal.push.max-attempts</code> (3) lần, nghỉ <code>backoff-ms × lần thử</code> (500 ms, 1000 ms). Hết lượt → đếm <code>push.dropped</code>, ghi cảnh báo và bỏ.</td></tr>
+  <tr><td>Không lấy được token của người nhận</td><td>Đếm <code>push.skipped{reason=directory_error}</code>, bỏ thông báo đó.</td></tr>
+  <tr><td>Không gỡ được token chết</td><td>Ghi cảnh báo, không ném.</td></tr>
+  <tr><td>Hàng đợi push đầy</td><td><code>pushExecutor</code> (lõi 4, tối đa 16 luồng, hàng đợi 5000) dùng <code>DiscardPolicy</code>: thông báo mới bị <strong>âm thầm bỏ</strong> thay vì làm chậm hệ thống.</td></tr>
+  <tr><td>Event JSON hỏng</td><td>Ghi log và bỏ.</td></tr>
+  <tr><td>Lỗi khi lập thông báo</td><td>Ghi log và bỏ event đó.</td></tr>
+  <tr><td>Event trùng</td><td>Bỏ qua nếu <code>eventId</code> đã thấy trong 1 giờ gần nhất (cache bộ nhớ).</td></tr>
+</table>
+<div class="box warn">Khử trùng lặp ở đây là <strong>best-effort</strong> (chính mã ghi chú: "trùng một push là chấp nhận được"): cache nằm trong bộ nhớ từng instance và mất khi restart. Sau khi restart hoặc với nhiều instance, một event có thể được gửi push hai lần. Consumer dùng <code>auto-offset-reset: latest</code> để không phát lại thông báo cũ khi khởi động lần đầu.</div>
+
+<!-- ============ 8 ============ -->
+<h2 id="metric">8. Metric</h2>
+<table>
+  <tr><th>Metric (Micrometer)</th><th>Nhãn</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>push.sent</code></td><td><code>type</code></td><td>Số push gửi thành công.</td></tr>
+  <tr><td><code>push.invalid_token</code></td><td>—</td><td>Số token chết bị phát hiện và gỡ.</td></tr>
+  <tr><td><code>push.dropped</code></td><td><code>type</code></td><td>Số push bỏ sau khi hết lượt thử.</td></tr>
+  <tr><td><code>push.skipped</code></td><td><code>reason=directory_error</code></td><td>Số thông báo bỏ vì không lấy được thiết bị.</td></tr>
+</table>
+<p>Hiển thị trên Prometheus qua <code>/actuator/prometheus</code> (tên có dấu gạch dưới, ví dụ <code>push_sent_total</code>). Thread pool bị đầy và bỏ thông báo <strong>không có metric</strong>.</p>
+
+<!-- ============ 9 ============ -->
+<h2 id="cau-hinh">9. Cấu hình</h2>
+<p><a href="notification-service/src/main/resources/application.yml">application.yml</a>.</p>
+<table>
+  <tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>server.port</code></td><td>8107</td><td>Cổng (chỉ cho actuator).</td></tr>
+  <tr><td><code>KAFKA_BOOTSTRAP</code></td><td><code>localhost:9092</code></td><td>Kafka. <code>auto-offset-reset: latest</code>.</td></tr>
+  <tr><td><code>animal.push.fcm.credentials-file</code> (<code>FCM_CREDENTIALS_FILE</code>)</td><td>rỗng</td><td>Đường dẫn file khoá dịch vụ Google. Rỗng → chỉ ghi log.</td></tr>
+  <tr><td><code>animal.push.max-attempts</code></td><td>3</td><td>Số lần thử mỗi push.</td></tr>
+  <tr><td><code>animal.push.backoff-ms</code></td><td>500</td><td>Nghỉ giữa các lần thử (nhân với số lần).</td></tr>
+  <tr><td><code>animal.user-service-url</code></td><td><code>http://user-service</code></td><td>Địa chỉ user-service qua load balancer.</td></tr>
+  <tr><td><code>animal.internal-token</code></td><td>từ Config Server</td><td>Gắn vào mọi lời gọi tới user-service.</td></tr>
+  <tr><td><code>KEYCLOAK_JWK_URI</code>, <code>EUREKA_URL</code></td><td>local</td><td>Như các service khác.</td></tr>
+</table>
+
+<!-- ============ 10 ============ -->
+<h2 id="test">10. Test</h2>
+<p><a href="notification-service/src/test/java/com/animallocket/notification/NotificationTest.java">NotificationTest</a> (một file; <code>spring.kafka.listener.auto-startup=false</code> trong cấu hình test nên không cần Kafka thật):</p>
+<ul>
+  <li>Context khởi động với <code>LoggingPushSender</code> khi chưa cấu hình FCM.</li>
+  <li>Bài mới được gửi tới mọi bạn bè nhưng không tới tác giả.</li>
+  <li>Kết bạn thành công báo cả hai phía.</li>
+  <li>Nội dung thông báo không bao giờ chứa danh tính.</li>
+  <li>Event lạ không tạo thông báo.</li>
+  <li>Lỗi tạm thời thử lại với backoff rồi thành công; lỗi kéo dài bị bỏ sau số lần tối đa; token không hợp lệ bị gỡ mà không thử lại; lỗi lấy danh bạ bị nuốt.</li>
+  <li>Listener khử trùng lặp và sống sót qua message rác.</li>
+</ul>
+<pre><code>mvn -q -B -pl services/notification-service install
+# kết quả: services/notification-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 11 ============ -->
+<h2 id="luu-y">11. Lưu ý</h2>
+<div class="box warn"><strong>FCM thật chưa kiểm chứng.</strong> Mình không thấy test nào chạy <code>FcmPushSender</code> với Firebase thật; chỉ <code>LoggingPushSender</code> được test. Đừng khẳng định push "chạy được" trên thiết bị thật khi chưa thử.</div>
+<div class="box warn"><strong>Thông báo có thể bị mất âm thầm:</strong> hàng đợi push đầy (<code>DiscardPolicy</code>), event hỏng, lỗi lập thông báo, hết lượt thử đều chỉ ghi log. Không có hàng đợi bền hay cơ chế gửi lại. Chỉ <code>push.dropped</code> và <code>push.skipped</code> có metric.</div>
+<div class="box warn"><strong>Gọi user-service trên luồng consumer, không có circuit breaker.</strong> <code>planner.plan</code> chạy trên thread của Kafka listener, và với <code>POST_PUBLISHED</code> nó gọi <code>/internal/friends/{id}</code> bằng <code>RestClient</code> thường (dù pom có Resilience4j, <code>UserServiceDeviceDirectory</code> không bọc circuit breaker). User-service chậm có thể làm chậm cả consumer; lỗi chỉ làm bỏ event đó.</div>
+<div class="box">Event bài mới của người có rất nhiều bạn sinh ra rất nhiều thông báo cùng lúc, có thể làm đầy hàng đợi 5000 và các thông báo kế tiếp bị bỏ.</div>
+<div class="box">Mỗi thông báo gọi user-service lấy token riêng (không cache), nên <code>POST_PUBLISHED</code> với N bạn bè gây N lời gọi lấy token.</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test.</div>
+
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>post-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>post-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#vong-doi">4. Vòng đời một bài</a>
+  <a href="#api">5. API</a>
+  <a href="#quy-tac">6. Quyền xem và quy tắc</a>
+  <a href="#han-muc">7. Hạn mức ảnh/ngày</a>
+  <a href="#user-dir">8. Danh bạ bạn bè và cache</a>
+  <a href="#dua">9. Cuộc đua và bộ điều hoà</a>
+  <a href="#du-lieu">10. Dữ liệu</a>
+  <a href="#su-kien">11. Sự kiện phát / nhận</a>
+  <a href="#cau-hinh">12. Cấu hình</a>
+  <a href="#test">13. Test</a>
+  <a href="#luu-y">14. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>post-service</h1>
+<p class="sub">Bài đăng ảnh, bảng tin của bạn bè, thích và bình luận. Cổng <code>8102</code>. Tài liệu lập từ mã nguồn tại <code>services/post-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Một bài đăng là <strong>một ảnh</strong> (do <a href="media-service-guide.html">media-service</a> giữ) kèm chú thích tuỳ chọn. Post-service quản lý bài, bảng tin, lượt thích, bình luận và hạn mức đăng ảnh. Nó <strong>không giữ file ảnh</strong>: bài chỉ lưu <code>mediaId</code>, client lấy URL xem từ media-service.</p>
+<div class="grid">
+  <div class="card"><h3>Đăng bài</h3><p>Tạo bài từ một <code>mediaId</code>; bài chờ ở <code>PENDING_MEDIA</code> cho tới khi ảnh sẵn sàng.</p></div>
+  <div class="card"><h3>Bảng tin</h3><p>Bài đã đăng của bạn bè và của chính mình, mới nhất trước, phân trang theo thời điểm đăng.</p></div>
+  <div class="card"><h3>Tương tác</h3><p>Thích, bình luận, xoá bình luận; phát event để thông báo cho tác giả.</p></div>
+  <div class="card"><h3>Hạn mức</h3><p>Số ảnh mỗi ngày theo gói FREE/PRO, đếm bằng Redis theo giờ Việt Nam.</p></div>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Gateway</td><td>gateway → post</td><td>Route <code>/api/v1/posts/**</code> và <code>/api/v1/feed/**</code>.</td></tr>
+  <tr><td>media-service</td><td>media → (Kafka) → post</td><td><code>PHOTO_READY</code> / <code>PHOTO_REJECTED</code> quyết định bài được đăng hay bị từ chối.</td></tr>
+  <tr><td>user-service</td><td>post → user</td><td><code>/internal/friends/{id}</code> (danh sách bạn) và <code>/internal/users?ids=</code> (hồ sơ hiển thị). Có circuit breaker và cache.</td></tr>
+  <tr><td>user, friend (Kafka)</td><td>→ post</td><td><code>USER_DELETED</code>, <code>USER_BLOCKED</code>, <code>FRIEND_ACCEPTED</code>, <code>FRIEND_REMOVED</code>.</td></tr>
+  <tr><td>billing (Kafka)</td><td>billing → post</td><td><code>SUBSCRIPTION_ACTIVATED</code> / <code>EXPIRED</code> để biết người dùng đang là PRO.</td></tr>
+  <tr><td>notification-service</td><td>post → (Kafka) → notification</td><td>Nhận <code>POST_LIKED</code>, <code>POST_COMMENTED</code> (xem tài liệu notification).</td></tr>
+  <tr><td>Redis</td><td>post ↔ Redis</td><td>Hạn mức, cờ PRO, cache danh sách bạn (qua <code>KeyValueStore</code> của <a href="../libs/common-guide.html">common</a>).</td></tr>
+  <tr><td>MySQL <code>post_db</code></td><td>post → DB</td><td>DB riêng, Flyway.</td></tr>
+</table>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<pre><code>services/post-service/src/main/
+├─ java/com/animallocket/post/
+│  ├─ PostServiceApplication.java
+│  ├─ web/        PostController
+│  ├─ dto/        PostDtos (CreatePostRequest, PostView, FeedPage, CommentView, CommentPage, ...)
+│  ├─ service/    PostService (nghiệp vụ), QuotaService (hạn mức),
+│  │              PendingPostReconciler (gỡ bài kẹt)
+│  ├─ client/     UserDirectory (gọi user-service + cache)
+│  ├─ messaging/  PostEventsListener
+│  ├─ domain/     Post, PostLike, Comment, MediaState
+│  └─ repo/       PostRepository, PostLikeRepository, CommentRepository, MediaStateRepository
+└─ resources/
+   ├─ application.yml
+   └─ db/migration/V1__init.sql</code></pre>
+<p>Dùng <a href="../libs/common-guide.html">common</a> (<code>Headers</code>, <code>ApiException</code>, event, <code>KeyValueStore</code>, circuit breaker) và <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a>. Phụ thuộc đáng chú ý trong <a href="post-service/pom.xml">pom.xml</a>: <code>spring-boot-starter-data-redis</code>, <code>caffeine</code>, JPA, Flyway + MySQL, LoadBalancer + Resilience4j.</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="vong-doi">4. Vòng đời một bài</h2>
+<pre><code>                 ┌──────── PHOTO_READY (chủ ảnh khớp) ────────► PUBLISHED
+PENDING_MEDIA ───┤
+                 └──── PHOTO_REJECTED / sai chủ ảnh ──────────► REJECTED
+
+mọi trạng thái (trừ đã xoá) ──── tác giả xoá ──────────────────► DELETED</code></pre>
+<ol>
+  <li><strong>Tạo bài</strong> (<code>PostService.create</code>): client đã upload ảnh bên media-service rồi gửi <code>mediaId</code> + <code>caption</code>.
+    <ul>
+      <li>Nếu đã có bài cho <code>mediaId</code> đó: của mình → trả lại bài (idempotent); của người khác → <code>403</code>.</li>
+      <li>Nếu đã biết trạng thái ảnh (<code>MediaState</code>) mà thuộc người khác → <code>403</code>.</li>
+      <li>Trừ một lượt hạn mức (<code>quota.consume</code>).</li>
+      <li>Tạo bài ở <code>PENDING_MEDIA</code>. Nếu <code>MediaState</code> đã có sẵn (ảnh sẵn sàng trước khi tạo bài) thì áp dụng ngay, bài lên <code>PUBLISHED</code> và phát <code>POST_PUBLISHED</code>.</li>
+    </ul>
+  </li>
+  <li><strong>Khi media-service báo kết quả ảnh</strong> (<code>onPhotoReady</code> / <code>onPhotoRejected</code>): ghi <code>MediaState</code> rồi, nếu bài đã tồn tại, <code>settle</code> nó.</li>
+  <li><strong><code>settle</code></strong> chỉ đổi bài đang <code>PENDING_MEDIA</code>. Chủ ảnh khác tác giả → <code>REJECTED</code> với lý do <code>OWNER_MISMATCH</code>; ảnh sẵn sàng → <code>PUBLISHED</code> (đặt <code>publishedAt</code>, phát <code>POST_PUBLISHED</code>); ảnh bị từ chối → <code>REJECTED</code> và <strong>hoàn lại lượt hạn mức</strong>.</li>
+  <li><strong>Xoá bài</strong>: chỉ tác giả; đặt <code>DELETED</code>, xoá <code>publicKey</code>, xoá like và bình luận. Người khác nhận <code>404</code>.</li>
+</ol>
+<p>Hai sự kiện "tạo bài" và "ảnh sẵn sàng" có thể đến theo <strong>bất kỳ thứ tự nào</strong>; đó là lý do có bảng <code>media_states</code> và bộ điều hoà (mục 9).</p>
+
+<!-- ============ 5 ============ -->
+<h2 id="api">5. API</h2>
+<p><a href="post-service/src/main/java/com/animallocket/post/web/PostController.java">PostController</a>, tiền tố <code>/api/v1</code>, người gọi dựa trên <code>X-Public-Id</code>. Không có API nội bộ.</p>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/posts</code></td><td>Đăng bài từ <code>mediaId</code> (201).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/posts/mine?limit=</code></td><td>Bài của tôi, trừ bài đã xoá, mới nhất trước (mặc định 20, tối đa 50).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/posts/{id}</code></td><td>Một bài (tác giả hoặc bạn bè, xem mục 6).</td></tr>
+  <tr><td><span class="m del">DELETE</span></td><td><code>/posts/{id}</code></td><td>Xoá bài của mình (204).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/posts/by/{publicId}?before=&amp;limit=</code></td><td>Bài của một người. Đặt dưới <code>/posts/**</code> để gateway chuyển về service này (<code>/users/**</code> thuộc user-service).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/feed?before=&amp;limit=</code></td><td>Bảng tin (mặc định 20, tối đa 50).</td></tr>
+  <tr><td><span class="m put">PUT</span></td><td><code>/posts/{id}/like</code></td><td>Thích (204), idempotent.</td></tr>
+  <tr><td><span class="m del">DELETE</span></td><td><code>/posts/{id}/like</code></td><td>Bỏ thích (204).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/posts/{id}/comments</code></td><td>Bình luận (201).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/posts/{id}/comments?after=&amp;limit=</code></td><td>Danh sách bình luận cũ → mới, phân trang theo id (mặc định 30).</td></tr>
+  <tr><td><span class="m del">DELETE</span></td><td><code>/posts/{id}/comments/{commentId}</code></td><td>Xoá bình luận (204).</td></tr>
+</table>
+<p>Phân trang theo <strong>con trỏ thời gian</strong>: phản hồi trả <code>nextBefore</code> (thời điểm của bài cuối) khi trang đầy; client gửi lại làm <code>before</code>. Bình luận phân trang theo <code>id</code>. Mọi <code>limit</code> bị kẹp vào khoảng 1–50.</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="quy-tac">6. Quyền xem và quy tắc</h2>
+<table>
+  <tr><th>Hành động</th><th>Ai được</th><th>Trường hợp còn lại</th></tr>
+  <tr><td>Xem / thích / bình luận một bài</td><td>Tác giả; hoặc <strong>bạn bè</strong> khi bài đã <code>PUBLISHED</code></td><td><code>404</code> (không lộ bài tồn tại)</td></tr>
+  <tr><td>Thích, bình luận</td><td>Bài phải <code>PUBLISHED</code></td><td><code>404</code></td></tr>
+  <tr><td>Xoá bài</td><td>Tác giả</td><td><code>404</code></td></tr>
+  <tr><td>Xoá bình luận</td><td>Tác giả bình luận hoặc tác giả bài</td><td><code>403</code></td></tr>
+  <tr><td>Danh sách bài của một người</td><td>Chính mình (mọi trạng thái trừ DELETED, theo <code>createdAt</code>); bạn bè (chỉ PUBLISHED, theo <code>publishedAt</code>)</td><td><code>404</code> kể cả khi không xác minh được quan hệ</td></tr>
+  <tr><td>Bảng tin</td><td>Bài PUBLISHED của bạn bè và của mình</td><td>—</td></tr>
+</table>
+<ul>
+  <li><strong>Không tự phát event cho chính mình:</strong> thích/bình luận bài của chính mình không phát <code>POST_LIKED</code>/<code>POST_COMMENTED</code>.</li>
+  <li><strong>Chịu lỗi (fail closed cho quyền, fail soft cho hiển thị):</strong> không xác minh được ai là bạn → ẩn bài (<code>visible</code> trả 404; bảng tin trả danh sách rỗng kèm cờ <code>degraded = true</code>). Không lấy được hồ sơ hiển thị → vẫn hiện bài nhưng thiếu alias/avatar.</li>
+  <li>Bình luận: không rỗng, được <code>strip()</code> khoảng trắng đầu/cuối (xem <code>PostDtos.CommentRequest</code> cho giới hạn độ dài).</li>
+  <li>Số lượt thích/bình luận lưu thành cột đếm trên bài (<code>incLikes</code>, <code>incComments</code>...) để không phải đếm mỗi lần đọc.</li>
+</ul>
+
+<!-- ============ 7 ============ -->
+<h2 id="han-muc">7. Hạn mức ảnh/ngày</h2>
+<p><a href="post-service/src/main/java/com/animallocket/post/service/QuotaService.java">QuotaService</a> giới hạn số ảnh đăng mỗi ngày, đếm trong Redis:</p>
+<table>
+  <tr><th>Gói</th><th>Mặc định</th><th>Cấu hình</th></tr>
+  <tr><td>FREE</td><td>10 ảnh/ngày</td><td><code>animal.limits.photos-per-day.free</code></td></tr>
+  <tr><td>PRO</td><td>50 ảnh/ngày</td><td><code>animal.limits.photos-per-day.pro</code></td></tr>
+</table>
+<ul>
+  <li><strong>Khoá đếm:</strong> <code>quota:photo:&lt;publicId&gt;:&lt;yyyyMMdd&gt;</code> theo múi giờ <code>Asia/Ho_Chi_Minh</code>, TTL 30 giờ khi tạo.</li>
+  <li><strong><code>consume</code></strong>: tăng bộ đếm; nếu vượt giới hạn thì trả lại (giảm) và báo <code>429 PHOTO_LIMIT</code>. Vì tăng trước rồi mới so, một lần thất bại không "ăn" lượt.</li>
+  <li><strong><code>refund</code></strong>: khi ảnh bị từ chối, giảm bộ đếm của <em>ngày tạo bài</em> để lỗi hệ thống không trừ vào hạn mức người dùng. Bộ đếm không đi dưới 0.</li>
+  <li><strong>Cờ PRO</strong> lưu ở khoá <code>pro:&lt;publicId&gt;</code> với TTL bằng thời gian còn lại của gói (không có hạn → 400 ngày); đặt khi nhận <code>SUBSCRIPTION_ACTIVATED</code>, xoá khi <code>SUBSCRIPTION_EXPIRED</code>.</li>
+</ul>
+<div class="box info">Trình tự khác với user-service: user-service giữ bản sao quyền lợi trong DB, còn post-service chỉ giữ một cờ PRO trong Redis (có TTL).</div>
+
+<!-- ============ 8 ============ -->
+<h2 id="user-dir">8. Danh bạ bạn bè và cache</h2>
+<p><a href="post-service/src/main/java/com/animallocket/post/client/UserDirectory.java">UserDirectory</a> là cổng sang user-service. Chính sách chịu lỗi nằm trong lớp này:</p>
+<table>
+  <tr><th>Dữ liệu</th><th>Cách lấy</th><th>Khi user-service lỗi</th></tr>
+  <tr><td>Danh sách bạn</td><td>Redis khoá <code>friends:&lt;id&gt;</code> (tươi 45 giây); hết hạn → gọi <code>/internal/friends/{id}</code> qua circuit breaker, rồi ghi lại cả khoá tươi và khoá dự phòng <code>friends:stale:&lt;id&gt;</code> (1 giờ)</td><td>Dùng bản dự phòng nếu có; không có → <code>503 FRIENDS_UNAVAILABLE</code></td></tr>
+  <tr><td>Hồ sơ hiển thị (alias, avatar)</td><td>Cache Caffeine trong bộ nhớ (tối đa 50 000, 5 phút), thiếu mới gọi <code>/internal/users?ids=</code></td><td>Trả thiếu hồ sơ; không ném lỗi</td></tr>
+</table>
+<p>Event <code>FRIEND_ACCEPTED</code>, <code>FRIEND_REMOVED</code>, <code>USER_BLOCKED</code> và <code>USER_DELETED</code> gọi <code>invalidateFriends</code> để xoá cả hai khoá cache, nên thay đổi bạn bè có hiệu lực nhanh hơn TTL 45 giây.</p>
+
+<!-- ============ 9 ============ -->
+<h2 id="dua">9. Cuộc đua giữa "tạo bài" và "ảnh sẵn sàng"</h2>
+<p>Ảnh được đánh dấu <code>READY</code> gần như ngay khi client gọi <code>complete</code>, nên event <code>PHOTO_READY</code> thường tới đúng lúc client đang gọi <code>POST /posts</code>. Hai transaction chạy song song và <strong>không thấy dòng chưa commit của nhau</strong>:</p>
+<div class="flow">
+  <span class="n">T1: tạo bài (PENDING_MEDIA), chưa thấy MediaState</span><span class="ar">∥</span>
+  <span class="n">T2: ghi MediaState, tìm bài → chưa thấy</span><span class="ar">→</span>
+  <span class="n">không ai đổi trạng thái → bài kẹt mãi</span>
+</div>
+<p>Để xử lý, <a href="post-service/src/main/java/com/animallocket/post/service/PendingPostReconciler.java">PendingPostReconciler</a> là lưới an toàn: cứ <code>animal.post.reconcile-interval-ms</code> (mặc định 3 giây) tìm tối đa 100 bài kẹt ở <code>PENDING_MEDIA</code> mà đã có <code>MediaState</code> và gọi <code>settlePending</code> cho từng bài (mỗi bài một transaction, lỗi từng bài chỉ ghi log). <code>settlePending</code> khoá dòng bài (<code>findForUpdateById</code>) và <code>settle</code> chỉ đổi bài còn <code>PENDING_MEDIA</code>, nên không phát <code>POST_PUBLISHED</code> hai lần.</p>
+
+<!-- ============ 10 ============ -->
+<h2 id="du-lieu">10. Dữ liệu</h2>
+<p>MySQL <code>post_db</code> (<a href="post-service/src/main/resources/db/migration/V1__init.sql">V1__init.sql</a>).</p>
+<table>
+  <tr><th>Bảng</th><th>Nội dung</th><th>Ràng buộc / chỉ mục</th></tr>
+  <tr><td><code>posts</code></td><td><code>id</code> (UUID), <code>author_id</code>, <code>caption</code> (≤200), <code>media_id</code>, <code>public_key</code>, <code>status</code> (PENDING_MEDIA / PUBLISHED / REJECTED / DELETED), <code>reject_reason</code>, <code>like_count</code>, <code>comment_count</code>, <code>created_at</code>, <code>published_at</code></td><td>duy nhất <code>media_id</code>; chỉ mục <code>(author_id, status, published_at)</code> cho bảng tin và <code>(status, created_at)</code> cho bộ điều hoà</td></tr>
+  <tr><td><code>post_likes</code></td><td>Lượt thích</td><td>duy nhất <code>(post_id, user_id)</code></td></tr>
+  <tr><td><code>comments</code></td><td>Bình luận</td><td>chỉ mục <code>(post_id, id)</code> và theo tác giả</td></tr>
+  <tr><td><code>media_states</code></td><td>Kết quả ảnh nhận từ media-service: chủ ảnh, <code>READY</code>/<code>REJECTED</code>, <code>public_key</code>, lý do</td><td>khoá chính là <code>media_id</code>; chỉ mục theo chủ ảnh</td></tr>
+  <tr><td><code>outbox_events</code>, <code>processed_events</code></td><td>Của <a href="../libs/outbox-jpa-guide.html">outbox-jpa</a></td><td>—</td></tr>
+</table>
+<p>Ràng buộc duy nhất trên <code>media_id</code> là điều bảo đảm một ảnh chỉ gắn vào một bài.</p>
+<div class="box warn"><code>ddl-auto</code> mặc định <code>none</code>; test dùng H2 <code>create-drop</code> nên entity khớp SQL không được test bắt. Đổi entity thì phải sửa SQL.</div>
+
+<!-- ============ 11 ============ -->
+<h2 id="su-kien">11. Sự kiện phát / nhận</h2>
+<h3>Phát (qua outbox, topic <code>post.events</code>)</h3>
+<table>
+  <tr><th>Event</th><th>Khi nào</th><th>Khoá</th><th>Payload</th></tr>
+  <tr><td><code>POST_PUBLISHED</code></td><td>Bài chuyển sang <code>PUBLISHED</code> (lúc tạo nếu ảnh đã sẵn sàng, hoặc khi <code>settle</code>)</td><td><code>postId</code></td><td><code>PostPublished(postId, authorId)</code></td></tr>
+  <tr><td><code>POST_LIKED</code></td><td>Thích bài người khác (lần đầu)</td><td><code>postId</code></td><td><code>PostLiked(postId, authorId, likerId)</code></td></tr>
+  <tr><td><code>POST_COMMENTED</code></td><td>Bình luận bài người khác</td><td><code>postId</code></td><td><code>PostCommented(postId, authorId, commenterId)</code></td></tr>
+</table>
+<h3>Nhận</h3>
+<p><a href="post-service/src/main/java/com/animallocket/post/messaging/PostEventsListener.java">PostEventsListener</a> nghe bốn topic <code>media.events</code>, <code>user.events</code>, <code>friend.events</code>, <code>billing.events</code> (nhóm <code>post-service</code>), khử trùng lặp bằng <code>idempotency.firstTime</code>:</p>
+<table>
+  <tr><th>Event</th><th>Xử lý</th></tr>
+  <tr><td><code>PHOTO_READY</code>, <code>PHOTO_REJECTED</code></td><td>Chỉ xử lý khi <code>context == "POST"</code> (ảnh chat bị bỏ qua).</td></tr>
+  <tr><td><code>USER_DELETED</code></td><td><code>onUserDeleted</code>: xoá mọi bài của họ (cùng like, bình luận), bình luận họ viết ở bài khác (giảm đếm), like của họ, <code>media_states</code> của họ, và cache bạn bè.</td></tr>
+  <tr><td><code>USER_BLOCKED</code>, <code>FRIEND_ACCEPTED</code>, <code>FRIEND_REMOVED</code></td><td>Xoá cache danh sách bạn của hai người.</td></tr>
+  <tr><td><code>SUBSCRIPTION_ACTIVATED</code> / <code>EXPIRED</code></td><td>Đặt / xoá cờ PRO trong Redis.</td></tr>
+  <tr><td>khác</td><td>Bỏ qua.</td></tr>
+</table>
+
+<!-- ============ 12 ============ -->
+<h2 id="cau-hinh">12. Cấu hình</h2>
+<p><a href="post-service/src/main/resources/application.yml">application.yml</a>.</p>
+<table>
+  <tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>server.port</code></td><td>8102</td><td>Cổng.</td></tr>
+  <tr><td><code>REDIS_HOST</code> / <code>REDIS_PORT</code></td><td><code>localhost</code> / 6379</td><td>Redis cho <code>KeyValueStore</code>. Test đặt <code>animal.kv.type=memory</code>.</td></tr>
+  <tr><td><code>animal.limits.photos-per-day.free</code> / <code>pro</code></td><td>10 / 50</td><td>Hạn mức ảnh/ngày.</td></tr>
+  <tr><td><code>animal.post.reconcile-interval-ms</code></td><td>3000</td><td>Chu kỳ bộ điều hoà bài kẹt (cũng là độ trễ khởi đầu).</td></tr>
+  <tr><td><code>animal.user-service-url</code></td><td><code>http://user-service</code></td><td>Địa chỉ user-service qua load balancer.</td></tr>
+  <tr><td><code>resilience4j.*</code></td><td>cửa sổ 20, ≥50% lỗi, chờ 10 giây, timeout 2 giây</td><td>Lưu ý các khoá này không áp dụng cho <code>CircuitBreakerFactory</code>; mặc định thực tế do <a href="../libs/common-guide.html">common</a> đặt (<code>animal.resilience.*</code>).</td></tr>
+  <tr><td>DB, Kafka, Keycloak, Eureka</td><td>như user-service</td><td><code>DB_URL</code>, <code>KAFKA_BOOTSTRAP</code>, <code>KEYCLOAK_JWK_URI</code>, <code>EUREKA_URL</code>, <code>JPA_DDL_AUTO=none</code>.</td></tr>
+</table>
+
+<!-- ============ 13 ============ -->
+<h2 id="test">13. Test</h2>
+<ul>
+  <li><strong>PostFlowIntegrationTest</strong>: bài chờ ảnh rồi hiện trong bảng tin bạn bè; ảnh sẵn sàng trước khi tạo bài thì đăng ngay; bộ điều hoà cứu bài thua cuộc đua; ảnh bị từ chối thì bài bị từ chối; không gắn được ảnh của người khác; chủ ảnh lệch ở event muộn → từ chối; người lạ không xem/thích/bình luận được; thích/bình luận của bạn bè và event phát ra; chỉ tác giả xoá được; bảng tin ẩn khi không có danh sách bạn; phân trang mới nhất trước; xem bài của một người; xoá người dùng dọn nội dung; event trùng chỉ xử lý một lần; ảnh chat bị bỏ qua.</li>
+  <li><strong>QuotaServiceTest</strong>: FREE bị giới hạn theo ngày, lần thất bại không tốn lượt, ảnh bị từ chối được hoàn lượt, PRO có hạn mức cao hơn, PRO hết hạn bị bỏ qua.</li>
+</ul>
+<pre><code>mvn -q -B -pl services/post-service install
+# kết quả: services/post-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 14 ============ -->
+<h2 id="luu-y">14. Lưu ý</h2>
+<div class="box warn"><strong>Chú thích cũ trong mã:</strong> entity <code>Post.publicKey</code> còn ghi "ảnh đã ẩn mặt; ảnh gốc không bao giờ đến đây", nhưng theo CLAUDE.md không còn bước ẩn mặt. Cột vẫn dùng được nhưng chú thích đã lỗi thời.</div>
+<div class="box warn"><strong>Hạn mức chỉ tính ở bước tạo bài, và đếm theo Redis:</strong> nếu Redis mất dữ liệu thì bộ đếm và cờ PRO mất theo (cờ PRO chỉ hồi lại khi có event billing mới). Hệ quả: người dùng PRO có thể bị áp hạn mức FREE cho tới khi event kế tiếp tới.</div>
+<div class="box"><strong>Bảng tin ẩn bài khi không biết ai là bạn</strong> (user-service chết và không có cache): trả danh sách rỗng với cờ <code>degraded = true</code> thay vì lỗi, để app hiển thị trạng thái "tạm thời không tải được".</div>
+<div class="box">Bài REJECTED vẫn nằm trong <code>/posts/mine</code> (chỉ loại DELETED), nên tác giả thấy được lý do bị từ chối.</div>
+<div class="box">Nhóm bài của <code>onUserDeleted</code> được xoá cứng từng bài một trong một transaction; người dùng có rất nhiều bài/bình luận sẽ tạo transaction dài.</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test. Theo CLAUDE.md, Redis thật nằm trong nhóm chưa kiểm chứng.</div>
+
+</main>
+</div>
+</body>
+</html>

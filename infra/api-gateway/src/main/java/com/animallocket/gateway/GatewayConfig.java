@@ -31,9 +31,12 @@ public class GatewayConfig {
         }
         return http.authorizeExchange(a -> a
                         .pathMatchers("/actuator/health/**", "/actuator/prometheus", "/fallback/**").permitAll()
+                        // nên là nó chỉ dc gọi từ internal 
                         .pathMatchers("/webhooks/**").permitAll()
+                        // nên cấu hình cors để chỉ nhận từ domain đó ko 
                         // Trang thanh toán web: không có JWT, billing-service xác thực bằng mã dùng một lần trên URL.
                         .pathMatchers("/pay/**").permitAll()
+                        // có nên xây dựng tempurator token cho giao dịch ko ?
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> {

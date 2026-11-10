@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>discovery-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>discovery-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#rieng-tu">4. Bảo vệ vị trí</a>
+  <a href="#bo-the">5. Dựng bộ thẻ</a>
+  <a href="#quet">6. Quẹt và hạn mức</a>
+  <a href="#online">7. Online và boost</a>
+  <a href="#api">8. API</a>
+  <a href="#redis">9. Dữ liệu trên Redis</a>
+  <a href="#su-kien">10. Sự kiện</a>
+  <a href="#cau-hinh">11. Cấu hình</a>
+  <a href="#test">12. Test</a>
+  <a href="#luu-y">13. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>discovery-service</h1>
+<p class="sub">Khám phá người dùng gần bạn hoặc đang online, "quẹt" để kết bạn, theo dõi trạng thái online và Boost. Cổng <code>8104</code>, <strong>không có cơ sở dữ liệu quan hệ</strong> (chỉ Redis). Tài liệu lập từ mã nguồn tại <code>services/discovery-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Discovery-service tạo ra <strong>bộ thẻ</strong> (danh sách người gợi ý) cho mỗi người dùng đang bật chế độ khám phá, nhận cú quẹt trái/phải, và giữ trạng thái online. Nó <strong>không sở hữu dữ liệu hồ sơ hay quan hệ bạn bè</strong>: mọi quyết định "kết bạn" được chuyển cho user-service.</p>
+<div class="grid">
+  <div class="card"><h3>Bộ thẻ</h3><p>Người ở gần <em>hoặc</em> đang online, đã loại bạn bè, người chặn và người đã quẹt; nhóm tuổi được tách riêng.</p></div>
+  <div class="card"><h3>Quẹt</h3><p>Trái: bỏ qua. Phải: nhờ user-service kết bạn / gửi lời mời, có hạn mức mỗi ngày.</p></div>
+  <div class="card"><h3>Riêng tư vị trí</h3><p>Làm tròn ô lưới ~500 m, cộng nhiễu cố định, chỉ trả "mức" khoảng cách.</p></div>
+  <div class="card"><h3>Boost &amp; online</h3><p>Boost (30 phút) tiêu 1 đơn vị trong ví billing; online chỉ bạn bè xem được.</p></div>
+</div>
+<div class="box info">Service không dùng JPA nên <strong>không dùng outbox-jpa</strong>. Các thao tác khi nhận event đều idempotent nên không cần bảng khử trùng lặp. Service cũng <strong>không phát event</strong> nào.</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Gateway</td><td>gateway → discovery</td><td>Route <code>/api/v1/discovery/**</code>.</td></tr>
+  <tr><td>user-service</td><td>discovery → user</td><td><code>/internal/users/{id}</code> và <code>/internal/users?ids=</code> (hồ sơ), <code>/internal/exclusions/{id}</code> (danh sách loại trừ), <code>/internal/swipes/right</code> (quẹt phải). Có circuit breaker.</td></tr>
+  <tr><td>billing-service</td><td>discovery → billing</td><td><code>/internal/wallet/consume</code> khi dùng Boost.</td></tr>
+  <tr><td>user, billing (Kafka)</td><td>→ discovery</td><td><code>USER_DELETED</code>, <code>DISCOVERY_DISABLED</code>, <code>SUBSCRIPTION_ACTIVATED/EXPIRED</code>.</td></tr>
+  <tr><td>Redis</td><td>discovery ↔ Redis</td><td>Toàn bộ dữ liệu: GEO vị trí, online, boost, lịch sử quẹt, hạn mức, cờ PRO.</td></tr>
+</table>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<pre><code>services/discovery-service/src/main/
+├─ java/com/animallocket/discovery/
+│  ├─ DiscoveryServiceApplication.java
+│  ├─ web/        DiscoveryController
+│  ├─ service/    DiscoveryService (nghiệp vụ), DiscoveryDtos
+│  ├─ geo/        LocationPrivacy (làm tròn, làm nhiễu, mức khoảng cách)
+│  ├─ store/      DiscoveryStore (interface), RedisDiscoveryStore, InMemoryDiscoveryStore
+│  ├─ client/     Gateways (interface), RemoteGateways (user, billing)
+│  ├─ messaging/  DiscoveryEvents (nhận event + dọn định kỳ)
+│  └─ config/     DiscoveryConfig
+└─ resources/application.yml</code></pre>
+<p>Dùng <a href="../libs/common-guide.html">common</a> (<code>Headers</code>, <code>ApiException</code>, event, <code>KeyValueStore</code>, circuit breaker); phụ thuộc đáng chú ý trong <a href="discovery-service/pom.xml">pom.xml</a>: <code>data-redis</code>, <code>caffeine</code>, Spring Kafka, LoadBalancer + Resilience4j. Không có JPA, Flyway hay MySQL.</p>
+<p>Hai tầng đều là interface để test không cần hạ tầng: <code>DiscoveryStore</code> (Redis hoặc bộ nhớ, chọn theo <code>animal.kv.type</code>) và <code>Gateways.UserGateway / BillingGateway</code>.</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="rieng-tu">4. Bảo vệ vị trí</h2>
+<p><a href="discovery-service/src/main/java/com/animallocket/discovery/geo/LocationPrivacy.java">LocationPrivacy</a> xử lý ngay khi nhận toạ độ, <strong>trước khi lưu</strong>:</p>
+<ol>
+  <li><strong>Làm tròn về tâm ô lưới ~500 m</strong> (<code>snap</code>). Hai điểm trong cùng ô cho cùng kết quả.</li>
+  <li><strong>Cộng độ lệch cố định theo từng người, tối đa ±250 m.</strong> Độ lệch lấy từ HMAC-SHA256 của <code>publicId</code> với khoá bí mật của server. Vì cố định nên kẻ tấn công không "lấy trung bình" nhiều lần truy vấn để triệt nhiễu.</li>
+  <li><strong>API chỉ trả mức khoảng cách</strong>, không trả số mét hay toạ độ:</li>
+</ol>
+<table>
+  <tr><th>Người dùng</th><th>Các mức (<code>distanceBand</code>)</th></tr>
+  <tr><td>Người lớn (ADULT)</td><td><code>UNDER_1KM</code>, <code>1_TO_3KM</code>, <code>3_TO_10KM</code>, <code>OVER_10KM</code></td></tr>
+  <tr><td>Dưới 18 (MINOR)</td><td><code>UNDER_3KM</code>, <code>3_TO_10KM</code>, <code>OVER_10KM</code> — thô hơn, không có "dưới 1 km"</td></tr>
+</table>
+<ul>
+  <li>Khoảng cách tính trên vị trí <em>đã làm nhiễu</em>, nên không dùng để suy ra vị trí thật.</li>
+  <li>Khoá bí mật là <code>animal.discovery.secret</code> (<code>DISCOVERY_SECRET</code>), <strong>tối thiểu 16 ký tự</strong>, nếu không service không khởi động. Mặc định chỉ để dev: <code>dev-only-secret-change-me-in-prod</code>.</li>
+  <li>Thẻ không chứa toạ độ, ảnh thật hay thông tin định danh; chỉ có <code>publicId</code>, alias, con vật, avatar, mức khoảng cách, cờ online / boost.</li>
+</ul>
+
+<!-- ============ 5 ============ -->
+<h2 id="bo-the">5. Dựng bộ thẻ — <code>DiscoveryService.cards</code></h2>
+<ol>
+  <li><strong>Giới hạn tìm kiếm:</strong> tối đa <code>cards-per-minute</code> (10) lần mỗi phút mỗi người, nếu không <code>429 TOO_MANY_SEARCHES</code>.</li>
+  <li><strong>Phải đang bật khám phá</strong> (<code>requireDiscoverable</code>): chưa bật → <code>403</code>; hồ sơ không còn hoạt động → <code>404</code>. Kích thước tối đa 30 thẻ (mặc định 20).</li>
+  <li><strong>Tập loại trừ:</strong> chính mình, bạn bè, người chặn/bị chặn (từ user-service), người đã quẹt trái trong 30 ngày gần đây, và người đã quẹt phải.</li>
+  <li><strong>Ứng viên = người ở gần HOẶC đang online</strong> (CLAUDE.md): "gần" là các điểm trong bán kính quanh vị trí của mình (người lớn 10 km, dưới 18 là 5 km) trong cùng nhóm tuổi; "online" là người có heartbeat trong 60 giây gần nhất. Mỗi nguồn lấy tối đa <code>size × 6</code> ứng viên.</li>
+  <li><strong>Lọc lại bằng hồ sơ mới</strong> lấy từ user-service: còn hoạt động, đang bật khám phá, <em>cùng nhóm tuổi</em> — vì dữ liệu Redis có thể đã cũ.</li>
+  <li><strong>Sắp xếp:</strong> người đang Boost trước, rồi gần hơn, rồi người đang online, rồi theo <code>publicId</code> cho ổn định. Cắt đủ số lượng.</li>
+  <li>Dựng <code>Card</code>: người không có vị trí (chỉ online) thì <code>distanceBand = null</code>.</li>
+</ol>
+<div class="box">Người lớn và người dưới 18 nằm trong <strong>các tập Redis riêng</strong> (<code>geo:ADULT</code>, <code>geo:MINOR</code>, ...) nên không bao giờ thấy nhau; kiểm tra nhóm tuổi ở bước 5 là lớp phòng thủ thứ hai. User-service còn chặn thêm một lần nữa ở lúc kết nối (<code>FriendService.connect</code>).</div>
+<h3>Chịu lỗi của <code>GET /cards</code></h3>
+<p>Controller <strong>fail soft</strong>: nếu user-service không khả dụng (503) hoặc Redis lỗi (<code>DataAccessException</code>) thì trả bộ thẻ rỗng với cờ <code>degraded = true</code> thay vì làm hỏng app. Lỗi nghiệp vụ như 429, 403 vẫn trả đúng mã.</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="quet">6. Quẹt và hạn mức — <code>DiscoveryService.swipe</code></h2>
+<ul>
+  <li><strong>Quẹt chính mình</strong> → <code>400 SELF_SWIPE</code>.</li>
+  <li><strong>Quẹt trái (<code>LEFT</code>):</strong> ghi vào lịch sử (người đó biến mất khỏi bộ thẻ 30 ngày), trả <code>SKIPPED</code>. Không tốn hạn mức.</li>
+  <li><strong>Quẹt phải (<code>RIGHT</code>):</strong>
+    <ol>
+      <li>Tăng bộ đếm ngày (<code>quota:swipe:&lt;id&gt;:&lt;yyyyMMdd&gt;</code>, ngày theo <code>Asia/Ho_Chi_Minh</code>). Vượt giới hạn → giảm lại và <code>429 SWIPE_LIMIT</code>. FREE 30/ngày, PRO 150/ngày (<code>animal.limits.swipes-per-day.*</code>).</li>
+      <li>Gọi user-service <code>swipeRight(from, to)</code>; trả <code>MATCHED</code>, <code>REQUESTED</code>, <code>ALREADY_FRIENDS</code>, <code>ALREADY_REQUESTED</code> hoặc <code>BLOCKED</code>.</li>
+      <li><strong>Hoàn lượt</strong> khi lỗi hệ thống (ngoại lệ) hoặc kết quả là <code>BLOCKED</code> / <code>ALREADY_FRIENDS</code> / <code>ALREADY_REQUESTED</code> — lỗi của hệ thống không được trừ vào lượt của người dùng.</li>
+      <li>Ghi vào danh sách "đã quẹt phải" (trừ khi bị chặn) để người đó không xuất hiện lại.</li>
+    </ol>
+  </li>
+</ul>
+<p>Số lượt còn lại (<code>swipesLeftToday</code>) = giới hạn theo gói trừ số đã dùng, luôn ≥ 0. Gói PRO được biết từ cờ <code>pro:&lt;id&gt;</code> trong Redis, đặt khi nhận <code>SUBSCRIPTION_ACTIVATED</code>.</p>
+
+<!-- ============ 7 ============ -->
+<h2 id="online">7. Online và boost</h2>
+<h3>Trạng thái online</h3>
+<ul>
+  <li><strong><code>POST /heartbeat</code></strong>: ghi <code>presence:&lt;id&gt;</code> (TTL 3 phút) cho <em>mọi</em> người dùng, để bạn bè xem được. Chỉ người <strong>đã bật khám phá</strong> mới được thêm vào danh sách online của bộ thẻ — nếu không, người không bật khám phá sẽ chiếm chỗ trong danh sách ứng viên (bị cắt trước khi lọc) và đẩy người hợp lệ ra ngoài.</li>
+  <li><strong><code>GET /presence?ids=</code></strong>: chỉ trả trạng thái của <em>bạn bè</em> (giao với danh sách bạn), tối đa 200 id; online = heartbeat trong 60 giây gần nhất.</li>
+  <li><strong>Cập nhật vị trí</strong> (<code>PUT /location</code>) cũng làm mới trạng thái online.</li>
+</ul>
+<h3>Boost</h3>
+<ul>
+  <li><code>POST /boost</code>: phải đang bật khám phá; gọi billing <code>consumeBoost</code> trừ 1 đơn vị. Không còn → <code>402 NO_BOOST</code>.</li>
+  <li>Người được boost đứng đầu bộ thẻ của người khác trong <strong>30 phút</strong> (<code>BOOST_DURATION</code>) và thẻ có <code>boosted = true</code>.</li>
+</ul>
+<h3>Tắt khám phá</h3>
+<p><code>DELETE /location</code> hoặc event <code>DISCOVERY_DISABLED</code> xoá ngay vị trí, trạng thái online và boost nhưng <strong>giữ lịch sử quẹt</strong>. Xoá tài khoản (<code>USER_DELETED</code>) xoá mọi dấu vết.</p>
+
+<!-- ============ 8 ============ -->
+<h2 id="api">8. API</h2>
+<p><a href="discovery-service/src/main/java/com/animallocket/discovery/web/DiscoveryController.java">DiscoveryController</a>, tiền tố <code>/api/v1/discovery</code>, người gọi dựa trên <code>X-Public-Id</code>. Không có API nội bộ.</p>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th></tr>
+  <tr><td><span class="m put">PUT</span></td><td><code>/location</code></td><td>Cập nhật vị trí (<code>lat</code> −90..90, <code>lon</code> −180..180). Cần đang bật khám phá. 204.</td></tr>
+  <tr><td><span class="m del">DELETE</span></td><td><code>/location</code></td><td>Xoá vị trí ngay (204).</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/heartbeat</code></td><td>Báo đang online (204).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/presence?ids=a,b,...</code></td><td>Trạng thái online của bạn bè: <code>{"online": {id: bool}}</code>.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/cards?limit=</code></td><td>Bộ thẻ: <code>{cards, degraded, swipesLeftToday}</code>.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/swipes</code></td><td>Quẹt: body <code>{targetPublicId, direction: LEFT|RIGHT}</code>; trả <code>{result, swipesLeftToday}</code>.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/boost</code></td><td>Dùng Boost (204).</td></tr>
+</table>
+
+<!-- ============ 9 ============ -->
+<h2 id="redis">9. Dữ liệu trên Redis</h2>
+<p>Tất cả nằm trong Redis; <a href="discovery-service/src/main/java/com/animallocket/discovery/store/RedisDiscoveryStore.java">RedisDiscoveryStore</a> ghi rõ cấu trúc khoá:</p>
+<table>
+  <tr><th>Khoá</th><th>Kiểu</th><th>Nội dung</th></tr>
+  <tr><td><code>geo:{ageGroup}</code></td><td>GEO</td><td>member = <code>publicId</code>, vị trí đã làm nhiễu</td></tr>
+  <tr><td><code>geo:exp:{ageGroup}</code></td><td>ZSET</td><td>score = thời điểm hết hạn (giây). Cần vì GEO không có TTL từng member</td></tr>
+  <tr><td><code>online:{ageGroup}</code></td><td>ZSET</td><td>score = lần heartbeat cuối (giây)</td></tr>
+  <tr><td><code>boost</code></td><td>ZSET</td><td>score = thời điểm hết Boost (giây)</td></tr>
+  <tr><td><code>swipe:left:{me}</code></td><td>ZSET</td><td>member = người bị quẹt trái, score = thời điểm; khoá TTL 35 ngày</td></tr>
+  <tr><td><code>swipe:right:{me}</code></td><td>SET</td><td>người đã quẹt phải; khoá TTL 35 ngày</td></tr>
+  <tr><td><code>presence:{id}</code></td><td>chuỗi (KV)</td><td>epoch giây của heartbeat; TTL 3 phút</td></tr>
+  <tr><td><code>quota:swipe:{id}:{ngày}</code></td><td>chuỗi (KV)</td><td>số lượt quẹt phải đã dùng; TTL 30 giờ</td></tr>
+  <tr><td><code>rl:cards:{id}:{phút}</code></td><td>chuỗi (KV)</td><td>bộ đếm giới hạn tìm kiếm; TTL 2 phút</td></tr>
+  <tr><td><code>pro:{id}</code></td><td>chuỗi (KV)</td><td>cờ PRO; TTL theo hạn gói (không hạn → 400 ngày)</td></tr>
+</table>
+<div class="box warn">Theo CLAUDE.md, <strong>Redis GEO chưa được kiểm chứng với Redis thật</strong>. Test dùng <code>InMemoryDiscoveryStore</code> (<code>animal.kv.type=memory</code>); <code>RedisDiscoveryStoreTest</code> (dùng chung hợp đồng với bản bộ nhớ) <strong>chỉ chạy khi đặt biến môi trường <code>REDIS_TEST_HOST</code></strong>, nên mặc định không chạy với Redis thật. Đừng khẳng định phần GEO "chạy được" khi chưa thử với Redis thật.</div>
+
+<!-- ============ 10 ============ -->
+<h2 id="su-kien">10. Sự kiện</h2>
+<h3>Phát</h3>
+<p>Không phát event nào.</p>
+<h3>Nhận</h3>
+<p><a href="discovery-service/src/main/java/com/animallocket/discovery/messaging/DiscoveryEvents.java">DiscoveryEvents</a> nghe <code>user.events</code> và <code>billing.events</code> (nhóm <code>discovery-service</code>):</p>
+<table>
+  <tr><th>Event</th><th>Xử lý</th></tr>
+  <tr><td><code>USER_DELETED</code></td><td><code>forget</code>: xoá mọi dấu vết của người đó (vị trí, online, boost, lịch sử quẹt).</td></tr>
+  <tr><td><code>DISCOVERY_DISABLED</code></td><td><code>clearLocation</code>: xoá vị trí ngay, giữ lịch sử quẹt.</td></tr>
+  <tr><td><code>SUBSCRIPTION_ACTIVATED</code></td><td>Đặt cờ PRO (TTL theo hạn gói).</td></tr>
+  <tr><td><code>SUBSCRIPTION_EXPIRED</code></td><td>Xoá cờ PRO.</td></tr>
+  <tr><td>khác</td><td>Bỏ qua. <code>USER_BLOCKED</code> và <code>FRIEND_ACCEPTED</code> không cần xử lý vì bộ thẻ lấy danh sách loại trừ trực tiếp từ user-service mỗi lần.</td></tr>
+</table>
+<h3>Việc nền</h3>
+<p><code>purge()</code> chạy mỗi <code>animal.discovery.purge-interval-ms</code> (mặc định 60 giây): xoá vị trí đã hết hạn, bản ghi online cũ hơn 1 giờ và Boost đã hết hạn (vì GEO không có TTL từng member). Lỗi chỉ ghi log.</p>
+
+<!-- ============ 11 ============ -->
+<h2 id="cau-hinh">11. Cấu hình</h2>
+<p><a href="discovery-service/src/main/resources/application.yml">application.yml</a>.</p>
+<table>
+  <tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>server.port</code></td><td>8104</td><td>Cổng.</td></tr>
+  <tr><td><code>REDIS_HOST</code> / <code>REDIS_PORT</code></td><td><code>localhost</code> / 6379</td><td>Redis.</td></tr>
+  <tr><td><code>animal.kv.type</code></td><td><code>redis</code></td><td><code>memory</code> → <code>InMemoryDiscoveryStore</code> (test).</td></tr>
+  <tr><td><code>animal.discovery.secret</code> (<code>DISCOVERY_SECRET</code>)</td><td><code>dev-only-secret-change-me-in-prod</code></td><td>Khoá làm nhiễu vị trí, ≥16 ký tự. <strong>Phải đổi ở production</strong> (deploy/README yêu cầu ngẫu nhiên ≥32 ký tự).</td></tr>
+  <tr><td><code>animal.discovery.location-ttl</code></td><td>30m</td><td>Vị trí hết hạn sau khoảng này nếu không cập nhật lại.</td></tr>
+  <tr><td><code>animal.discovery.radius-adult-m</code> / <code>radius-minor-m</code></td><td>10000 / 5000</td><td>Bán kính tìm người ở gần (mét).</td></tr>
+  <tr><td><code>animal.discovery.cards-per-minute</code></td><td>10</td><td>Giới hạn số lần lấy bộ thẻ mỗi phút.</td></tr>
+  <tr><td><code>animal.discovery.purge-interval-ms</code></td><td>60000</td><td>Nhịp dọn dẹp.</td></tr>
+  <tr><td><code>animal.limits.swipes-per-day.free</code> / <code>pro</code></td><td>30 / 150</td><td>Hạn mức quẹt phải mỗi ngày.</td></tr>
+  <tr><td><code>animal.user-service-url</code>, <code>animal.billing-service-url</code></td><td>địa chỉ qua load balancer</td><td>Địa chỉ gọi nội bộ.</td></tr>
+  <tr><td><code>resilience4j.timelimiter.instances.user-service</code></td><td>6 giây (mặc định chung 2 giây)</td><td>Lưu ý các khoá này không áp dụng cho <code>CircuitBreakerFactory</code>; mặc định thực tế do <a href="../libs/common-guide.html">common</a> đặt.</td></tr>
+  <tr><td>Kafka, Keycloak, Eureka</td><td>như các service khác</td><td><code>KAFKA_BOOTSTRAP</code>, <code>KEYCLOAK_JWK_URI</code>, <code>EUREKA_URL</code>.</td></tr>
+</table>
+
+<!-- ============ 12 ============ -->
+<h2 id="test">12. Test</h2>
+<ul>
+  <li><strong>DiscoveryServiceTest</strong>: bộ thẻ chỉ gồm người hợp lệ (gần hoặc online); người online ở xa xuất hiện không có thông tin khoảng cách; thẻ không lộ toạ độ hay mét; người dưới 18 chỉ thấy người dưới 18 với mức thô; bán kính người dưới 18 nhỏ hơn; người được Boost đứng đầu và cần có số dư; quẹt trái ẩn thẻ, quẹt phải được ghi lại; giới hạn quẹt phải mỗi ngày và hoàn lượt khi lỗi; bị chặn / đã là bạn / lỗi dịch vụ không tốn lượt; không quẹt chính mình; vị trí cần bật khám phá; vị trí hết hạn và bị quên; trạng thái online chỉ bạn bè xem được; người không bật khám phá thấy online với bạn nhưng không vào bộ thẻ; tắt khám phá xoá vị trí nhưng giữ lịch sử quẹt; giới hạn tìm kiếm; PRO có giới hạn quẹt cao hơn.</li>
+  <li><strong>LocationPrivacyTest</strong>, <strong>InMemoryDiscoveryStoreTest</strong>, <strong>DiscoveryStoreContractTest</strong>, <strong>RedisDiscoveryStoreTest</strong>: làm nhiễu vị trí và mức khoảng cách, hợp đồng chung của hai cài đặt <code>DiscoveryStore</code>.</li>
+</ul>
+<pre><code>mvn -q -B -pl services/discovery-service install
+# kết quả: services/discovery-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 13 ============ -->
+<h2 id="luu-y">13. Lưu ý</h2>
+<div class="box warn"><strong>Đổi <code>DISCOVERY_SECRET</code> sẽ dịch chuyển mọi vị trí đã lưu.</strong> Độ lệch cố định của mỗi người suy ra từ khoá này; đổi khoá làm vị trí lưu trong Redis lệch so với vị trí mới cập nhật cho tới khi hết TTL 30 phút.</div>
+<div class="box warn"><strong>Mọi trạng thái nằm trong Redis, không có bản sao bền:</strong> mất Redis là mất vị trí, online, Boost đang chạy, lịch sử quẹt và cờ PRO (cờ PRO chỉ hồi lại khi có event billing mới). Boost đã bị trừ ở ví billing nhưng nếu Redis mất trước khi hết 30 phút thì người dùng mất hiệu lực Boost đó.</div>
+<div class="box">Lịch sử quẹt (trái và phải) được làm mới TTL 35 ngày <em>mỗi lần ghi</em> (<code>redis.expire</code> sau mỗi lần thêm). Người không quẹt trong 35 ngày sẽ mất toàn bộ lịch sử và những người đã quẹt có thể xuất hiện lại trong bộ thẻ.</div>
+<div class="box">Việc "chọn ứng viên rồi mới lọc" cắt ứng viên ở <code>size × 6</code> trước khi lọc bằng hồ sơ; khi cộng đồng đông và nhiều người không hợp lệ, bộ thẻ có thể ít hơn <code>limit</code> dù còn người phù hợp xa hơn.</div>
+<div class="box">Sau khi restart một service, Eureka giữ bản ghi cũ khoảng 90 giây nên gateway có thể trả 503 (CLAUDE.md).</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test.</div>
+
+</main>
+</div>
+</body>
+</html>

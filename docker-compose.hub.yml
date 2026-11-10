@@ -1,0 +1,58 @@
+# =====================================================================================================
+#  ANIMAL LOCKET — chạy bằng image có sẵn trên Docker Hub (không build từ mã nguồn)
+#
+#  File này GHI ĐÈ docker-compose.yml: chỉ đổi 10 service Java sang image trên Docker Hub và bỏ phần build.
+#  Mọi thứ khác (biến môi trường, Traefik, Keycloak, Kafka, volume...) vẫn lấy từ docker-compose.yml.
+#
+#  Máy chạy vẫn cần (vì được mount vào container, không nằm trong image):
+#    docker-compose.yml, file này, .env, deploy/ (keycloak, traefik, secrets, observability), infra/config-repo/
+#  Cần Docker Compose >= 2.24 (để dùng !reset).
+#
+#  Dùng:
+#    docker compose -f docker-compose.yml -f docker-compose.hub.yml pull
+#    docker compose -f docker-compose.yml -f docker-compose.hub.yml up -d
+#  (KHÔNG thêm --build.) Cập nhật bản mới: chạy lại 2 lệnh trên.
+#
+#  Đổi tài khoản/tag qua .env:  DOCKERHUB_USER=manhletapcode   IMAGE_TAG=dev
+# =====================================================================================================
+
+services:
+  eureka-server:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/eureka-server:${IMAGE_TAG:-dev}
+
+  config-server:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/config-server:${IMAGE_TAG:-dev}
+
+  api-gateway:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/api-gateway:${IMAGE_TAG:-dev}
+
+  user-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/user-service:${IMAGE_TAG:-dev}
+
+  media-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/media-service:${IMAGE_TAG:-dev}
+
+  post-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/post-service:${IMAGE_TAG:-dev}
+
+  notification-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/notification-service:${IMAGE_TAG:-dev}
+
+  discovery-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/discovery-service:${IMAGE_TAG:-dev}
+
+  chat-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/chat-service:${IMAGE_TAG:-dev}
+
+  billing-service:
+    build: !reset null
+    image: ${DOCKERHUB_USER:-manhletapcode}/billing-service:${IMAGE_TAG:-dev}

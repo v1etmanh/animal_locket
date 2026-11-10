@@ -42,39 +42,39 @@ Tài liệu này mô tả kiến trúc **như code đang làm**. Kế hoạch g�
 
 ## 3.2 Công nghệ
 
-| Lớp | Công nghệ | Ghi chú |
-|---|---|---|
-| Ngôn ngữ/Framework | Java 17, Spring Boot 3.3.5, Spring Cloud 2023.0.3 | Maven đa module, parent pom ở gốc repo |
-| Service nghiệp vụ | Spring MVC (servlet) | Gateway dùng Spring Cloud Gateway (reactive) |
-| Xác thực | Keycloak (OIDC/JWT) | Gateway **và** từng service đều kiểm tra JWT bằng JWKS |
-| Định tuyến/khám phá | Eureka + `lb://` | Gateway, `RestClient` có `@LoadBalanced` |
-| Cấu hình | Spring Cloud Config (profile `native`) | `infra/config-repo/application.yml` dùng chung; mọi service có `optional:configserver` nên chạy được không cần Config Server |
-| Chịu lỗi | Resilience4j qua Spring Cloud CircuitBreaker | Xem 3.6 |
-| Message broker | Kafka (JSON String), KRaft | Event nghiệp vụ + Outbox |
-| DB quan hệ | MySQL (user, media, post), PostgreSQL (billing, Keycloak) | Flyway; `JPA_DDL_AUTO` mặc định `none` (MySQL, chờ kiểm chứng) / `validate` (billing) |
-| Document | MongoDB (chat) | `conversations`, `messages` |
-| Cache/GEO/hạn mức | Redis | Qua `KeyValueStore` (hạn mức, cache) và `RedisDiscoveryStore` (GEO, online) |
-| Kho ảnh | MinIO (S3) | Bucket `raw` và `public`, đều private |
-| Xử lý ảnh | Python 3.12, Pillow, OpenCV 4.x, MinIO SDK, confluent-kafka | `face-worker/`; AI inpainting tuỳ chọn (diffusers) |
-| Quan sát | Micrometer → Prometheus; OTLP → Tempo; log → Loki; Grafana | Xem [11-observability-resilience.md](11-observability-resilience.md) |
-| Push | Firebase Admin (FCM) | Mặc định `LoggingPushSender` khi chưa có khoá |
+| Lớp                     | Công nghệ                                                   | Ghi chú                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ngôn ngữ/Framework     | Java 17, Spring Boot 3.3.5, Spring Cloud 2023.0.3             | Maven đa module, parent pom ở gốc repo                                                                                                  |
+| Service nghiệp vụ      | Spring MVC (servlet)                                          | Gateway dùng Spring Cloud Gateway (reactive)                                                                                              |
+| Xác thực               | Keycloak (OIDC/JWT)                                           | Gateway **và** từng service đều kiểm tra JWT bằng JWKS                                                                         |
+| Định tuyến/khám phá | Eureka + `lb://`                                            | Gateway, `RestClient` có `@LoadBalanced`                                                                                              |
+| Cấu hình               | Spring Cloud Config (profile `native`)                      | `infra/config-repo/application.yml` dùng chung; mọi service có `optional:configserver` nên chạy được không cần Config Server |
+| Chịu lỗi               | Resilience4j qua Spring Cloud CircuitBreaker                  | Xem 3.6                                                                                                                                    |
+| Message broker           | Kafka (JSON String), KRaft                                    | Event nghiệp vụ + Outbox                                                                                                                 |
+| DB quan hệ              | MySQL (user, media, post), PostgreSQL (billing, Keycloak)     | Flyway; `JPA_DDL_AUTO` mặc định `none` (MySQL, chờ kiểm chứng) / `validate` (billing)                                          |
+| Document                 | MongoDB (chat)                                                | `conversations`, `messages`                                                                                                            |
+| Cache/GEO/hạn mức      | Redis                                                         | Qua `KeyValueStore` (hạn mức, cache) và `RedisDiscoveryStore` (GEO, online)                                                         |
+| Kho ảnh                 | MinIO (S3)                                                    | Bucket `raw` và `public`, đều private                                                                                               |
+| Xử lý ảnh             | Python 3.12, Pillow, OpenCV 4.x, MinIO SDK, confluent-kafka   | `face-worker/`; AI inpainting tuỳ chọn (diffusers)                                                                                     |
+| Quan sát                | Micrometer → Prometheus; OTLP → Tempo; log → Loki; Grafana | Xem [11-observability-resilience.md](11-observability-resilience.md)                                                                        |
+| Push                     | Firebase Admin (FCM)                                          | Mặc định `LoggingPushSender` khi chưa có khoá                                                                                      |
 
 ### Cổng dịch vụ
 
-| Thành phần | Cổng | Nguồn |
-|---|---|---|
-| api-gateway | 8080 | `infra/api-gateway/.../application.yml` |
-| config-server | 8888 | idem |
-| eureka-server | 8761 | idem |
-| user-service | 8101 | `services/user-service/.../application.yml` |
-| post-service | 8102 | idem |
-| media-service | 8103 | idem |
-| discovery-service | 8104 | idem |
-| chat-service | 8105 | idem |
-| billing-service | 8106 | quy ước (xem [04-service-specs.md](04-service-specs.md)) |
-| notification-service | 8107 | idem |
-| face-worker (metrics/health) | 8110 | `face-worker/facework/config.py` |
-| Keycloak | 8081 | mặc định trong `KEYCLOAK_JWK_URI` |
+| Thành phần                 | Cổng | Nguồn                                                    |
+| ---------------------------- | ----- | --------------------------------------------------------- |
+| api-gateway                  | 8080  | `infra/api-gateway/.../application.yml`                 |
+| config-server                | 8888  | idem                                                      |
+| eureka-server                | 8761  | idem                                                      |
+| user-service                 | 8101  | `services/user-service/.../application.yml`             |
+| post-service                 | 8102  | idem                                                      |
+| media-service                | 8103  | idem                                                      |
+| discovery-service            | 8104  | idem                                                      |
+| chat-service                 | 8105  | idem                                                      |
+| billing-service              | 8106  | quy ước (xem [04-service-specs.md](04-service-specs.md)) |
+| notification-service         | 8107  | idem                                                      |
+| face-worker (metrics/health) | 8110  | `face-worker/facework/config.py`                        |
+| Keycloak                     | 8081  | mặc định trong `KEYCLOAK_JWK_URI`                    |
 
 Hạ tầng (MySQL 3306, PostgreSQL 5432, MongoDB 27017, Redis 6379, MinIO 9000/9001, Kafka 9092, Prometheus 9090, Loki 3100, Tempo 3200/4318, Grafana 3000) xem [10-deployment-infrastructure.md](10-deployment-infrastructure.md).
 
@@ -105,20 +105,20 @@ Ngoại lệ: `POST /api/v1/users/register` không cần `X-Public-Id`; user-ser
 
 ## 3.4 Đồng bộ và bất đồng bộ
 
-| Việc | Cách | Chịu lỗi |
-|---|---|---|
-| Client → Gateway → service | REST/WebSocket | Circuit breaker + timeout ở gateway |
-| post → user (danh sách bạn) | REST nội bộ, cache Redis 45s + bản dự phòng 1 giờ | Dùng cache cũ; không có cache thì 503 → feed trả rỗng `degraded=true` |
-| post → user (hồ sơ hiển thị) | REST nội bộ, cache Caffeine 5 phút | Fail soft: thiếu alias vẫn trả bài |
-| media → user (con vật chủ đạo) | Bản sao `owner_animals` cập nhật bằng event; thiếu thì REST | REST lỗi → 503 (fail closed) |
-| media/chat → user (quan hệ bạn bè) | REST nội bộ | Fail closed |
-| discovery → user | REST nội bộ (hồ sơ, loại trừ, quẹt phải) | Quẹt: 503 và hoàn lượt; thẻ: trả rỗng `degraded=true` |
-| discovery → billing (Boost) | REST nội bộ | 503 `BILLING_UNAVAILABLE` |
-| chat → media (kiểm tra ảnh) | REST nội bộ | 503 |
-| Ảnh: upload → ẩn mặt → đăng | Kafka (`PHOTO_UPLOADED` → `FACE_PROCESSED` → `PHOTO_READY`) | Retry/DLQ ở worker, timeout ở media-service |
-| Kết bạn, chặn, xoá tài khoản, gói Pro | Kafka (Outbox) | Consumer idempotent |
-| Push | Kafka → notification-service → FCM | Retry 3 lần rồi bỏ qua |
-| Tin nhắn realtime | WebSocket + Redis pub/sub | Xem 3.7 |
+| Việc                                        | Cách                                                               | Chịu lỗi                                                                      |
+| -------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Client → Gateway → service                 | REST/WebSocket                                                      | Circuit breaker + timeout ở gateway                                            |
+| post → user (danh sách bạn)               | REST nội bộ, cache Redis 45s + bản dự phòng 1 giờ             | Dùng cache cũ; không có cache thì 503 → feed trả rỗng `degraded=true` |
+| post → user (hồ sơ hiển thị)            | REST nội bộ, cache Caffeine 5 phút                               | Fail soft: thiếu alias vẫn trả bài                                          |
+| media → user (con vật chủ đạo)          | Bản sao `owner_animals` cập nhật bằng event; thiếu thì REST | REST lỗi → 503 (fail closed)                                                  |
+| media/chat → user (quan hệ bạn bè)       | REST nội bộ                                                       | Fail closed                                                                     |
+| discovery → user                            | REST nội bộ (hồ sơ, loại trừ, quẹt phải)                    | Quẹt: 503 và hoàn lượt; thẻ: trả rỗng `degraded=true`                 |
+| discovery → billing (Boost)                 | REST nội bộ                                                       | 503 `BILLING_UNAVAILABLE`                                                     |
+| chat → media (kiểm tra ảnh)               | REST nội bộ                                                       | 503                                                                             |
+| Ảnh: upload → ẩn mặt → đăng           | Kafka (`PHOTO_UPLOADED` → `FACE_PROCESSED` → `PHOTO_READY`) | Retry/DLQ ở worker, timeout ở media-service                                   |
+| Kết bạn, chặn, xoá tài khoản, gói Pro | Kafka (Outbox)                                                      | Consumer idempotent                                                             |
+| Push                                         | Kafka → notification-service → FCM                                | Retry 3 lần rồi bỏ qua                                                       |
+| Tin nhắn realtime                           | WebSocket + Redis pub/sub                                           | Xem 3.7                                                                         |
 
 ## 3.5 Outbox và idempotency
 
@@ -133,19 +133,19 @@ Chi tiết topic và payload: [07-event-catalog.md](07-event-catalog.md).
 
 ## 3.6 Ma trận chịu lỗi (như đã cấu hình)
 
-| Chỗ | Cơ chế | Giá trị (theo `application.yml`/code) |
-|---|---|---|
-| Gateway → mọi service | CircuitBreaker `default` + forward `/fallback/default` (503 problem+json) | cửa sổ 20, tối thiểu 10 lời gọi, ngưỡng lỗi 50%, mở 10 giây, half-open 5 |
-| Gateway → discovery | CircuitBreaker `discovery` → `/fallback/discovery` trả `{"cards":[],"degraded":true}` | cùng cấu hình |
-| Gateway timeout | `connect-timeout 2000`, `response-timeout 3s` | |
-| Gateway rate limit | `RequestRateLimiter` Redis, khoá = publicId hoặc IP | mặc định 20 req/s, burst 40; discovery 2 req/s, burst 10 |
-| Service → service | `CircuitBreakerFactory.create("user-service" \| "media-service" \| "billing-service")` | cấu hình `resilience4j.*` như trên, time limiter 2–3s |
-| Danh sách bạn (post) | Cache tươi 45s + bản cũ 1h | |
-| Hồ sơ hiển thị (post) | Caffeine 5 phút | fail soft |
-| Push | Thread pool riêng (4–16 luồng, hàng đợi 5000, `DiscardPolicy`) + retry 3 lần, backoff `500ms × lần` | bulkhead tự cài |
-| face-worker | Retry `MAX_ATTEMPTS=3`, backoff `1.5s × lần`, DLQ `media.events.dlq` | AI timeout 45s |
-| media-service | Job kẹt `UPLOADED` quá 10 phút → `REJECTED/PROCESSING_TIMEOUT` | |
-| Chat | Giới hạn 20 tin/10 giây/người | Bulkhead Resilience4j **mới chỉ khai báo trong YAML**, chưa gắn vào code |
+| Chỗ                      | Cơ chế                                                                                                         | Giá trị (theo `application.yml`/code)                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Gateway → mọi service   | CircuitBreaker `default` + forward `/fallback/default` (503 problem+json)                                    | cửa sổ 20, tối thiểu 10 lời gọi, ngưỡng lỗi 50%, mở 10 giây, half-open 5  |
+| Gateway → discovery      | CircuitBreaker `discovery` → `/fallback/discovery` trả `{"cards":[],"degraded":true}`                    | cùng cấu hình                                                                     |
+| Gateway timeout           | `connect-timeout 2000`, `response-timeout 3s`                                                                |                                                                                      |
+| Gateway rate limit        | `RequestRateLimiter` Redis, khoá = publicId hoặc IP                                                          | mặc định 20 req/s, burst 40; discovery 2 req/s, burst 10                          |
+| Service → service        | `CircuitBreakerFactory.create("user-service" \| "media-service" \| "billing-service")`                           | cấu hình `resilience4j.*` như trên, time limiter 2–3s                         |
+| Danh sách bạn (post)    | Cache tươi 45s + bản cũ 1h                                                                                   |                                                                                      |
+| Hồ sơ hiển thị (post) | Caffeine 5 phút                                                                                                 | fail soft                                                                            |
+| Push                      | Thread pool riêng (4–16 luồng, hàng đợi 5000, `DiscardPolicy`) + retry 3 lần, backoff `500ms × lần` | bulkhead tự cài                                                                    |
+| face-worker               | Retry `MAX_ATTEMPTS=3`, backoff `1.5s × lần`, DLQ `media.events.dlq`                                     | AI timeout 45s                                                                       |
+| media-service             | Job kẹt `UPLOADED` quá 10 phút → `REJECTED/PROCESSING_TIMEOUT`                                           |                                                                                      |
+| Chat                      | Giới hạn 20 tin/10 giây/người                                                                               | Bulkhead Resilience4j **mới chỉ khai báo trong YAML**, chưa gắn vào code |
 
 > Cần kiểm chứng khi chạy thật: các giá trị `resilience4j.circuitbreaker/timelimiter.configs.default` trong YAML có áp dụng cho `CircuitBreakerFactory` của Spring Cloud hay không. Nếu không, time limiter mặc định của Spring Cloud CircuitBreaker là **1 giây**, dễ gây lỗi giả. Cách chắc chắn: khai báo `Customizer<Resilience4JCircuitBreakerFactory>` trong từng service.
 
@@ -162,18 +162,18 @@ Mỗi instance `PSUBSCRIBE chat:user:*` một lần (`RedisMessageBus`) và ch�
 
 ## 3.8 Fail closed và fail soft (đối chiếu code)
 
-| Nhóm | Hành vi | Nơi trong code |
-|---|---|---|
-| Ẩn mặt | **Closed**: ảnh chỉ `PUBLISHED` khi có `PHOTO_READY`; lỗi/timeout → `REJECTED` | `PostService.applyMedia`, `MediaService.onFaceFailed/expireStuck`, `Worker.handle` |
-| Xác định người dùng | **Closed**: không tra được `sub` → 503 | `IdentityFilter` |
-| Xác minh quan hệ bạn bè (chat, xem ảnh) | **Closed** | `ChatService.requireFriends`, `MediaService.viewUrl` |
-| Con vật chủ đạo khi upload | **Closed** nếu cả bản sao lẫn REST đều thiếu | `MediaService.complete` |
-| Thanh toán/quyền lợi | **Closed**: chỉ mở quyền sau khi xác minh với store | `billing-service` (xem 04) |
-| Vị trí | **Closed**: chỉ lưu khi bật khám phá; xác thực hồ sơ mới cho cập nhật | `DiscoveryService.updateLocation` |
-| Feed | **Soft**: không biết danh sách bạn → trả rỗng `degraded` | `PostService.feed` |
-| Bộ thẻ | **Soft**: lỗi hạ tầng → rỗng `degraded` | `DiscoveryController.cards` |
-| Hồ sơ hiển thị | **Soft** | `UserDirectory.profiles` |
-| Push | **Soft**: lỗi bỏ qua sau 3 lần | `NotificationDispatcher` |
+| Nhóm                                        | Hành vi                                                                                        | Nơi trong code                                                                          |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Ẩn mặt                                     | **Closed**: ảnh chỉ `PUBLISHED` khi có `PHOTO_READY`; lỗi/timeout → `REJECTED` | `PostService.applyMedia`, `MediaService.onFaceFailed/expireStuck`, `Worker.handle` |
+| Xác định người dùng                    | **Closed**: không tra được `sub` → 503                                             | `IdentityFilter`                                                                       |
+| Xác minh quan hệ bạn bè (chat, xem ảnh) | **Closed**                                                                                | `ChatService.requireFriends`, `MediaService.viewUrl`                                 |
+| Con vật chủ đạo khi upload               | **Closed** nếu cả bản sao lẫn REST đều thiếu                                       | `MediaService.complete`                                                                |
+| Thanh toán/quyền lợi                      | **Closed**: chỉ mở quyền sau khi xác minh với store                                  | `billing-service` (xem 04)                                                             |
+| Vị trí                                     | **Closed**: chỉ lưu khi bật khám phá; xác thực hồ sơ mới cho cập nhật         | `DiscoveryService.updateLocation`                                                      |
+| Feed                                         | **Soft**: không biết danh sách bạn → trả rỗng `degraded`                         | `PostService.feed`                                                                     |
+| Bộ thẻ                                     | **Soft**: lỗi hạ tầng → rỗng `degraded`                                            | `DiscoveryController.cards`                                                            |
+| Hồ sơ hiển thị                           | **Soft**                                                                                  | `UserDirectory.profiles`                                                               |
+| Push                                         | **Soft**: lỗi bỏ qua sau 3 lần                                                         | `NotificationDispatcher`                                                               |
 
 ## 3.9 Cấu trúc module
 

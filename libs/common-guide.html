@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>libs/common — Tài liệu thư viện dùng chung</title>
+<style>
+  :root {
+    --bg: #fafaf7; --fg: #1d2330; --muted: #5d6676; --line: #dfe2e8; --card: #ffffff;
+    --accent: #1f6feb; --accent-bg: #e8f0fe; --ok: #1a7f37; --ok-bg: #e6f4ea;
+    --warn: #9a6700; --warn-bg: #fff4d6; --code-bg: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --fg: #e6e9ef; --muted: #98a2b3; --line: #2a3140; --card: #1a1f2a;
+      --accent: #6ea8fe; --accent-bg: #1d2a44; --ok: #56d364; --ok-bg: #12301c;
+      --warn: #e3b341; --warn-bg: #3a2f10; --code-bg: #222a38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.65 system-ui, "Segoe UI", sans-serif; }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 28px 16px; border-right: 1px solid var(--line); }
+  nav b { display: block; margin-bottom: 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  nav a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--fg); text-decoration: none; font-size: 14px; }
+  nav a:hover { background: var(--accent-bg); color: var(--accent); }
+  main { padding: 32px 40px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 21px; margin: 44px 0 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font: 13px ui-monospace, Consolas, monospace; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow: auto; font: 13px/1.55 ui-monospace, Consolas, monospace; margin: 10px 0; }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 14px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.c, th.c { text-align: center; }
+  .yes { color: var(--ok); font-weight: 700; }
+  .no { color: var(--muted); }
+  a { color: var(--accent); }
+  .box { padding: 12px 16px; border-radius: 8px; margin: 14px 0; border: 1px solid var(--line); background: var(--card); }
+  .box.info { background: var(--accent-bg); border-color: transparent; }
+  .box.warn { background: var(--warn-bg); border-color: transparent; }
+  .box.ok { background: var(--ok-bg); border-color: transparent; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); margin-right: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card h3 { margin-top: 0; }
+  .card p { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; font-size: 14px; }
+  .flow span.n { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .flow span.ar { color: var(--muted); }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } main { padding: 24px 18px 60px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>Mục lục</b>
+  <a href="#tong-quan">1. Tổng quan</a>
+  <a href="#cau-truc">2. Cách tổ chức</a>
+  <a href="#chuc-nang">3. Chức năng từng phần</a>
+  <a href="#auto-config">4. Auto-configuration</a>
+  <a href="#cau-hinh">5. Thuộc tính cấu hình</a>
+  <a href="#import">6. Cách import</a>
+  <a href="#ban-do">7. Ai dùng ở đâu</a>
+  <a href="#vi-du">8. Ví dụ dùng</a>
+  <a href="#luu-y">9. Lưu ý và phần thừa</a>
+  <a href="#mo-rong">10. Khi cần sửa / thêm</a>
+</nav>
+<main>
+
+<h1>libs/common</h1>
+<p class="sub">Thư viện Java dùng chung cho các microservice servlet của Animal Locket. Tài liệu viết dựa trên mã nguồn tại <code>libs/common</code> (trạng thái nhánh <code>feat/chang-billing-mechainism</code>).</p>
+
+<!-- ===================== 1 ===================== -->
+<h2 id="tong-quan">1. Tổng quan</h2>
+<p><code>common</code> là một module Maven (<code>com.animallocket:common</code>, phiên bản <code>0.1.0-SNAPSHOT</code>) chứa những thứ mà <strong>mọi service cần giống hệt nhau</strong> để chúng nói chuyện với nhau được:</p>
+<div class="grid">
+  <div class="card"><h3>Hợp đồng giữa service</h3><p>Tên header, tên Kafka topic, loại event, hình dạng payload và phong bì event.</p></div>
+  <div class="card"><h3>Hạ tầng web chung</h3><p>Lỗi RFC 7807, kiểm tra JWT, bảo vệ <code>/internal/**</code>.</p></div>
+  <div class="card"><h3>Hạ tầng chịu lỗi</h3><p>Circuit breaker mặc định, dead-letter queue cho Kafka.</p></div>
+  <div class="card"><h3>Tiện ích nhỏ</h3><p>Kho key-value có TTL (Redis / bộ nhớ), sinh <code>publicId</code>.</p></div>
+</div>
+<div class="box info">
+  <strong>Không phải</strong> thư viện logic nghiệp vụ. Không có entity, repository hay controller nào ở đây. Nó cũng <strong>không</strong> gồm outbox (nằm ở <code>libs/outbox-jpa</code>, phụ thuộc vào common) và không gồm thư viện avatar (<code>libs/avatar-lib</code>).
+</div>
+
+<h3>Vị trí trong monorepo</h3>
+<table>
+  <tr><th>Module</th><th>Vai trò</th><th>Quan hệ với common</th></tr>
+  <tr><td><code>libs/common</code></td><td>Hợp đồng + hạ tầng chung</td><td>—</td></tr>
+  <tr><td><code>libs/outbox-jpa</code></td><td>Ghi event vào bảng outbox trong transaction</td><td>Phụ thuộc common (<code>EventEnvelope</code>, <code>EventJson</code>)</td></tr>
+  <tr><td><code>libs/avatar-lib</code></td><td>Thư viện avatar (JS build)</td><td>Độc lập</td></tr>
+  <tr><td><code>services/*</code> (7 service)</td><td>Nghiệp vụ</td><td>Cả 7 đều phụ thuộc common</td></tr>
+  <tr><td><code>infra/api-gateway</code>, <code>config-server</code>, <code>eureka-server</code></td><td>Hạ tầng</td><td>Không phụ thuộc (gateway là reactive nên không dùng được phần servlet)</td></tr>
+</table>
+
+<!-- ===================== 2 ===================== -->
+<h2 id="cau-truc">2. Cách tổ chức</h2>
+<pre><code>libs/common/
+├─ pom.xml
+└─ src/
+   ├─ main/java/com/animallocket/common/
+   │  ├─ Headers.java            tên header dùng chung (X-Public-Id, X-Internal-Token, ...)
+   │  ├─ Topics.java             tên Kafka topic
+   │  ├─ EventTypes.java         tên loại event
+   │  ├─ PublicIds.java          sinh / kiểm tra publicId 20 ký tự
+   │  ├─ event/
+   │  │  ├─ EventEnvelope.java   phong bì event (record)
+   │  │  ├─ EventJson.java       ObjectMapper dùng chung + write/read
+   │  │  └─ Events.java          các record payload theo từng loại event
+   │  ├─ web/
+   │  │  ├─ ApiException.java        lỗi nghiệp vụ có mã ổn định
+   │  │  ├─ ApiExceptionHandler.java @RestControllerAdvice → RFC 7807
+   │  │  └─ InternalTokenFilter.java bảo vệ /internal/**
+   │  ├─ kv/
+   │  │  ├─ KeyValueStore.java            interface
+   │  │  ├─ RedisKeyValueStore.java       cài đặt Redis
+   │  │  ├─ InMemoryKeyValueStore.java    cài đặt bộ nhớ (test / dev)
+   │  │  └─ KeyValueAutoConfiguration.java
+   │  └─ config/
+   │     ├─ CommonAutoConfiguration.java            bảo mật + lỗi
+   │     ├─ ResilienceAutoConfiguration.java        circuit breaker
+   │     └─ KafkaErrorHandlingAutoConfiguration.java DLQ
+   ├─ main/resources/META-INF/spring/
+   │  └─ org.springframework.boot.autoconfigure.AutoConfiguration.imports
+   └─ test/java/com/animallocket/common/
+      ├─ PublicIdsTest, KeyValueStoreTest
+      └─ config/InfrastructureAutoConfigurationTest</code></pre>
+<p>Chia làm ba nhóm theo cách dùng:</p>
+<ol>
+  <li><strong>Hằng số và kiểu dữ liệu</strong> (<code>Headers</code>, <code>Topics</code>, <code>EventTypes</code>, <code>event/*</code>, <code>PublicIds</code>, <code>ApiException</code>, <code>KeyValueStore</code>): service gọi/import trực tiếp.</li>
+  <li><strong>Bean tự đăng ký</strong> (<code>config/*</code>, <code>kv/KeyValueAutoConfiguration</code>): service không import gì, chỉ cần có common trên classpath.</li>
+  <li><strong>Cài đặt phía sau</strong> (<code>RedisKeyValueStore</code>, <code>InternalTokenFilter</code>, <code>ApiExceptionHandler</code>): do auto-config tạo ra.</li>
+</ol>
+
+<!-- ===================== 3 ===================== -->
+<h2 id="chuc-nang">3. Chức năng từng phần</h2>
+
+<h3>3.1 <code>Headers</code></h3>
+<table>
+  <tr><th>Hằng số</th><th>Giá trị</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>PUBLIC_ID</code></td><td><code>X-Public-Id</code></td><td>publicId người gọi. Gateway gắn sau khi xác thực JWT; client không được tự đặt.</td></tr>
+  <tr><td><code>INTERNAL_TOKEN</code></td><td><code>X-Internal-Token</code></td><td>Khoá gọi service→service tới <code>/internal/**</code>.</td></tr>
+  <tr><td><code>CORRELATION_ID</code></td><td><code>X-Correlation-Id</code></td><td>Khai báo nhưng chưa có chỗ dùng.</td></tr>
+  <tr><td><code>IDEMPOTENCY_KEY</code></td><td><code>Idempotency-Key</code></td><td>Khai báo nhưng chưa có chỗ dùng.</td></tr>
+</table>
+<p>Controller đọc người gọi bằng <code>@RequestHeader(Headers.PUBLIC_ID)</code>. Thiếu header → <code>ApiExceptionHandler</code> trả <code>PROFILE_REQUIRED</code> (403).</p>
+
+<h3>3.2 <code>Topics</code> và <code>EventTypes</code></h3>
+<p>Danh sách tên Kafka topic và tên loại event. Quy ước: khoá message luôn là <code>publicId</code> liên quan (hoặc <code>mediaId</code>) để giữ thứ tự theo thực thể.</p>
+<table>
+  <tr><th>Topic</th><th>Tên</th><th>Loại event chính</th></tr>
+  <tr><td><code>USER</code></td><td><code>user.events</code></td><td>USER_REGISTERED, USER_DELETED, USER_BLOCKED, LEAD_ANIMAL_CHANGED, AVATAR_CHANGED</td></tr>
+  <tr><td><code>FRIEND</code></td><td><code>friend.events</code></td><td>FRIEND_REQUEST_RECEIVED, FRIEND_ACCEPTED, FRIEND_REMOVED, DISCOVERY_DISABLED</td></tr>
+  <tr><td><code>MEDIA</code></td><td><code>media.events</code></td><td>PHOTO_READY, PHOTO_REJECTED</td></tr>
+  <tr><td><code>POST</code></td><td><code>post.events</code></td><td>POST_PUBLISHED, POST_LIKED, POST_COMMENTED</td></tr>
+  <tr><td><code>CHAT</code></td><td><code>chat.events</code></td><td>MESSAGE_SENT</td></tr>
+  <tr><td><code>BILLING</code></td><td><code>billing.events</code></td><td>SUBSCRIPTION_ACTIVATED, SUBSCRIPTION_EXPIRED, CONSUMABLE_GRANTED</td></tr>
+</table>
+<p>Bảng trên là nhóm theo ý nghĩa; mã nguồn không ràng buộc loại event với topic.</p>
+
+<h3>3.3 <code>event/*</code> — phong bì và payload</h3>
+<ul>
+  <li><code>EventEnvelope</code> (record): <code>eventId, type, version, occurredAt, producer, correlationId, key, payload</code>. <code>EventEnvelope.of(type, producer, key, payload)</code> tạo mới với <code>eventId</code> là UUID; <code>payloadAs(Class)</code> giải mã payload (lỗi → <code>IllegalArgumentException</code>).</li>
+  <li><code>EventJson</code>: <code>ObjectMapper</code> dùng chung (có <code>JavaTimeModule</code>, tắt timestamp, bỏ qua trường lạ). <code>write(envelope)</code> → JSON, <code>read(json)</code> → envelope.</li>
+  <li><code>Events</code>: các record payload, ví dụ <code>UserRegistered</code>, <code>PhotoReady</code>, <code>PostLiked</code>, <code>MessageSent</code>, <code>SubscriptionChanged</code>. Chỉ chứa <code>publicId</code>, không bao giờ chứa email / SĐT / <code>sub</code>.</li>
+</ul>
+<div class="flow">
+  <span class="n">Service gọi <code>outbox.publish(topic, type, key, payload)</code></span><span class="ar">→</span>
+  <span class="n"><code>EventEnvelope.of</code> + <code>EventJson.write</code></span><span class="ar">→</span>
+  <span class="n">bảng outbox (cùng transaction)</span><span class="ar">→</span>
+  <span class="n">Kafka</span><span class="ar">→</span>
+  <span class="n"><code>EventJson.read</code> ở consumer</span><span class="ar">→</span>
+  <span class="n"><code>payloadAs(Events.X.class)</code></span>
+</div>
+<p>Phần outbox và <code>idempotency.firstTime(eventId)</code> không nằm trong common.</p>
+
+<h3>3.4 <code>web/*</code></h3>
+<table>
+  <tr><th>Lớp</th><th>Việc làm</th></tr>
+  <tr><td><code>ApiException</code></td><td>Lỗi nghiệp vụ gồm <code>HttpStatus</code>, <code>code</code> ổn định, thông điệp. Có factory: <code>notFound</code>, <code>forbidden</code>, <code>conflict</code>, <code>badRequest</code>, <code>tooMany</code>.</td></tr>
+  <tr><td><code>ApiExceptionHandler</code></td><td><code>@RestControllerAdvice</code> đổi lỗi sang <code>ProblemDetail</code> (RFC 7807) kèm thuộc tính <code>code</code>. Xử lý: <code>ApiException</code>; <code>MethodArgumentNotValidException</code> và <code>ConstraintViolationException</code> → <code>VALIDATION_FAILED</code> (400); thiếu header → <code>PROFILE_REQUIRED</code> (403); lỗi khác → <code>INTERNAL_ERROR</code> (500). Một số ngoại lệ Spring (access denied, method not supported, resource not found, message not readable) được ném lại để Spring trả mã mặc định.</td></tr>
+  <tr><td><code>InternalTokenFilter</code></td><td>Chỉ lọc URI bắt đầu <code>/internal/</code>. So khoá <code>X-Internal-Token</code> bằng <code>MessageDigest.isEqual</code> (so sánh thời gian hằng). Sai → 403 <code>INTERNAL_ONLY</code>.</td></tr>
+</table>
+
+<h3>3.5 <code>kv/*</code></h3>
+<p><code>KeyValueStore</code> là kho key-value có TTL, dùng cho hạn mức, cache bạn bè, bản sao quyền lợi:</p>
+<pre><code>long increment(String key, Duration ttlIfNew)   // tăng bộ đếm, đặt TTL nếu key mới
+void decrement(String key)                      // giảm, không xuống dưới 0
+Optional&lt;String&gt; get(String key)
+void set(String key, String value, Duration ttl)
+boolean setIfAbsent(String key, String value, Duration ttl)
+void delete(String... keys)</code></pre>
+<p>Hai cài đặt: <code>RedisKeyValueStore</code> (runtime) và <code>InMemoryKeyValueStore</code> (test, dev không có Redis).</p>
+
+<h3>3.6 <code>PublicIds</code></h3>
+<p><code>generate()</code> sinh chuỗi 20 ký tự trong bảng <code>[a-z2-7]</code> (~100 bit) bằng <code>SecureRandom</code>; <code>isValid(String)</code> kiểm tra đúng định dạng. publicId không suy ra được từ <code>sub</code> của Keycloak.</p>
+
+<!-- ===================== 4 ===================== -->
+<h2 id="auto-config">4. Auto-configuration</h2>
+<p>Bốn lớp được khai báo trong <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>, nên service chỉ cần có common trên classpath là Spring Boot tự nạp.</p>
+<table>
+  <tr><th>Lớp</th><th>Điều kiện</th><th>Tạo ra</th></tr>
+  <tr>
+    <td><code>CommonAutoConfiguration</code></td>
+    <td>Ứng dụng web <strong>servlet</strong></td>
+    <td><code>ApiExceptionHandler</code> (qua <code>@Import</code>); bean <code>InternalTokenFilter</code>; <code>SecurityFilterChain</code> (chỉ khi service chưa tự định nghĩa): tắt CSRF, session STATELESS, cho phép <code>/actuator/health/**</code>, <code>/actuator/prometheus</code>, <code>/actuator/info</code>, <code>/internal/**</code> (đã có filter), <code>OPTIONS</code>, các <code>public-paths</code>; còn lại bắt buộc JWT (<code>oauth2ResourceServer.jwt</code>).</td>
+  </tr>
+  <tr>
+    <td><code>ResilienceAutoConfiguration</code></td>
+    <td>Có <code>Resilience4JCircuitBreakerFactory</code> trên classpath</td>
+    <td><code>Customizer</code> mặc định cho <code>CircuitBreakerFactory</code>: timeout 2s, cửa sổ 20 lời gọi, tối thiểu 10, mở mạch khi ≥50% lỗi, chờ 10s, 5 lời gọi thử ở half-open. Cần vì khoá <code>resilience4j.timelimiter.*</code> trong YAML không áp dụng cho <code>CircuitBreakerFactory</code> của Spring Cloud (mặc định chỉ 1s).</td>
+  </tr>
+  <tr>
+    <td><code>KafkaErrorHandlingAutoConfiguration</code></td>
+    <td>Có Spring Kafka và bean <code>KafkaTemplate</code>; chưa có <code>CommonErrorHandler</code></td>
+    <td><code>DefaultErrorHandler</code>: thử lại 3 lần cách 1s rồi chuyển message sang topic <code>&lt;topic&gt;.dlq</code>. <code>IllegalArgumentException</code> (JSON event sai) vào DLQ ngay, không thử lại.</td>
+  </tr>
+  <tr>
+    <td><code>KeyValueAutoConfiguration</code></td>
+    <td><code>animal.kv.type</code> (mặc định <code>redis</code>)</td>
+    <td><code>redis</code> → <code>RedisKeyValueStore</code> (cần <code>StringRedisTemplate</code>); <code>memory</code> → <code>InMemoryKeyValueStore</code>. Đều là <code>@ConditionalOnMissingBean</code>.</td>
+  </tr>
+</table>
+<div class="box info">
+  Redis, Kafka và Resilience4j trong <code>libs/common/pom.xml</code> là <code>optional</code>: service muốn dùng phải tự khai báo dependency tương ứng. Phần web, security, oauth2-resource-server, validation, actuator, Micrometer/OTel được kéo vào mọi service.
+</div>
+
+<!-- ===================== 5 ===================== -->
+<h2 id="cau-hinh">5. Thuộc tính cấu hình</h2>
+<table>
+  <tr><th>Thuộc tính</th><th>Mặc định</th><th>Tác dụng</th></tr>
+  <tr><td><code>animal.security.enabled</code></td><td><code>true</code></td><td><code>false</code> → cho phép mọi request (dùng cho test).</td></tr>
+  <tr><td><code>animal.security.public-paths</code></td><td>rỗng</td><td>Đường dẫn không cần JWT, phân tách bằng dấu phẩy. Billing đặt <code>/webhooks/**,/pay/**</code>.</td></tr>
+  <tr><td><code>animal.internal-token</code></td><td><code>dev-internal-token</code></td><td>Khoá của <code>InternalTokenFilter</code>. Config Server đặt <code>${INTERNAL_TOKEN:dev-internal-token}</code> trong <code>infra/config-repo/application.yml</code>.</td></tr>
+  <tr><td><code>animal.kv.type</code></td><td><code>redis</code></td><td><code>memory</code> cho test. Chat, discovery, post đặt <code>memory</code> trong test.</td></tr>
+  <tr><td><code>animal.resilience.timeout</code></td><td><code>2s</code></td><td>Timeout mỗi lời gọi qua circuit breaker.</td></tr>
+  <tr><td><code>animal.resilience.open-wait</code></td><td><code>10s</code></td><td>Thời gian chờ ở trạng thái mở mạch.</td></tr>
+</table>
+<div class="box warn">Nếu không đặt <code>INTERNAL_TOKEN</code> ở môi trường thật, hệ thống dùng <code>dev-internal-token</code>. Cần đặt biến môi trường khi triển khai.</div>
+
+<!-- ===================== 6 ===================== -->
+<h2 id="import">6. Cách import</h2>
+<h3>Bước 1 — phiên bản đã được quản lý ở POM gốc</h3>
+<p>Trong <code>pom.xml</code> gốc, mục <code>dependencyManagement</code> đã khai báo <code>common</code> với <code>${project.version}</code>.</p>
+<h3>Bước 2 — khai báo trong module cần dùng (không ghi version)</h3>
+<pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;com.animallocket&lt;/groupId&gt;
+    &lt;artifactId&gt;common&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+<h3>Bước 3 — thêm dependency tuỳ chọn nếu cần tính năng tương ứng</h3>
+<table>
+  <tr><th>Muốn dùng</th><th>Thêm vào pom của service</th></tr>
+  <tr><td><code>RedisKeyValueStore</code></td><td><code>spring-boot-starter-data-redis</code></td></tr>
+  <tr><td>Circuit breaker mặc định</td><td><code>spring-cloud-starter-circuitbreaker-resilience4j</code></td></tr>
+  <tr><td>DLQ Kafka</td><td><code>spring-kafka</code> (+ cấu hình Kafka của service)</td></tr>
+</table>
+<h3>Bước 4 — import trong code</h3>
+<pre><code>import com.animallocket.common.Headers;
+import com.animallocket.common.Topics;
+import com.animallocket.common.EventTypes;
+import com.animallocket.common.PublicIds;
+import com.animallocket.common.event.EventEnvelope;
+import com.animallocket.common.event.EventJson;
+import com.animallocket.common.event.Events;
+import com.animallocket.common.kv.KeyValueStore;
+import com.animallocket.common.web.ApiException;</code></pre>
+<h3>Build</h3>
+<p>Common được liệt kê đầu tiên trong <code>&lt;modules&gt;</code> của POM gốc, nên build tất cả sẽ build common trước:</p>
+<pre><code>mvn -B install                                  # tất cả module
+mvn -q -B -pl libs/common install               # chỉ common
+mvn -q -B -pl services/user-service -am install # một service + common (-am)</code></pre>
+<p>Kết quả test nằm ở <code>libs/common/target/surefire-reports/*.txt</code>.</p>
+
+<!-- ===================== 7 ===================== -->
+<h2 id="ban-do">7. Ai dùng ở đâu</h2>
+<p>Bảng ghi nhận theo <code>import</code> trong <code>src/main</code> và theo các bean auto-config thực sự có tác dụng (dựa vào việc service có dependency và có chỗ gọi tương ứng).</p>
+<table>
+  <tr>
+    <th>Thành phần</th>
+    <th class="c">billing</th><th class="c">chat</th><th class="c">discovery</th><th class="c">media</th><th class="c">notification</th><th class="c">post</th><th class="c">user</th><th class="c">outbox-jpa</th>
+  </tr>
+  <tr><td><code>Headers</code></td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td><code>ApiException</code></td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td><code>Topics</code>, <code>EventTypes</code>, <code>Events</code></td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td><code>EventEnvelope</code>, <code>EventJson</code></td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td></tr>
+  <tr><td><code>KeyValueStore</code></td><td class="c no">—</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td><td class="c no">—</td><td class="c yes">✔</td><td class="c no">—</td><td class="c no">—</td></tr>
+  <tr><td><code>PublicIds</code></td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td>Auto: bảo mật + lỗi (<code>CommonAutoConfiguration</code>)</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔*</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td>Auto: circuit breaker</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td><td class="c yes">✔</td><td class="c no">—</td><td class="c no">—</td></tr>
+  <tr><td>Auto: Kafka DLQ</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td></tr>
+  <tr><td>Auto: KeyValueStore bean</td><td class="c no">—</td><td class="c yes">✔</td><td class="c yes">✔</td><td class="c no">—</td><td class="c no">—</td><td class="c yes">✔</td><td class="c no">—</td><td class="c no">—</td></tr>
+</table>
+<p>* Notification không khai báo <code>spring-boot-starter-web</code> và không có controller, nhưng common kéo web vào transitive nên service vẫn là ứng dụng servlet và nhận cấu hình bảo mật.</p>
+
+<h3>Vị trí cụ thể</h3>
+<table>
+  <tr><th>Thành phần</th><th>Các file chính</th></tr>
+  <tr>
+    <td><code>Headers</code></td>
+    <td>
+      <a href="../services/billing-service/src/main/java/com/animallocket/billing/web/BillingController.java">BillingController</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/web/ChatController.java">ChatController</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/ws/PublicIdHandshakeInterceptor.java">PublicIdHandshakeInterceptor</a>,
+      <a href="../services/discovery-service/src/main/java/com/animallocket/discovery/web/DiscoveryController.java">DiscoveryController</a>,
+      <a href="../services/media-service/src/main/java/com/animallocket/media/web/MediaController.java">MediaController</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/web/PostController.java">PostController</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/web/UserController.java">UserController</a>,
+      <a href="../services/notification-service/src/main/java/com/animallocket/notification/UserServiceDeviceDirectory.java">UserServiceDeviceDirectory</a>
+    </td>
+  </tr>
+  <tr>
+    <td><code>ApiException</code></td>
+    <td>
+      <a href="../services/billing-service/src/main/java/com/animallocket/billing/service/BillingService.java">BillingService</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/service/ChatService.java">ChatService</a>,
+      <a href="../services/discovery-service/src/main/java/com/animallocket/discovery/service/DiscoveryService.java">DiscoveryService</a>,
+      <a href="../services/media-service/src/main/java/com/animallocket/media/service/MediaService.java">MediaService</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/service/PostService.java">PostService</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/AccountService.java">AccountService</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/web/InternalController.java">InternalController</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Event (<code>Topics</code>, <code>EventTypes</code>, <code>Events</code>, <code>EventEnvelope</code>, <code>EventJson</code>) — phía nhận</td>
+    <td>
+      <a href="../services/billing-service/src/main/java/com/animallocket/billing/service/BillingMaintenance.java">BillingMaintenance</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/messaging/ChatEventsListener.java">ChatEventsListener</a>,
+      <a href="../services/discovery-service/src/main/java/com/animallocket/discovery/messaging/DiscoveryEvents.java">DiscoveryEvents</a>,
+      <a href="../services/media-service/src/main/java/com/animallocket/media/messaging/MediaEventsListener.java">MediaEventsListener</a>,
+      <a href="../services/notification-service/src/main/java/com/animallocket/notification/NotificationListener.java">NotificationListener</a>,
+      <a href="../services/notification-service/src/main/java/com/animallocket/notification/NotificationPlanner.java">NotificationPlanner</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/messaging/PostEventsListener.java">PostEventsListener</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/messaging/BillingEventsListener.java">BillingEventsListener</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Event — phía phát</td>
+    <td>
+      <a href="outbox-jpa/src/main/java/com/animallocket/outbox/OutboxService.java">OutboxService</a> (lib outbox),
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/AccountService.java">AccountService</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/FriendService.java">FriendService</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/SafetyService.java">SafetyService</a>,
+      <a href="../services/user-service/src/main/java/com/animallocket/user/service/AvatarService.java">AvatarService</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/service/PostService.java">PostService</a>,
+      <a href="../services/media-service/src/main/java/com/animallocket/media/service/MediaService.java">MediaService</a>,
+      <a href="../services/billing-service/src/main/java/com/animallocket/billing/service/BillingService.java">BillingService</a>,
+      và chat phát thẳng qua <code>KafkaTemplate</code> ở <a href="../services/chat-service/src/main/java/com/animallocket/chat/client/RemoteGateways.java">chat RemoteGateways</a> (chat không dùng JPA/outbox)
+    </td>
+  </tr>
+  <tr>
+    <td><code>KeyValueStore</code></td>
+    <td>
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/service/ChatService.java">ChatService</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/service/GlyphService.java">GlyphService</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/ws/SessionRegistry.java">SessionRegistry</a>,
+      <a href="../services/discovery-service/src/main/java/com/animallocket/discovery/service/DiscoveryService.java">DiscoveryService</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/client/UserDirectory.java">UserDirectory</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/service/QuotaService.java">QuotaService</a>
+    </td>
+  </tr>
+  <tr>
+    <td><code>PublicIds</code></td>
+    <td><a href="../services/user-service/src/main/java/com/animallocket/user/service/AccountService.java">AccountService</a> (sinh publicId lúc đăng ký)</td>
+  </tr>
+  <tr>
+    <td>Circuit breaker (hưởng cấu hình mặc định)</td>
+    <td>
+      <a href="../services/billing-service/src/main/java/com/animallocket/billing/store/StoreCaller.java">StoreCaller</a>,
+      <a href="../services/chat-service/src/main/java/com/animallocket/chat/client/RemoteGateways.java">chat RemoteGateways</a>,
+      <a href="../services/discovery-service/src/main/java/com/animallocket/discovery/client/RemoteGateways.java">discovery RemoteGateways</a>,
+      <a href="../services/media-service/src/main/java/com/animallocket/media/client/UserClient.java">UserClient</a>,
+      <a href="../services/post-service/src/main/java/com/animallocket/post/client/UserDirectory.java">UserDirectory</a>
+    </td>
+  </tr>
+</table>
+<p class="sub">Các liên kết là đường dẫn tương đối từ thư mục <code>libs/</code>. Danh sách phía phát event lấy từ các file gọi <code>outbox.publish</code> hoặc <code>KafkaTemplate</code>.</p>
+
+<!-- ===================== 8 ===================== -->
+<h2 id="vi-du">8. Ví dụ dùng</h2>
+
+<h3>Đọc người gọi và ném lỗi nghiệp vụ</h3>
+<pre><code>@GetMapping("/something")
+public Dto get(@RequestHeader(Headers.PUBLIC_ID) String me) {
+    var item = repo.find(me).orElseThrow(() -&gt; ApiException.notFound("Mục"));
+    if (item.isLocked()) {
+        throw ApiException.conflict("ITEM_LOCKED", "Mục đang bị khoá");
+    }
+    return Dto.of(item);
+}</code></pre>
+<p>Phản hồi lỗi: <code>application/problem+json</code> có <code>status</code>, <code>title</code>, <code>detail</code> và <code>code</code>.</p>
+
+<h3>Phát event (trong transaction)</h3>
+<pre><code>outbox.publish(Topics.USER, EventTypes.USER_DELETED, publicId, new Events.UserDeleted(publicId));</code></pre>
+
+<h3>Nhận event (idempotent)</h3>
+<pre><code>@KafkaListener(topics = Topics.USER)
+void on(String json) {
+    EventEnvelope env = EventJson.read(json);          // JSON sai → IllegalArgumentException → DLQ
+    if (!idempotency.firstTime(env.eventId())) return; // khử trùng lặp
+    if (EventTypes.USER_DELETED.equals(env.type())) {
+        var e = env.payloadAs(Events.UserDeleted.class);
+        // xử lý
+    }
+}</code></pre>
+
+<h3>Hạn mức bằng <code>KeyValueStore</code></h3>
+<pre><code>long used = kv.increment("quota:" + me + ":" + day, Duration.ofDays(1));
+if (used &gt; limit) {
+    kv.decrement("quota:" + me + ":" + day);   // hoàn lại
+    throw ApiException.tooMany("QUOTA_EXCEEDED", "Hết hạn mức");
+}</code></pre>
+
+<h3>Test không cần Redis</h3>
+<pre><code># src/test/resources/application.yml
+animal:
+  kv:
+    type: memory
+  security:
+    enabled: false   # nếu muốn bỏ qua JWT trong test</code></pre>
+
+<!-- ===================== 9 ===================== -->
+<h2 id="luu-y">9. Lưu ý và phần thừa</h2>
+<div class="box warn">
+  <strong>Còn sót từ face-worker cũ</strong> (CLAUDE.md ghi rằng face-worker đã bỏ), không có chỗ nào dùng trong <code>src/main</code> của các service:
+  <ul>
+    <li><code>Events.PhotoUploaded</code>, <code>Events.FaceProcessed</code>, <code>Events.FaceFailed</code></li>
+    <li><code>EventTypes.PHOTO_UPLOADED</code>, <code>FACE_PROCESSED</code>, <code>FACE_FAILED</code></li>
+    <li><code>Topics.MEDIA_RESULTS</code> (javadoc còn nhắc face-worker), <code>Topics.MEDIA_DLQ</code></li>
+  </ul>
+</div>
+<div class="box warn">
+  <strong>Khai báo chưa dùng:</strong> <code>Headers.CORRELATION_ID</code>, <code>Headers.IDEMPOTENCY_KEY</code>, <code>PublicIds.isValid()</code>.
+</div>
+<div class="box">
+  <strong>Trùng lặp:</strong> <code>ChatConfig</code> và <code>DiscoveryConfig</code> tự tạo <code>InMemoryKeyValueStore</code> làm fallback khi thiếu bean, trong khi <code>KeyValueAutoConfiguration</code> đã có nhánh <code>memory</code>.
+</div>
+<div class="box">
+  <strong>Gateway không dùng common:</strong> <code>X-Public-Id</code> được viết lại bằng chuỗi trong <code>IdentityFilter</code>. Đổi tên header ở <code>Headers.PUBLIC_ID</code> phải đổi cả gateway.
+</div>
+<div class="box">
+  <strong>Độ phủ test của common còn mỏng:</strong> chỉ có <code>PublicIdsTest</code>, <code>KeyValueStoreTest</code> và <code>InfrastructureAutoConfigurationTest</code>. <code>InternalTokenFilter</code> và <code>ApiExceptionHandler</code> chưa có test riêng ở module này.
+</div>
+<div class="box">
+  <strong>Chưa kiểm chứng:</strong> tài liệu này lập từ việc đọc mã nguồn, chưa chạy build hay test. Theo CLAUDE.md, Redis thật cũng nằm trong nhóm chưa kiểm chứng.
+</div>
+
+<!-- ===================== 10 ===================== -->
+<h2 id="mo-rong">10. Khi cần sửa / thêm</h2>
+<table>
+  <tr><th>Việc</th><th>Làm thế nào</th></tr>
+  <tr><td>Thêm loại event mới</td><td>Thêm hằng vào <code>EventTypes</code>, thêm record vào <code>Events</code> (chỉ chứa <code>publicId</code>), chọn topic trong <code>Topics</code>; rồi phát bằng <code>outbox.publish</code> và nhận ở consumer có <code>idempotency.firstTime</code>.</td></tr>
+  <tr><td>Đổi hình dạng payload đang chạy</td><td>Chỉ thêm trường (<code>EventJson</code> bỏ qua trường lạ nên consumer cũ vẫn đọc được). Đổi tên hoặc bỏ trường sẽ làm hỏng consumer chưa cập nhật.</td></tr>
+  <tr><td>Thêm mã lỗi mới</td><td>Dùng <code>ApiException.conflict/badRequest/...</code> với <code>code</code> ổn định; không cần sửa common trừ khi cần factory mới.</td></tr>
+  <tr><td>Service tự quản bảo mật riêng</td><td>Tự khai báo bean <code>SecurityFilterChain</code>; <code>CommonAutoConfiguration</code> sẽ lùi lại (<code>@ConditionalOnMissingBean</code>). <code>InternalTokenFilter</code> vẫn là bean và phải tự thêm vào chain.</td></tr>
+  <tr><td>Thêm auto-config mới</td><td>Viết lớp <code>@AutoConfiguration</code> và thêm tên đầy đủ vào file <code>AutoConfiguration.imports</code>.</td></tr>
+  <tr><td>Sau khi sửa common</td><td>Chạy <code>mvn -q -B -pl libs/common install</code> rồi build các service phụ thuộc; kiểm tra <code>target/surefire-reports</code>.</td></tr>
+</table>
+
+</main>
+</div>
+</body>
+</html>

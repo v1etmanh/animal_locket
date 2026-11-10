@@ -52,6 +52,7 @@ spring:
             - name: RequestRateLimiter
               args:
                 key-resolver: "#{@userOrIpKeyResolver}"
+                
                 redis-rate-limiter.replenishRate: 2
                 redis-rate-limiter.burstCapacity: 10
         - id: chat-ws

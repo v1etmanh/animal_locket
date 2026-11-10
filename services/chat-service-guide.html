@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chat-service — Tài liệu chi tiết</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+<div class="layout">
+<nav>
+  <b>chat-service</b>
+  <a href="#vai-tro">1. Vai trò</a>
+  <a href="#vi-tri">2. Vị trí trong hệ thống</a>
+  <a href="#cau-truc">3. Cách tổ chức</a>
+  <a href="#hoi-thoai">4. Hội thoại và tin nhắn</a>
+  <a href="#glyph">5. Từ điển ký hiệu (glyph)</a>
+  <a href="#realtime">6. Thời gian thực</a>
+  <a href="#api">7. API REST</a>
+  <a href="#ws">8. Giao thức WebSocket</a>
+  <a href="#du-lieu">9. Dữ liệu (MongoDB)</a>
+  <a href="#su-kien">10. Sự kiện phát / nhận</a>
+  <a href="#cau-hinh">11. Cấu hình</a>
+  <a href="#test">12. Test</a>
+  <a href="#luu-y">13. Lưu ý</a>
+  <hr>
+  <a href="index.html">← Danh sách service</a>
+</nav>
+<main>
+
+<h1>chat-service</h1>
+<p class="sub">Nhắn tin 1-1 giữa bạn bè bằng WebSocket và REST, với tin nhắn bằng "ký hiệu" (glyph) vẽ tay. Cổng <code>8105</code>, cơ sở dữ liệu MongoDB. Tài liệu lập từ mã nguồn tại <code>services/chat-service</code>.</p>
+
+<!-- ============ 1 ============ -->
+<h2 id="vai-tro">1. Vai trò</h2>
+<p>Chat-service cho hai người <strong>đã là bạn và không chặn nhau</strong> nhắn tin với nhau. Hiện cấu hình mặc định <strong>chỉ cho gửi tin kiểu <code>GLYPH</code></strong> (chat bằng ký hiệu): tin <code>TEXT</code> và <code>IMAGE</code> vẫn đọc được trong lịch sử nhưng bị từ chối khi gửi mới.</p>
+<div class="grid">
+  <div class="card"><h3>Hội thoại</h3><p>Mỗi cặp bạn có một hội thoại duy nhất; đóng khi chặn / huỷ kết bạn, mở lại khi hợp lệ trở lại.</p></div>
+  <div class="card"><h3>Thời gian thực</h3><p>WebSocket <code>/ws/chat</code>; Redis pub/sub đưa tin tới đúng instance đang giữ kết nối.</p></div>
+  <div class="card"><h3>Từ điển glyph</h3><p>Mỗi hội thoại có từ điển ký hiệu riêng (nét vẽ + nghĩa + màu), đồng bộ theo revision.</p></div>
+  <div class="card"><h3>Chống lạm dụng</h3><p>Giới hạn 20 tin/10 giây, giới hạn tạo glyph, chống gửi trùng bằng <code>clientId</code>.</p></div>
+</div>
+<div class="box info">Chat-service là service <strong>không dùng JPA</strong> (MongoDB + Redis) nên <strong>không dùng outbox-jpa</strong>: phát event trực tiếp qua <code>KafkaTemplate</code> và các thao tác nhận event đều được viết để idempotent (CLAUDE.md).</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="vi-tri">2. Vị trí trong hệ thống</h2>
+<table>
+  <tr><th>Với</th><th>Hướng</th><th>Nội dung</th></tr>
+  <tr><td>Gateway</td><td>gateway → chat</td><td>Route <code>/api/v1/chat/**</code> (REST) và <code>/ws/**</code> (WebSocket, <code>lb:ws://chat-service</code>).</td></tr>
+  <tr><td>user-service</td><td>chat → user</td><td><code>/internal/relationship</code> để biết bạn bè/chặn (cache 30 giây, circuit breaker, fail closed).</td></tr>
+  <tr><td>media-service</td><td>chat → media</td><td><code>/internal/media/{id}</code> để kiểm tra ảnh trong tin <code>IMAGE</code>.</td></tr>
+  <tr><td>user, friend (Kafka)</td><td>→ chat</td><td><code>USER_BLOCKED</code>, <code>FRIEND_ACCEPTED</code>, <code>FRIEND_REMOVED</code>, <code>USER_DELETED</code>.</td></tr>
+  <tr><td>notification-service</td><td>chat → (Kafka) → notification</td><td><code>MESSAGE_SENT</code> để đẩy thông báo khi người nhận không đang mở app.</td></tr>
+  <tr><td>Redis</td><td>chat ↔ Redis</td><td>Bộ đếm tốc độ, cache quan hệ, cờ "đang kết nối", kênh pub/sub giữa các instance.</td></tr>
+  <tr><td>MongoDB <code>chat_db</code></td><td>chat → DB</td><td>Hội thoại, tin nhắn, glyph.</td></tr>
+</table>
+
+<!-- ============ 3 ============ -->
+<h2 id="cau-truc">3. Cách tổ chức</h2>
+<pre><code>services/chat-service/src/main/
+├─ java/com/animallocket/chat/
+│  ├─ ChatServiceApplication.java
+│  ├─ web/        ChatController (REST), GlyphController
+│  ├─ ws/         ChatWebSocketHandler, PublicIdHandshakeInterceptor, SessionRegistry
+│  ├─ bus/        MessageBus (interface), RedisMessageBus, LocalMessageBus
+│  ├─ service/    ChatService (hội thoại + tin), GlyphService (từ điển),
+│  │              GlyphShapes (kiểm tra / chuẩn hoá nét vẽ), GlyphSettings, GlyphErrors
+│  ├─ client/     Gateways (interface), RemoteGateways (user, media, Kafka)
+│  ├─ messaging/  ChatEventsListener
+│  ├─ config/     ChatConfig (WebSocket, bus, glyph settings)
+│  ├─ domain/     Conversation, Message, ConversationGlyph
+│  └─ repo/       ConversationRepository, MessageRepository, GlyphRepository
+└─ resources/application.yml</code></pre>
+<p>Dùng <a href="../libs/common-guide.html">common</a> (<code>Headers</code>, <code>ApiException</code>, event, <code>KeyValueStore</code>, circuit breaker). Phụ thuộc đáng chú ý trong <a href="chat-service/pom.xml">pom.xml</a>: <code>websocket</code>, <code>data-mongodb</code>, <code>data-redis</code>, Spring Kafka, LoadBalancer + Resilience4j; Testcontainers (<code>mongodb</code>, <code>junit-jupiter</code>) cho test.</p>
+<p>Các <code>Gateways.*</code> là interface nên test thay bằng bản giả mà không cần user-service, media-service hay Kafka.</p>
+
+<!-- ============ 4 ============ -->
+<h2 id="hoi-thoai">4. Hội thoại và tin nhắn</h2>
+<h3>4.1 Mở hội thoại — <code>ChatService.open</code></h3>
+<ul>
+  <li>Không tự nhắn cho mình (<code>400 SELF_CHAT</code>). Hai người phải là bạn và không chặn nhau (<code>requireFriends</code>), nếu không <code>403</code>.</li>
+  <li><strong>Mỗi cặp một hội thoại:</strong> khoá <code>key = "idThấp:idCao"</code> (chỉ mục duy nhất). Hai request tạo đồng thời: bên thua gặp <code>DuplicateKeyException</code> rồi đọc lại hội thoại của bên thắng.</li>
+  <li>Hội thoại đang <code>CLOSED</code> (do chặn / huỷ kết bạn) được <strong>mở lại</strong> khi đã là bạn và hết chặn.</li>
+  <li>Danh sách (<code>mine</code>) chỉ trả hội thoại <code>ACTIVE</code>, mới nhất trước, kèm số tin chưa đọc.</li>
+</ul>
+
+<h3>4.2 Gửi tin — <code>ChatService.send</code></h3>
+<ol>
+  <li><strong>Loại tin được phép</strong> (<code>animal.chat.allowed-types</code>, mặc định <code>GLYPH</code>): tin loại khác → <code>403 MESSAGE_TYPE_DISABLED</code>. Tin <code>GLYPH</code> còn cần cờ ghi glyph bật (<code>GLYPH_WRITE_ENABLED</code>), nếu không <code>GLYPH_DISABLED</code>.</li>
+  <li><strong>Hội thoại phải ghi được</strong> (<code>writable</code>): bạn là thành viên, hội thoại còn <code>ACTIVE</code> (nếu không <code>403</code>), hai bên vẫn là bạn.</li>
+  <li><strong>Chống gửi trùng</strong> bằng <code>clientId</code> (≤64 ký tự): cùng người gửi + <code>clientId</code> đã có thì trả lại tin cũ, không lưu và không phát lại. Hai lần thử đến đồng thời: lần ghi sau thua chỉ mục duy nhất <code>(senderId, clientId)</code> và cũng trả tin cũ.</li>
+  <li><strong>Giới hạn tốc độ:</strong> tối đa <code>animal.chat.max-messages-per-10s</code> (20) tin mỗi 10 giây mỗi người, đếm bằng khoá <code>chat:rl:&lt;id&gt;:&lt;cửa sổ&gt;</code>; vượt → <code>429 CHAT_RATE_LIMIT</code>.</li>
+  <li><strong>Dựng tin theo loại:</strong>
+    <ul>
+      <li><code>TEXT</code>: 1–2000 ký tự sau khi <code>strip()</code>.</li>
+      <li><code>IMAGE</code>: cần <code>mediaId</code>; hỏi media-service: ảnh phải của chính mình, <code>context = CHAT</code>, trạng thái <code>READY</code> (đang xử lý → <code>409 MEDIA_NOT_READY</code>).</li>
+      <li><code>GLYPH</code>: xem mục 5.3.</li>
+    </ul>
+  </li>
+  <li><strong>Lưu và phát:</strong> lưu tin, cập nhật <code>lastMessageAt</code> và mốc đã đọc của người gửi, rồi <code>bus.publish</code> khung <code>message</code> cho <em>cả người nhận lẫn chính người gửi</em> (các thiết bị khác của người gửi).</li>
+  <li><strong>Thông báo đẩy:</strong> chỉ phát <code>MESSAGE_SENT</code> khi người nhận <em>không</em> có kết nối chat (khoá <code>chat:conn:&lt;id&gt;</code>), để không đẩy thừa khi họ đang mở app.</li>
+</ol>
+
+<h3>4.3 Lịch sử, đã đọc</h3>
+<ul>
+  <li><code>history</code>: phân trang theo thời gian (<code>before</code>, <code>limit</code> kẹp 1–100, mặc định 30), mới nhất trước.</li>
+  <li><code>markRead</code>: đặt mốc đã đọc = thời điểm của <em>tin mới nhất thực sự tồn tại</em> (không dùng "bây giờ"), vì MongoDB chỉ lưu thời gian ở độ phân giải mili-giây và dùng "bây giờ" có thể làm rơi tin đến cùng mili-giây. Sau đó gửi khung <code>read</code> cho người kia.</li>
+  <li>Số chưa đọc = số tin của người kia có <code>createdAt</code> lớn hơn mốc đã đọc của mình.</li>
+</ul>
+
+<h3>4.4 Quan hệ bạn bè và cache</h3>
+<p><code>requireFriends</code> hỏi user-service, kết quả <code>ok/no</code> được cache 30 giây ở khoá <code>chat:rel:&lt;a&gt;:&lt;b&gt;</code>. Khi nhận event bạn bè / chặn, cache hai chiều bị xoá ngay. User-service không trả lời (mạch hở) → <code>503 USER_SERVICE_UNAVAILABLE</code>, tức <strong>fail closed</strong>: không xác minh được thì không cho gửi.</p>
+
+<!-- ============ 5 ============ -->
+<h2 id="glyph">5. Từ điển ký hiệu (glyph)</h2>
+<p>Glyph là ký hiệu do người dùng vẽ (64 điểm), gắn một nghĩa ngắn và một màu. Mỗi hội thoại có <strong>từ điển riêng dùng chung cho hai người</strong>; tin nhắn là một dãy <code>glyphId</code>.</p>
+<div class="box info">Nguồn chuẩn của từ điển là MongoDB. WebSocket <strong>chỉ báo "có thay đổi"</strong> (<code>dictionary_changed</code>); client tự gọi API đồng bộ delta để lấy dữ liệu. Server không log nghĩa, nét vẽ hay id glyph.</div>
+
+<h3>5.1 Tạo glyph — <code>GlyphService.create</code></h3>
+<ol>
+  <li>Cờ ghi bật; hội thoại ghi được.</li>
+  <li><code>clientMutationId</code> phải là UUID (chữ thường) → nếu không bị từ chối bằng lỗi xác thực (<code>VALIDATION_FAILED</code>); dùng làm khoá <strong>idempotent</strong> theo <code>(hội thoại, người tạo, clientMutationId)</code>: gọi lặp trả lại glyph cũ (HTTP 200 thay vì 201).</li>
+  <li><strong>Nghĩa:</strong> 1–64 ký tự Unicode (đếm theo code point), không chứa ký tự điều khiển.</li>
+  <li><strong>Màu:</strong> dạng <code>#RRGGBB</code> và phải thuộc bảng màu cấu hình (mặc định 7 màu).</li>
+  <li><strong>Nét vẽ</strong> (<code>GlyphShapes</code>): đúng 128 số nguyên (64 cặp x,y) trong khoảng −1000..1000; số thực, null, NaN, ngoài miền → <code>GLYPH_INVALID_POINTS</code>. Sau đó <strong>chuẩn hoá</strong>: dời trọng tâm về gốc, phóng/thu để toạ độ lớn nhất bằng 1000, làm tròn. Hai nét chỉ khác vị trí hoặc kích cỡ cho cùng một hình chuẩn. Server <em>luôn tự tính</em> <code>shapeHash</code> (SHA-256) và bỏ qua hash client gửi.</li>
+  <li><strong>Từ chối nếu:</strong> đã có glyph ACTIVE cùng hình trong hội thoại (<code>GLYPH_DUPLICATE</code>); đã đủ <code>max-active</code> (100) glyph ACTIVE (<code>GLYPH_LIMIT</code>); người tạo vượt <code>max-creates-per-day</code> (20 mỗi ngày UTC, <code>GLYPH_CREATE_RATE_LIMIT</code>). Mỗi lần từ chối đều kiểm tra lại "có phải request lặp lại không" vì bản gốc có thể vừa ghi xong.</li>
+  <li><strong>Gán revision:</strong> <code>revision = revision lớn nhất hiện có + 1</code>; ghi bằng <code>insert</code>. Va chạm chỉ mục duy nhất thì phân loại (request lặp / trùng hình / chỉ trùng revision) và thử lại tối đa 5 lần, hết lượt → <code>GLYPH_BUSY</code>.</li>
+  <li>Phát <code>dictionary_changed</code> (<code>UPSERT</code>) tới mọi thiết bị của cả hai người.</li>
+</ol>
+
+<h3>5.2 Revision và đồng bộ delta</h3>
+<ul>
+  <li>Revision tăng dần <em>trong từng hội thoại</em>; chỉ mục duy nhất <code>(conversationId, revision)</code> bảo đảm không trùng.</li>
+  <li><strong>Đừng đặt bộ đếm cần tăng nguyên tử vào document <code>conversations</code></strong> (CLAUDE.md): <code>ChatService</code> lưu đè cả document này. Vì vậy revision glyph = max revision + chỉ mục duy nhất + thử lại.</li>
+  <li><code>sync(afterRevision, limit)</code> (limit ≤100) trả mọi glyph, kể cả <code>ARCHIVED</code> (bia mộ), có revision trong <code>(afterRevision, revision hiện tại]</code>, tăng dần. Chốt revision hiện tại <em>trước</em> khi đọc để thay đổi đến giữa chừng không bị nhảy cóc; có <code>hasMore</code> và <code>nextAfterRevision</code> để lặp.</li>
+  <li>Đọc luôn mở, kể cả khi cờ ghi tắt hoặc hội thoại đã đóng.</li>
+</ul>
+
+<h3>5.3 Xoá mềm và gửi tin glyph</h3>
+<ul>
+  <li><code>archive</code>: chỉ người tạo (<code>GLYPH_NOT_OWNER</code>); đặt <code>ARCHIVED</code>, gán revision mới, phát <code>dictionary_changed</code> (<code>ARCHIVE</code>). Gọi lại khi đã archive vẫn thành công, không tăng revision. Glyph đã xuất bản là <strong>bất kỳ thay đổi nào cũng phải tạo glyph mới</strong>: chỉ archive được.</li>
+  <li><strong>Tin <code>GLYPH</code>:</strong> chỉ gửi <code>glyphIds</code> (1–12 id, cho phép lặp, đúng thứ tự), <strong>không</strong> được gửi <code>text</code>/<code>mediaId</code> (<code>INVALID_GLYPH_MESSAGE</code>). Mọi glyph phải thuộc hội thoại (<code>GLYPH_NOT_FOUND</code>) và đang <code>ACTIVE</code> (<code>GLYPH_NOT_ACTIVE</code>). Server tạo <code>text</code> dự phòng bằng cách nối nghĩa các glyph với dấu " · " để client cũ vẫn đọc được, và lưu <code>dictionaryRevision</code> tại lúc gửi.</li>
+</ul>
+<h3>Mã lỗi glyph</h3>
+<p><code>GLYPH_BUSY</code>, <code>GLYPH_CREATE_RATE_LIMIT</code>, <code>GLYPH_DISABLED</code>, <code>GLYPH_DUPLICATE</code>, <code>GLYPH_INVALID_COLOR</code>, <code>GLYPH_INVALID_MEANING</code>, <code>GLYPH_INVALID_POINTS</code>, <code>GLYPH_LIMIT</code>, <code>GLYPH_NOT_ACTIVE</code>, <code>GLYPH_NOT_FOUND</code>, <code>GLYPH_NOT_OWNER</code>, <code>GLYPH_SEQUENCE_TOO_LONG</code>, <code>INVALID_GLYPH_MESSAGE</code> (định nghĩa trong <a href="chat-service/src/main/java/com/animallocket/chat/service/GlyphErrors.java">GlyphErrors</a>).</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="realtime">6. Thời gian thực (nhiều instance)</h2>
+<div class="flow">
+  <span class="n">Instance A: <code>ChatService.send</code></span><span class="ar">→</span>
+  <span class="n"><code>bus.publish(userId, khung)</code></span><span class="ar">→</span>
+  <span class="n">Redis kênh <code>chat:user:&lt;id&gt;</code></span><span class="ar">→</span>
+  <span class="n">mọi instance nhận (PSUBSCRIBE <code>chat:user:*</code>)</span><span class="ar">→</span>
+  <span class="n"><code>SessionRegistry.deliver</code> chỉ gửi cho phiên WebSocket nằm ở instance đó</span>
+</div>
+<ul>
+  <li><strong>SessionRegistry</strong> giữ các phiên WebSocket đang mở <em>trên instance này</em>. Mỗi phiên được bọc <code>ConcurrentWebSocketSessionDecorator</code> (ghi chậm quá 10 giây hoặc bộ đệm vượt 512 KB thì ngắt).</li>
+  <li><strong>MessageBus</strong> là interface: <code>RedisMessageBus</code> (runtime, nhiều instance) hoặc <code>LocalMessageBus</code> (test và chạy một instance). Chọn theo <code>animal.kv.type</code> (<code>redis</code> mặc định, <code>memory</code> cho test).</li>
+  <li><strong>Cờ "đang kết nối":</strong> khoá <code>chat:conn:&lt;id&gt;</code> TTL 90 giây, đặt khi mở kết nối và làm mới mỗi khi nhận <code>ping</code>; xoá khi phiên cuối cùng của người đó đóng. Dùng để quyết định có gửi thông báo đẩy hay không.</li>
+  <li>Khi tin được gửi cho một người không có kết nối, publish vẫn xảy ra nhưng không phiên nào nhận; người đó đọc lại bằng REST (<code>history</code>) khi mở app.</li>
+</ul>
+
+<!-- ============ 7 ============ -->
+<h2 id="api">7. API REST</h2>
+<p>Tiền tố <code>/api/v1/chat</code>, người gọi dựa trên <code>X-Public-Id</code>. REST là đường dự phòng cho WebSocket (tải lịch sử, gửi khi mất kết nối thời gian thực). Không có API nội bộ.</p>
+<table>
+  <tr><th>Phương thức</th><th>Đường dẫn</th><th>Việc làm</th></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/conversations</code></td><td>Mở / lấy hội thoại với <code>withPublicId</code>.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/conversations</code></td><td>Danh sách hội thoại ACTIVE (kèm <code>unread</code>, <code>lastMessageAt</code>).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/conversations/{id}/messages?before=&amp;limit=</code></td><td>Lịch sử.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/conversations/{id}/messages</code></td><td>Gửi tin (201). Body: <code>type</code>, <code>text</code>, <code>mediaId</code>, <code>glyphIds</code>, <code>clientId</code>.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/conversations/{id}/read</code></td><td>Đánh dấu đã đọc (204).</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/conversations/{cid}/glyphs?afterRevision=&amp;limit=</code></td><td>Đồng bộ delta từ điển.</td></tr>
+  <tr><td><span class="m get">GET</span></td><td><code>/conversations/{cid}/glyphs/{glyphId}</code></td><td>Một glyph.</td></tr>
+  <tr><td><span class="m post">POST</span></td><td><code>/conversations/{cid}/glyphs</code></td><td>Tạo glyph: 201 nếu mới, 200 nếu là request lặp lại.</td></tr>
+  <tr><td><span class="m del">DELETE</span></td><td><code>/conversations/{cid}/glyphs/{glyphId}</code></td><td>Archive (204).</td></tr>
+</table>
+<p>Người không phải thành viên của hội thoại nhận <code>404</code>. Các trường mới của <code>MessageView</code> (<code>glyphIds</code>, <code>dictionaryRevision</code>, <code>clientId</code>) bị bỏ khi null nên hợp đồng TEXT/IMAGE giữ nguyên.</p>
+
+<!-- ============ 8 ============ -->
+<h2 id="ws">8. Giao thức WebSocket</h2>
+<p>Điểm kết nối: <code>/ws/chat</code>. Xác thực lúc bắt tay: JWT đã được Spring Security kiểm tra trên request HTTP Upgrade, gateway đã gắn <code>X-Public-Id</code>; <code>PublicIdHandshakeInterceptor</code> <strong>từ chối (403) nếu thiếu publicId</strong> — không bao giờ mở phiên vô danh.</p>
+<table>
+  <tr><th>Chiều</th><th>Khung</th></tr>
+  <tr><td>client → server</td><td><code>{"type":"send","conversationId":"..","text":"..","clientId":".."}</code><br><code>{"type":"send","conversationId":"..","messageType":"IMAGE","mediaId":"..","clientId":".."}</code><br><code>{"type":"send","conversationId":"..","messageType":"GLYPH","glyphIds":[..],"clientId":".."}</code><br><code>{"type":"read","conversationId":".."}</code> &nbsp; <code>{"type":"ping"}</code></td></tr>
+  <tr><td>server → client</td><td><code>{"type":"message","data":{..}}</code> &nbsp; <code>{"type":"ack","data":{"clientId":..,"messageId":..}}</code><br><code>{"type":"dictionary_changed","data":{"conversationId":..,"revision":..,"glyphId":..,"change":"UPSERT|ARCHIVE"}}</code><br><code>{"type":"read","data":{..}}</code> &nbsp; <code>{"type":"closed","data":{"conversationId":..,"reason":"BLOCKED|UNFRIENDED|DELETED"}}</code><br><code>{"type":"error","data":{"code":..}}</code> &nbsp; <code>{"type":"pong"}</code></td></tr>
+</table>
+<ul>
+  <li>Khung quá <strong>16 KB</strong> → đóng phiên (<code>TOO_BIG_TO_PROCESS</code>). JSON hỏng → khung lỗi <code>BAD_FRAME</code>; loại khung lạ → <code>UNKNOWN_TYPE</code>.</li>
+  <li>Lỗi nghiệp vụ trả khung <code>error</code> kèm <code>code</code>, <code>message</code> và <code>clientId</code>; lỗi bất ngờ trả <code>INTERNAL_ERROR</code>.</li>
+  <li>Client cũ không gửi <code>messageType</code> (hoặc gửi giá trị lạ) vẫn được hiểu là <code>TEXT</code> — nhưng ở chế độ glyph-only sẽ bị từ chối.</li>
+  <li>Cấu hình container: bộ đệm tin 32 KB, ngắt phiên rảnh sau 120 giây. Các kết nối cho phép mọi Origin (<code>setAllowedOriginPatterns("*")</code>) vì mobile không gửi Origin.</li>
+</ul>
+
+<!-- ============ 9 ============ -->
+<h2 id="du-lieu">9. Dữ liệu (MongoDB)</h2>
+<p>Cơ sở dữ liệu <code>chat_db</code>, chỉ mục tạo tự động (<code>auto-index-creation: true</code>).</p>
+<table>
+  <tr><th>Collection</th><th>Nội dung</th><th>Chỉ mục đáng chú ý</th></tr>
+  <tr><td><code>conversations</code></td><td>Hội thoại 1-1: <code>key</code>, <code>participants</code> (2 id), <code>status</code> (ACTIVE/CLOSED), <code>closedReason</code>, <code>lastMessageAt</code>, <code>lastReadAt</code> (map người → thời điểm)</td><td>duy nhất <code>key</code>; chỉ mục <code>participants</code></td></tr>
+  <tr><td><code>messages</code></td><td>Tin nhắn: loại (TEXT/IMAGE/GLYPH), nội dung, <code>mediaId</code>, <code>glyphIds</code>, <code>dictionaryRevision</code>, <code>clientId</code>, <code>createdAt</code></td><td><code>(conversationId, createdAt desc)</code> cho phân trang; duy nhất <code>(senderId, clientId)</code> chỉ áp cho tin có <code>clientId</code></td></tr>
+  <tr><td><code>conversation_glyphs</code></td><td>Glyph: nghĩa, màu, 128 số đã chuẩn hoá, <code>shapeHash</code>, trạng thái, revision, <code>clientMutationId</code></td><td>duy nhất <code>(conversation, creator, clientMutationId)</code>; duy nhất <code>(conversation, revision)</code>; duy nhất <code>(conversation, shapeHash)</code> chỉ cho glyph ACTIVE; <code>(conversation, status)</code></td></tr>
+</table>
+<p>Không có migration / SQL. Dữ liệu cũ của tin <code>TEXT</code> và <code>IMAGE</code> vẫn được giữ và đọc được.</p>
+
+<!-- ============ 10 ============ -->
+<h2 id="su-kien">10. Sự kiện phát / nhận</h2>
+<h3>Phát</h3>
+<table>
+  <tr><th>Event</th><th>Topic</th><th>Khi nào</th><th>Cách phát</th></tr>
+  <tr><td><code>MESSAGE_SENT</code></td><td><code>chat.events</code>, khoá = người nhận</td><td>Có tin mới và người nhận không có kết nối chat</td><td>Trực tiếp qua <code>KafkaTemplate.send</code> (không outbox). Lỗi chỉ ghi log cảnh báo — <strong>fail soft</strong>, không làm hỏng việc gửi tin</td></tr>
+</table>
+<h3>Nhận</h3>
+<p><a href="chat-service/src/main/java/com/animallocket/chat/messaging/ChatEventsListener.java">ChatEventsListener</a> nghe <code>user.events</code> và <code>friend.events</code> (nhóm <code>chat-service</code>). Không có bảng khử trùng lặp vì mọi thao tác đều idempotent:</p>
+<table>
+  <tr><th>Event</th><th>Xử lý</th></tr>
+  <tr><td><code>USER_BLOCKED</code></td><td><code>onBlocked</code>: xoá cache quan hệ, đặt hội thoại <code>CLOSED</code> (lý do <code>BLOCKED</code>), gửi khung <code>closed</code> cho hai đầu.</td></tr>
+  <tr><td><code>FRIEND_REMOVED</code></td><td><code>onUnfriended</code>: xoá cache; nếu đang ACTIVE thì đóng (<code>UNFRIENDED</code>) và báo hai đầu.</td></tr>
+  <tr><td><code>FRIEND_ACCEPTED</code></td><td><code>onFriendshipChanged</code>: chỉ xoá cache quan hệ. Hội thoại cũ được mở lại khi một bên gọi <code>open</code>.</td></tr>
+  <tr><td><code>USER_DELETED</code></td><td><code>onUserDeleted</code>: xoá mọi hội thoại, tin nhắn và glyph có người đó; báo người kia khung <code>closed</code> (<code>DELETED</code>).</td></tr>
+</table>
+
+<!-- ============ 11 ============ -->
+<h2 id="cau-hinh">11. Cấu hình</h2>
+<p><a href="chat-service/src/main/resources/application.yml">application.yml</a>.</p>
+<table>
+  <tr><th>Khoá</th><th>Mặc định</th><th>Ý nghĩa</th></tr>
+  <tr><td><code>server.port</code></td><td>8105</td><td>Cổng.</td></tr>
+  <tr><td><code>MONGO_URI</code></td><td><code>mongodb://localhost:27017/chat_db</code></td><td>Kết nối MongoDB.</td></tr>
+  <tr><td><code>REDIS_HOST</code> / <code>REDIS_PORT</code></td><td><code>localhost</code> / 6379</td><td>Redis cho <code>KeyValueStore</code> và pub/sub.</td></tr>
+  <tr><td><code>animal.kv.type</code></td><td><code>redis</code></td><td><code>memory</code> → dùng <code>LocalMessageBus</code> và KV trong bộ nhớ (test).</td></tr>
+  <tr><td><code>animal.chat.max-messages-per-10s</code></td><td>20</td><td>Giới hạn tốc độ gửi tin.</td></tr>
+  <tr><td><code>animal.chat.allowed-types</code> (<code>CHAT_ALLOWED_TYPES</code>)</td><td><code>GLYPH</code></td><td>Loại tin được gửi mới, ngăn cách bằng dấu phẩy (<code>TEXT,IMAGE,GLYPH</code>).</td></tr>
+  <tr><td><code>animal.chat.glyph.write-enabled</code> (<code>GLYPH_WRITE_ENABLED</code>)</td><td>true</td><td><code>false</code> = rollback: chặn tạo / archive / gửi glyph nhưng vẫn đọc được lịch sử và từ điển.</td></tr>
+  <tr><td><code>animal.chat.glyph.palette</code></td><td>7 màu</td><td>Chuỗi phân cách dấu phẩy (YAML list không bind được qua <code>@Value</code>).</td></tr>
+  <tr><td><code>animal.chat.glyph.max-active</code></td><td>100</td><td>Số glyph ACTIVE tối đa mỗi hội thoại.</td></tr>
+  <tr><td><code>animal.chat.glyph.max-creates-per-day</code></td><td>20</td><td>Số glyph một người tạo mỗi ngày (UTC).</td></tr>
+  <tr><td><code>animal.user-service-url</code>, <code>animal.media-service-url</code></td><td><code>http://user-service</code>, <code>http://media-service</code></td><td>Địa chỉ qua load balancer.</td></tr>
+  <tr><td><code>resilience4j.*</code></td><td>cửa sổ 20, ≥50% lỗi, chờ 10 giây, timeout 2 giây; bulkhead <code>chat</code> 50</td><td>Lưu ý các khoá này không áp dụng cho <code>CircuitBreakerFactory</code>; mặc định thực tế do <a href="../libs/common-guide.html">common</a> đặt.</td></tr>
+  <tr><td>Kafka, Keycloak, Eureka</td><td>như các service khác</td><td><code>KAFKA_BOOTSTRAP</code>, <code>KEYCLOAK_JWK_URI</code>, <code>EUREKA_URL</code>. Producer ở đây không đặt <code>acks: all</code> / idempotence như các service dùng outbox.</td></tr>
+</table>
+
+<!-- ============ 12 ============ -->
+<h2 id="test">12. Test</h2>
+<ul>
+  <li><strong>ChatServiceTest</strong>: mở hội thoại cần là bạn và idempotent; chế độ glyph-only từ chối TEXT/IMAGE nhưng vẫn đọc lịch sử; cặp bị chặn không mở được; gửi tin tới cả hai phía và thông báo; không đẩy khi người nhận đang kết nối; lịch sử phân trang; chưa đọc / đánh dấu đã đọc; người lạ không đọc/ghi được; kiểm tra TEXT; chặn đóng hội thoại và báo hai bên; huỷ kết bạn; mở lại sau khi bỏ chặn; cache quan hệ ngắn hạn; giới hạn tốc độ; ảnh cần là ảnh CHAT READY của chính mình; xoá tài khoản dọn hội thoại; WebSocket từ đầu tới cuối giữa hai client; khung quá cỡ đóng phiên; bắt tay thiếu publicId bị từ chối.</li>
+  <li><strong>GlyphServiceTest</strong>, <strong>GlyphApiTest</strong>, <strong>GlyphFixture</strong>, <strong>ChatMongoIntegrationTest</strong>, <strong>GlyphMongoIntegrationTest</strong>: tầng dịch vụ, tầng API và tích hợp MongoDB (Testcontainers).</li>
+</ul>
+<div class="box warn">Theo CLAUDE.md: <code>@SpringBootTest</code> của chat-service phải dùng <code>RANDOM_PORT</code> (bean <code>webSocketContainer</code> không chạy ở môi trường web MOCK). Test dùng chung kho key-value trong một Spring context nên phải dọn dữ liệu ở <code>@BeforeEach</code>. So sánh thời gian với Mongo chỉ ở độ phân giải mili-giây.</div>
+<pre><code>mvn -q -B -pl services/chat-service install
+# kết quả: services/chat-service/target/surefire-reports/*.txt</code></pre>
+
+<!-- ============ 13 ============ -->
+<h2 id="luu-y">13. Lưu ý</h2>
+<div class="box warn"><strong>Phát <code>MESSAGE_SENT</code> không đi qua outbox</strong> và chỉ ghi log khi lỗi: nếu Kafka lỗi hoặc service chết đúng lúc, người nhận có thể không được thông báo đẩy dù tin đã lưu. Đây là đánh đổi chủ ý ("fail soft"), nhưng khác bảo đảm "không mất event" của các service dùng outbox.</div>
+<div class="box warn"><strong>Chế độ chỉ-glyph là mặc định:</strong> client cũ gửi <code>TEXT</code> sẽ nhận <code>403 MESSAGE_TYPE_DISABLED</code>. Muốn bật lại phải đặt <code>CHAT_ALLOWED_TYPES</code>.</div>
+<div class="box">Giới hạn <code>max-active</code> của glyph được đếm rồi mới ghi (không nguyên tử): hai request đồng thời có thể vượt giới hạn tối đa 1 glyph (mã ghi chú là chấp nhận được).</div>
+<div class="box">Chỉ số bộ đếm tốc độ dùng cửa sổ cố định 10 giây (<code>epochSecond / 10</code>), nên có thể gửi tới 2 × giới hạn quanh ranh giới hai cửa sổ.</div>
+<div class="box">Sau khi restart một service, Eureka giữ bản ghi cũ khoảng 90 giây nên gateway có thể trả 503 (CLAUDE.md).</div>
+<div class="box">Tài liệu lập từ việc đọc mã nguồn, chưa chạy build/test. Theo CLAUDE.md, Redis thật nằm trong nhóm chưa kiểm chứng.</div>
+
+</main>
+</div>
+</body>
+</html>
