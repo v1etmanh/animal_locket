@@ -27,7 +27,7 @@ class WashiNavBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   static const _height = 68.0;
-  static const _washWidth = 54.0;
+  static const _washWidth = 72.0;
   static const _radius = BorderRadius.only(
     topLeft: Radius.circular(4),
     topRight: Radius.circular(4),
@@ -74,12 +74,12 @@ class WashiNavBar extends StatelessWidget {
                         painter: _TornEdgePainter(p.fold1),
                       ),
                     ),
-                    // Vệt màu nước trượt tới tab đang chọn, loe ra khi tới nơi.
+                    // Vệt cọ trượt tới tab đang chọn, loe ra khi tới nơi.
                     AnimatedPositioned(
                       duration: slide,
                       curve: Curves.easeOutCubic,
                       left: slot * currentIndex + (slot - _washWidth) / 2,
-                      top: 0,
+                      top: 8,
                       child: TweenAnimationBuilder<double>(
                         key: ValueKey(currentIndex),
                         tween: Tween(begin: 0, end: 1),
@@ -93,7 +93,7 @@ class WashiNavBar extends StatelessWidget {
                           ),
                         ),
                         child: WatercolorWash(
-                          size: const Size.square(_washWidth),
+                          size: const Size(_washWidth, 38),
                           seed: currentIndex,
                         ),
                       ),
