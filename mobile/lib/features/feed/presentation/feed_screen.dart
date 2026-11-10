@@ -28,7 +28,7 @@ class FeedScreen extends ConsumerWidget {
       title: context.l10n.feedTitle,
       // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
       scrollable: false,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       actions: [
         IconButton(
           tooltip: context.l10n.friendsLabel,
@@ -67,7 +67,7 @@ class FeedScreen extends ConsumerWidget {
                         }
                         return Padding(
                           // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
-                          padding: const EdgeInsets.only(top: 14, bottom: 110),
+                          padding: const EdgeInsets.only(top: 4, bottom: 88),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -79,9 +79,9 @@ class FeedScreen extends ConsumerWidget {
                                 child: Padding(
                                   // Chừa lề cho góc nghiêng và băng washi.
                                   padding: const EdgeInsets.fromLTRB(
+                                    4,
                                     10,
-                                    12,
-                                    10,
+                                    4,
                                     0,
                                   ),
                                   child: _PostCard(
@@ -109,7 +109,7 @@ class _DayLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6, left: 4),
+    padding: const EdgeInsets.only(bottom: 2, left: 4),
     child: Text(
       text,
       style: TextStyle(
@@ -230,43 +230,63 @@ class _PostCard extends ConsumerWidget {
                 ),
         ),
       ),
-      header: InkWell(
-        onTap: () => context.push('/user/${post.author.publicId}'),
-        borderRadius: BorderRadius.circular(10),
-        // Vùng chạm tối thiểu 48pt (hướng dẫn Android).
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              AnimalAvatar(
-                avatar: post.author.avatar,
-                leadAnimal: post.author.leadAnimal,
-                size: 40,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      // Một hàng: tác giả bên trái, thích/bình luận bên phải (gọn hơn hai hàng).
+      header: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => context.push('/user/${post.author.publicId}'),
+              borderRadius: BorderRadius.circular(10),
+              // Vùng chạm tối thiểu 48pt (hướng dẫn Android).
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
                   children: [
-                    Text(
-                      post.author.displayAlias,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                    AnimalAvatar(
+                      avatar: post.author.avatar,
+                      leadAnimal: post.author.leadAnimal,
+                      size: 36,
                     ),
-                    Text(
-                      _relativeTime(post.createdAt),
-                      style: TextStyle(fontSize: 12, color: p.muted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            post.author.displayAlias,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            _relativeTime(post.createdAt),
+                            style: TextStyle(fontSize: 12, color: p.muted),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          HankoStamp(
+            stamped: post.likedByMe,
+            tooltip: post.likedByMe ? context.l10n.unlike : context.l10n.like,
+            onPressed: () =>
+                ref.read(feedControllerProvider.notifier).toggleLike(post.id),
+          ),
+          Text('${post.likeCount}', style: TextStyle(color: p.muted)),
+          const SizedBox(width: 12),
+          AlbumIcon(AlbumIcons.comment, size: 21, color: p.muted),
+          const SizedBox(width: 4),
+          Text('${post.commentCount}', style: TextStyle(color: p.muted)),
+          const SizedBox(width: 4),
+        ],
       ),
       caption: caption?.isNotEmpty == true
           ? Text(
@@ -279,21 +299,6 @@ class _PostCard extends ConsumerWidget {
               ),
             )
           : null,
-      footer: Row(
-        children: [
-          HankoStamp(
-            stamped: post.likedByMe,
-            tooltip: post.likedByMe ? context.l10n.unlike : context.l10n.like,
-            onPressed: () =>
-                ref.read(feedControllerProvider.notifier).toggleLike(post.id),
-          ),
-          Text('${post.likeCount}', style: TextStyle(color: p.muted)),
-          const SizedBox(width: 16),
-          AlbumIcon(AlbumIcons.comment, size: 21, color: p.muted),
-          const SizedBox(width: 6),
-          Text('${post.commentCount}', style: TextStyle(color: p.muted)),
-        ],
-      ),
     );
 
     return _Entrance(postId: post.id, builder: card);
