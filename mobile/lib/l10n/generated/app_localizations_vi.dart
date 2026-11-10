@@ -164,4 +164,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get conversationClosed => 'Hội thoại đã đóng';
+
+  @override
+  String get languageSection => 'Ngôn ngữ';
 }

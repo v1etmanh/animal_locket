@@ -50,5 +50,6 @@
   "glyphHideMeaning": "Ẩn nghĩa ký hiệu",
   "glyphUnknownFallback": "Không tải được hình ký hiệu. Đang hiển thị nội dung thay thế.",
   "retryMessage": "Gửi lại tin nhắn",
-  "conversationClosed": "Hội thoại đã đóng"
+  "conversationClosed": "Hội thoại đã đóng",
+  "languageSection": "Ngôn ngữ"
 }

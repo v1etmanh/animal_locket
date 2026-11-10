@@ -16,6 +16,7 @@ import 'package:animal_locket/features/friends/presentation/friends_controller.d
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:animal_locket/features/profile/presentation/profile_screen.dart';
 import 'package:animal_locket/features/profile/presentation/settings_screen.dart';
+import 'package:animal_locket/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,9 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         theme: AppTheme.forPalette(AlbumPalette.of(AlbumThemeId.shu)),
+        locale: const Locale('vi'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(textScale)),

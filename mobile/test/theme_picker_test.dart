@@ -4,6 +4,7 @@ import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/features/profile/presentation/settings_screen.dart';
 import 'package:animal_locket/features/profile/presentation/theme_picker.dart';
+import 'package:animal_locket/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,9 @@ class _Host extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => MaterialApp(
     theme: AppTheme.forPalette(AlbumPalette.of(ref.watch(albumThemeProvider))),
+    locale: const Locale('vi'),
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
     home: home,
   );
 }

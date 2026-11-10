@@ -9,6 +9,7 @@ import 'package:animal_locket/features/discovery/data/discovery_repository_impl.
 import 'package:animal_locket/features/friends/data/friends_repository_impl.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
+import 'package:animal_locket/features/profile/presentation/language_picker.dart';
 import 'package:animal_locket/features/profile/presentation/theme_picker.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +40,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const ThemePicker(),
+          const SizedBox(height: 24),
+          const LanguagePicker(),
           const SizedBox(height: 24),
           PaperSheet(
             child: SwitchListTile(
@@ -108,7 +111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 32),
           Align(
-            alignment: Alignment.centerLeft,
+            alignment: Alignment.center,
             child: PaperButton.tape(
               label: 'Đăng xuất',
               icon: AlbumIcons.logout,
@@ -119,7 +122,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 12),
           Align(
-            alignment: Alignment.centerLeft,
+            alignment: Alignment.center,
             child: TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: p.danger),
               onPressed: _busy ? null : _confirmDelete,

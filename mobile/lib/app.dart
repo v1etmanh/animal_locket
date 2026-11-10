@@ -1,4 +1,5 @@
 import 'package:animal_locket/core/avatar/avatar_library.dart';
+import 'package:animal_locket/core/l10n/locale_controller.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/network/api_client.dart';
 import 'package:animal_locket/core/router/app_router.dart';
@@ -23,7 +24,7 @@ class AnimalLocketApp extends ConsumerWidget {
       theme: AppTheme.forPalette(
         AlbumPalette.of(ref.watch(albumThemeProvider)),
       ),
-      locale: const Locale('vi'),
+      locale: ref.watch(appLocaleProvider),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       routerConfig: ref.watch(appRouterProvider),
