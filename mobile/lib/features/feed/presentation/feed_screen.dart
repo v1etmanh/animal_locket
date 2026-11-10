@@ -16,6 +16,7 @@ import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class FeedScreen extends ConsumerWidget {
   const FeedScreen({super.key});
@@ -24,13 +25,13 @@ class FeedScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final feed = ref.watch(feedControllerProvider);
     return AppPage(
-      title: 'Khoảnh khắc',
+      title: context.l10n.feedTitle,
       // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
       scrollable: false,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
       actions: [
         IconButton(
-          tooltip: 'Bạn bè',
+          tooltip: context.l10n.friendsLabel,
           onPressed: () => context.push('/friends'),
           icon: const AlbumIcon(AlbumIcons.friends),
         ),
@@ -133,7 +134,7 @@ class _FeedError extends ConsumerWidget {
             (error as ApiProblem).code,
             status: (error as ApiProblem).status,
           )
-        : 'Không thể tải feed. Vui lòng kiểm tra mạng.';
+        : context.l10n.feedLoadFailed;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -144,7 +145,7 @@ class _FeedError extends ConsumerWidget {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: ref.read(feedControllerProvider.notifier).refresh,
-            child: const Text('Thử lại'),
+            child: Text(context.l10n.retry),
           ),
         ],
       ),
@@ -168,10 +169,7 @@ class _EmptyFeed extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 14),
-      const Text(
-        'Chưa có khoảnh khắc nào\nHãy chụp ảnh hoặc kết bạn để bắt đầu.',
-        textAlign: TextAlign.center,
-      ),
+      Text(context.l10n.feedEmpty, textAlign: TextAlign.center),
     ],
   );
 }
@@ -191,10 +189,7 @@ class _DegradedBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: p.fold1),
       ),
-      child: const Text(
-        'Một phần dịch vụ đang chậm. Feed có thể chưa đầy đủ.',
-        textAlign: TextAlign.center,
-      ),
+      child: Text(context.l10n.feedDegraded, textAlign: TextAlign.center),
     );
   }
 }
@@ -288,7 +283,7 @@ class _PostCard extends ConsumerWidget {
         children: [
           HankoStamp(
             stamped: post.likedByMe,
-            tooltip: post.likedByMe ? 'Bỏ thích' : 'Thích',
+            tooltip: post.likedByMe ? context.l10n.unlike : context.l10n.like,
             onPressed: () =>
                 ref.read(feedControllerProvider.notifier).toggleLike(post.id),
           ),
@@ -347,8 +342,8 @@ String _dayLabel(Post post) =>
 
 String _relativeTime(DateTime value) {
   final difference = DateTime.now().toUtc().difference(value.toUtc());
-  if (difference.inMinutes < 1) return 'Vừa xong';
-  if (difference.inHours < 1) return '${difference.inMinutes} phút trước';
-  if (difference.inDays < 1) return '${difference.inHours} giờ trước';
-  return '${difference.inDays} ngày trước';
+  if (difference.inMinutes < 1) return tr.timeJustNow;
+  if (difference.inHours < 1) return tr.timeMinutesAgo(difference.inMinutes);
+  if (difference.inDays < 1) return tr.timeHoursAgo(difference.inHours);
+  return tr.timeDaysAgo(difference.inDays);
 }

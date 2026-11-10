@@ -5,12 +5,13 @@ import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
-const _themeNames = {
-  AlbumThemeId.shu: 'Shu · Son đỏ',
-  AlbumThemeId.yuzu: 'Yuzu · Vàng thanh yên',
-  AlbumThemeId.sakura: 'Sakura · Hồng anh đào',
-  AlbumThemeId.sora: 'Sora · Trời xanh',
+String _themeName(BuildContext context, AlbumThemeId id) => switch (id) {
+  AlbumThemeId.shu => context.l10n.themeShu,
+  AlbumThemeId.yuzu => context.l10n.themeYuzu,
+  AlbumThemeId.sakura => context.l10n.themeSakura,
+  AlbumThemeId.sora => context.l10n.themeSora,
 };
 
 /// Chọn một trong bốn bảng màu; bấm là áp dụng ngay và lưu trên máy.
@@ -37,7 +38,7 @@ class ThemePicker extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SectionLabel('Màu giao diện'),
+        SectionLabel(context.l10n.themeSection),
         const SizedBox(height: 10),
         row(AlbumThemeId.shu, AlbumThemeId.yuzu),
         const SizedBox(height: 12),
@@ -112,7 +113,7 @@ class _ThemeTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        _themeNames[id]!,
+                        _themeName(context, id),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

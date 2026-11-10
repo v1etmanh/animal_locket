@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class BillingState {
   const BillingState({
@@ -36,9 +37,8 @@ class BillingState {
 
   /// Sản phẩm mua được qua trang thanh toán web của chúng ta (/pay).
   /// Ẩn gói con vật (PACK): thuộc cơ chế con vật cũ, mua xong không hiện ở đâu (docs/19).
-  List<BillingProduct> get webProducts => products
-      .where((p) => p.purchasableOnline && p.type != 'PACK')
-      .toList();
+  List<BillingProduct> get webProducts =>
+      products.where((p) => p.purchasableOnline && p.type != 'PACK').toList();
 
   BillingState copyWith({bool? busy, String? message, BillingMe? me}) =>
       BillingState(
@@ -63,10 +63,7 @@ class BillingController extends AsyncNotifier<BillingState> {
       return const BillingState(enabled: false);
     }
     if (ref.watch(backendModeProvider) == BackendMode.demo) {
-      return const BillingState(
-        enabled: false,
-        message: 'Chế độ demo không mua hàng được.',
-      );
+      return BillingState(enabled: false, message: tr.billingDemoDisabled);
     }
     final repository = ref.read(billingRepositoryProvider);
     final products = await repository.products();
@@ -85,7 +82,7 @@ class BillingController extends AsyncNotifier<BillingState> {
         storeEnabled = true;
         _subscription = store.purchaseStream.listen(
           _onPurchases,
-          onError: (Object error) => _setMessage('Giao dịch gặp lỗi.'),
+          onError: (Object error) => _setMessage(tr.billingTransactionError),
         );
         ref.onDispose(() => _subscription?.cancel());
         final response = await store.queryProductDetails(
@@ -118,19 +115,15 @@ class BillingController extends AsyncNotifier<BillingState> {
         Uri.parse(link.url),
         mode: LaunchMode.externalApplication,
       );
-      _setMessage(
-        opened
-            ? 'Đã mở trang thanh toán. Thanh toán xong quay lại app để cập nhật.'
-            : 'Không mở được trình duyệt.',
-      );
+      _setMessage(opened ? tr.billingCheckoutOpened : tr.billingBrowserFailed);
     } on ApiProblem catch (problem) {
       _setMessage(switch (problem.code) {
-        'PAYMENT_UNAVAILABLE' => 'Thanh toán web chưa được bật trên máy chủ.',
-        'NOT_PURCHASABLE_ONLINE' => 'Sản phẩm này chưa bán qua web.',
-        _ => 'Không tạo được phiên thanh toán.',
+        'PAYMENT_UNAVAILABLE' => tr.billingWebPaymentOff,
+        'NOT_PURCHASABLE_ONLINE' => tr.billingNotOnWeb,
+        _ => tr.billingSessionFailed,
       });
     } catch (_) {
-      _setMessage('Không tạo được phiên thanh toán.');
+      _setMessage(tr.billingSessionFailed);
     }
   }
 
@@ -147,7 +140,7 @@ class BillingController extends AsyncNotifier<BillingState> {
         current.copyWith(
           busy: false,
           me: me,
-          message: changed ? 'Đã cập nhật giao dịch của bạn.' : current.message,
+          message: changed ? tr.billingUpdated : current.message,
         ),
       );
       if (changed) {
@@ -200,15 +193,13 @@ class BillingController extends AsyncNotifier<BillingState> {
           if (purchase.pendingCompletePurchase) {
             await InAppPurchase.instance.completePurchase(purchase);
           }
-          _setMessage('Giao dịch đã được xác minh.');
+          _setMessage(tr.billingVerified);
         } catch (error) {
-          _setMessage(
-            'Backend chưa xác minh giao dịch. Giao dịch chưa được hoàn tất.',
-          );
+          _setMessage(tr.billingNotVerified);
         }
       } else if (purchase.status == PurchaseStatus.error ||
           purchase.status == PurchaseStatus.canceled) {
-        _setMessage(purchase.error?.message ?? 'Đã huỷ giao dịch.');
+        _setMessage(purchase.error?.message ?? tr.billingCanceled);
       }
     }
   }

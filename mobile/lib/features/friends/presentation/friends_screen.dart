@@ -11,6 +11,7 @@ import 'package:animal_locket/features/friends/presentation/friends_controller.d
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Bạn bè và lời mời như một cuốn sổ địa chỉ: tab giấy + trang kẻ (spec §7.5).
 class FriendsScreen extends ConsumerWidget {
@@ -19,14 +20,14 @@ class FriendsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(friendsControllerProvider);
     return AppPage(
-      title: 'Bạn bè và lời mời',
+      title: context.l10n.friendsAndRequests,
       scrollable: false,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
           child: PaperButton(
-            label: 'Không tải được · Thử lại',
+            label: context.l10n.loadFailedRetry,
             onPressed: ref.read(friendsControllerProvider.notifier).refresh,
           ),
         ),
@@ -37,9 +38,9 @@ class FriendsScreen extends ConsumerWidget {
             children: [
               PaperTabBar(
                 tabs: [
-                  'Bạn bè ${data.friends.length}',
-                  'Lời mời ${data.incoming.length}',
-                  'Đã gửi ${data.outgoing.length}',
+                  context.l10n.tabFriends(data.friends.length),
+                  context.l10n.tabRequests(data.incoming.length),
+                  context.l10n.tabSent(data.outgoing.length),
                 ],
               ),
               Expanded(
@@ -76,7 +77,7 @@ class _FriendList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.album;
     return _ListShell(
-      empty: 'Chưa có bạn bè.',
+      empty: context.l10n.noFriends,
       count: data.friends.length,
       builder: (index) {
         final person = data.friends[index];
@@ -85,12 +86,12 @@ class _FriendList extends ConsumerWidget {
         return _PersonTile(
           person: person,
           index: index,
-          subtitle: online ? 'Đang online' : 'Ngoại tuyến',
+          subtitle: online ? context.l10n.online : context.l10n.offline,
           subtitleColor: online ? onlineGreen : p.muted,
           online: online,
           onTap: open,
           trailing: Semantics(
-            label: 'Xem hồ sơ',
+            label: context.l10n.viewProfile,
             button: true,
             excludeSemantics: true,
             onTap: open,
@@ -119,7 +120,7 @@ class _RequestList extends ConsumerWidget {
     final p = context.album;
     final controller = ref.read(friendsControllerProvider.notifier);
     return _ListShell(
-      empty: incoming ? 'Không có lời mời mới.' : 'Bạn chưa gửi lời mời nào.',
+      empty: incoming ? context.l10n.noIncoming : context.l10n.noOutgoing,
       count: items.length,
       builder: (index) {
         final request = items[index];
@@ -127,7 +128,7 @@ class _RequestList extends ConsumerWidget {
         return _PersonTile(
           person: request.user,
           index: index,
-          subtitle: 'Không hiển thị khoảng cách để bảo vệ riêng tư',
+          subtitle: context.l10n.distanceHidden,
           subtitleColor: p.muted,
           onTap: () => context.push('/user/${request.user.publicId}'),
           trailing: busy
@@ -143,21 +144,21 @@ class _RequestList extends ConsumerWidget {
                       stamped: true,
                       toggle: false,
                       mark: AlbumIcons.check,
-                      tooltip: 'Chấp nhận',
+                      tooltip: context.l10n.accept,
                       size: 38,
                       onPressed: () => controller.accept(request.id),
                     ),
                     const SizedBox(width: 4),
                     PaperTileButton(
                       icon: AlbumIcons.close,
-                      label: 'Từ chối',
+                      label: context.l10n.decline,
                       size: 48,
                       onPressed: () => controller.decline(request.id),
                     ),
                   ],
                 )
               : PaperButton.tape(
-                  label: 'Huỷ',
+                  label: context.l10n.cancel,
                   onPressed: () => controller.cancel(request.id),
                 ),
         );

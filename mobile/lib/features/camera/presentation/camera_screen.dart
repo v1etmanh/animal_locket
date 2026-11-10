@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Camera: khung ngắm là tấm polaroid đang hiện hình (spec §7.4).
 class CameraScreen extends StatefulWidget {
@@ -192,12 +193,12 @@ class _CameraScreenState extends State<CameraScreen>
             children: [
               Flexible(
                 child: Text(
-                  'Khoảnh khắc mới',
+                  context.l10n.newMoment,
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
               ),
               Semantics(
-                label: 'Đổi chế độ đèn flash',
+                label: context.l10n.flashMode,
                 button: true,
                 enabled: initialized,
                 excludeSemantics: true,
@@ -239,13 +240,13 @@ class _CameraScreenState extends State<CameraScreen>
             children: [
               PaperTileButton(
                 icon: AlbumIcons.gallery,
-                label: 'Chọn từ thư viện',
+                label: context.l10n.pickFromGallery,
                 onPressed: _pickImage,
               ),
               _Shutter(onPressed: initialized ? _capture : null),
               PaperTileButton(
                 icon: AlbumIcons.flipCamera,
-                label: 'Lật camera',
+                label: context.l10n.flipCamera,
                 onPressed: _switchCamera,
               ),
             ],
@@ -266,7 +267,7 @@ class _Shutter extends StatelessWidget {
     final p = context.album;
     final color = onPressed == null ? p.muted : p.accent;
     return Semantics(
-      label: 'Chụp ảnh',
+      label: context.l10n.takePhoto,
       button: true,
       enabled: onPressed != null,
       excludeSemantics: true,
@@ -326,13 +327,13 @@ class _PermissionExplainer extends StatelessWidget {
             children: [
               AlbumIcon(AlbumIcons.camera, color: p.muted, size: 56),
               const SizedBox(height: 16),
-              const Text(
-                'Cho phép camera để chụp khoảnh khắc.',
+              Text(
+                context.l10n.cameraPermission,
                 textAlign: TextAlign.center,
                 style: TextStyle(height: 1.5),
               ),
               const SizedBox(height: 18),
-              PaperButton(label: 'Cho phép camera', onPressed: onAllow),
+              PaperButton(label: context.l10n.allowCamera, onPressed: onAllow),
             ],
           ),
         ),

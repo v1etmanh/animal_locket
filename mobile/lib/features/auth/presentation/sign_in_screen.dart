@@ -10,6 +10,7 @@ import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Màn đăng nhập như bìa sổ ảnh: hai polaroid con vật origami (spec §7.3).
 class SignInScreen extends ConsumerWidget {
@@ -62,26 +63,28 @@ class SignInScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 26),
             Text(
-              'Gần nhau hơn,\nvẫn là chính mình.',
+              context.l10n.signInHeadline,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.displayLarge,
             ),
             const SizedBox(height: 14),
             Text(
-              'Chia sẻ khoảnh khắc với bạn bè. Mỗi người là một con vật duy nhất, không lộ tên thật.',
+              context.l10n.signInSubtitle,
               textAlign: TextAlign.center,
               style: TextStyle(color: p.muted, height: 1.5),
             ),
             const SizedBox(height: 30),
             PaperButton(
-              label: busy ? 'Đang mở đăng nhập…' : 'Đăng nhập bằng email',
+              label: busy
+                  ? context.l10n.signInOpening
+                  : context.l10n.signInEmail,
               icon: AlbumIcons.mail,
               onPressed: busy ? null : controller.signIn,
             ),
             if (problem == null && auth.error != null) ...[
               const SizedBox(height: 12),
               Text(
-                'Đăng nhập thất bại: ${auth.error}',
+                context.l10n.signInFailed('${auth.error}'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: p.danger, fontSize: 12),
               ),
@@ -97,13 +100,13 @@ class SignInScreen extends ConsumerWidget {
             const SizedBox(height: 22),
             Center(
               child: PaperButton.tape(
-                label: 'Mở tài khoản demo',
+                label: context.l10n.openDemoAccount,
                 onPressed: busy ? null : controller.enterDemo,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Chúng tôi không hiển thị tên thật, email hay vị trí chính xác của bạn.',
+              context.l10n.signInPrivacy,
               textAlign: TextAlign.center,
               style: TextStyle(color: p.muted, fontSize: 11, height: 1.45),
             ),

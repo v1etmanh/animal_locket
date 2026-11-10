@@ -14,6 +14,7 @@ import 'package:animal_locket/features/profile/presentation/theme_picker.dart';
 import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 final blockedUsersProvider = FutureProvider<List<PublicProfile>>(
   (ref) => ref.watch(safetyRepositoryProvider).blocked(),
@@ -35,7 +36,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final blocked = ref.watch(blockedUsersProvider);
     final p = context.album;
     return AppPage(
-      title: 'Cài đặt và riêng tư',
+      title: context.l10n.settingsTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -48,29 +49,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               value: discoverable,
               onChanged: _busy ? null : _setDiscovery,
-              title: const Text(
-                'Cho phép khám phá',
+              title: Text(
+                context.l10n.allowDiscovery,
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
-              subtitle: const Text(
-                'Tắt để xoá vị trí và dừng xuất hiện trong bộ thẻ.',
-              ),
+              subtitle: Text(context.l10n.discoveryOffNote),
             ),
           ),
           const SizedBox(height: 24),
-          const SectionLabel('Đã chặn'),
+          SectionLabel(context.l10n.blockedSection),
           const SizedBox(height: 10),
           blocked.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (_, _) => Align(
               alignment: Alignment.centerLeft,
               child: PaperButton.tape(
-                label: 'Không tải được · Thử lại',
+                label: context.l10n.loadFailedRetry,
                 onPressed: () => ref.invalidate(blockedUsersProvider),
               ),
             ),
             data: (items) => items.isEmpty
-                ? Text('Chưa chặn ai.', style: TextStyle(color: p.muted))
+                ? Text(
+                    context.l10n.nobodyBlocked,
+                    style: TextStyle(color: p.muted),
+                  )
                 : PaperSheet(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -97,7 +99,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     ),
                                   ),
                                   PaperButton.tape(
-                                    label: 'Bỏ chặn',
+                                    label: context.l10n.unblock,
                                     onPressed: () => _unblock(person.publicId),
                                   ),
                                 ],
@@ -113,7 +115,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Align(
             alignment: Alignment.center,
             child: PaperButton.tape(
-              label: 'Đăng xuất',
+              label: context.l10n.signOut,
               icon: AlbumIcons.logout,
               onPressed: _busy
                   ? null
@@ -131,7 +133,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 size: 18,
                 color: _busy ? p.muted : p.danger,
               ),
-              label: const Text('Xoá tài khoản'),
+              label: Text(context.l10n.deleteAccount),
             ),
           ),
         ],
@@ -163,24 +165,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmDelete() async {
+    final deleteWord = context.l10n.deleteWord;
     final first = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Xoá tài khoản?'),
-        content: const Text(
-          'Ảnh, tin nhắn và hồ sơ sẽ bị xoá. Thao tác này không thể hoàn tác.',
-        ),
+        title: Text(context.l10n.deleteAccountQ),
+        content: Text(context.l10n.deleteAccountBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Giữ tài khoản'),
+            child: Text(context.l10n.keepAccount),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: context.album.danger,
             ),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Tiếp tục'),
+            child: Text(context.l10n.continueLabel),
           ),
         ],
       ),
@@ -188,13 +189,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (first != true || !mounted) return;
     final typed = await showDialog<String>(
       context: context,
-      builder: (_) => const TextInputDialog(
-        title: 'Xác nhận lần cuối',
-        label: 'Nhập XOÁ để xác nhận',
-        confirmLabel: 'Xoá vĩnh viễn',
+      builder: (_) => TextInputDialog(
+        title: context.l10n.finalConfirm,
+        label: context.l10n.typeDeleteWord,
+        confirmLabel: context.l10n.deleteForever,
       ),
     );
-    final second = typed?.trim().toUpperCase() == 'XOÁ';
+    final second = typed?.trim().toUpperCase() == deleteWord;
     if (!second || !mounted) return;
     setState(() => _busy = true);
     try {

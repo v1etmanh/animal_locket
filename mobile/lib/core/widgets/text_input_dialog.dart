@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Hộp thoại nhập một dòng chữ, trả về nội dung khi bấm xác nhận (null khi huỷ).
 ///
@@ -13,13 +14,13 @@ class TextInputDialog extends StatefulWidget {
     required this.confirmLabel,
     this.initialText = '',
     this.maxLength,
-    this.cancelLabel = 'Huỷ',
+    this.cancelLabel,
   });
 
   final String title;
   final String label;
   final String confirmLabel;
-  final String cancelLabel;
+  final String? cancelLabel;
   final String initialText;
   final int? maxLength;
 
@@ -53,7 +54,7 @@ class _TextInputDialogState extends State<TextInputDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: Text(widget.cancelLabel),
+        child: Text(widget.cancelLabel ?? context.l10n.cancel),
       ),
       FilledButton(onPressed: _confirm, child: Text(widget.confirmLabel)),
     ],

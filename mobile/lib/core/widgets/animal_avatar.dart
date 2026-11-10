@@ -2,6 +2,7 @@ import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/avatar/avatar_library.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Avatar con vật. Có [avatar] ("v:animal:palette:accessory") thì vẽ SVG từ thư viện;
 /// không có hoặc chưa tải được thư viện thì dùng emoji của [leadAnimal] / [emoji].
@@ -39,7 +40,9 @@ class AnimalAvatar extends StatelessWidget {
         final name = libs.animalName(avatar);
         return Semantics(
           image: true,
-          label: name == null ? 'Ảnh đại diện con vật' : 'Ảnh đại diện: $name',
+          label: name == null
+              ? tr.avatarSemantic
+              : tr.avatarSemanticNamed(name),
           child: square
               ? SvgPicture.string(svg, width: size, height: size)
               : ClipOval(
@@ -63,7 +66,7 @@ class AnimalAvatar extends StatelessWidget {
         );
     return Semantics(
       image: !locked,
-      label: locked ? 'Con vật chưa mở khóa' : 'Ảnh đại diện con vật',
+      label: locked ? tr.animalLocked : tr.avatarSemantic,
       child: Container(
         width: size,
         height: size,

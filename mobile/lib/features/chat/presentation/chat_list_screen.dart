@@ -8,6 +8,7 @@ import 'package:animal_locket/features/chat/presentation/chat_controllers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Danh sách chat trên một trang giấy kẻ, cùng kiểu sổ bạn bè (spec §7.6).
 class ChatListScreen extends ConsumerWidget {
@@ -17,23 +18,20 @@ class ChatListScreen extends ConsumerWidget {
     final p = context.album;
     final value = ref.watch(conversationsProvider);
     return AppPage(
-      title: 'Trò chuyện',
+      title: context.l10n.chatListTitle,
       scrollable: false,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Tin nhắn chỉ mở giữa bạn bè.',
-            style: TextStyle(color: p.muted),
-          ),
+          Text(context.l10n.chatOnlyFriends, style: TextStyle(color: p.muted)),
           const SizedBox(height: 14),
           Expanded(
             child: value.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (_, _) => Center(
                 child: PaperButton(
-                  label: 'Không tải được · Thử lại',
+                  label: context.l10n.loadFailedRetry,
                   onPressed: () => ref.invalidate(conversationsProvider),
                 ),
               ),
@@ -52,7 +50,7 @@ class ChatListScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                'Chưa có cuộc trò chuyện nào.',
+                                context.l10n.chatEmpty,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: p.muted),
                               ),
@@ -122,8 +120,8 @@ class _ConversationTile extends ConsumerWidget {
                   ),
                   Text(
                     conversation.lastMessageAt == null
-                        ? 'Bắt đầu trò chuyện'
-                        : 'Tin nhắn gần đây',
+                        ? context.l10n.chatStart
+                        : context.l10n.chatRecent,
                     style: TextStyle(color: p.muted, fontSize: 12),
                   ),
                 ],
@@ -134,7 +132,7 @@ class _ConversationTile extends ConsumerWidget {
               // Con dấu tròn son ghi số tin chưa đọc.
               Semantics(
                 container: true,
-                label: '$unread tin chưa đọc',
+                label: context.l10n.unreadCount(unread),
                 excludeSemantics: true,
                 child: Container(
                   constraints: const BoxConstraints(

@@ -1,3 +1,4 @@
+import 'package:animal_locket/core/l10n/tr.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -55,15 +56,23 @@ class LocaleController extends Notifier<Locale> {
   @override
   Locale build() {
     final initial = ref.read(initialLocaleProvider);
-    if (initial != null) return initial;
+    if (initial != null) {
+      setTrLocale(initial);
+      return initial;
+    }
     _restore();
     return supportedLanguages.first;
+  }
+
+  void _apply(Locale locale) {
+    setTrLocale(locale);
+    state = locale;
   }
 
   Future<void> _restore() async {
     try {
       final saved = await ref.read(localeStoreProvider).read();
-      if (saved != null && !_userPicked) state = saved;
+      if (saved != null && !_userPicked) _apply(saved);
     } catch (_) {
       // Không đọc được: giữ tiếng Việt.
     }
@@ -71,7 +80,7 @@ class LocaleController extends Notifier<Locale> {
 
   Future<void> select(Locale locale) async {
     _userPicked = true;
-    state = locale;
+    _apply(locale);
     try {
       await ref.read(localeStoreProvider).write(locale);
     } catch (_) {

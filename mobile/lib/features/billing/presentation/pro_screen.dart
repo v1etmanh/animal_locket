@@ -8,6 +8,7 @@ import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:animal_locket/features/billing/presentation/billing_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class ProScreen extends ConsumerStatefulWidget {
   const ProScreen({super.key});
@@ -46,7 +47,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
           child: PaperButton(
-            label: 'Không thể tải cửa hàng · Thử lại',
+            label: context.l10n.proLoadFailed,
             onPressed: () => ref.invalidate(billingControllerProvider),
           ),
         ),
@@ -57,19 +58,19 @@ class _ProScreenState extends ConsumerState<ProScreen> {
             const Center(child: GoldBadge(label: 'Pro', size: 104)),
             const SizedBox(height: 20),
             Text(
-              'Nhiều cách kết nối hơn',
+              context.l10n.proHeadline,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineLarge,
             ),
             const SizedBox(height: 18),
             PaperSheet(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
                   children: [
-                    for (final (i, (icon, text)) in const [
-                      (AlbumIcons.bolt, 'Boost khám phá'),
-                      (AlbumIcons.mail, 'Lời mời kết bạn ưu tiên'),
+                    for (final (i, (icon, text)) in [
+                      (AlbumIcons.bolt, context.l10n.proPerkBoost),
+                      (AlbumIcons.mail, context.l10n.proPerkInvite),
                     ].indexed) ...[
                       if (i > 0) const DashedDivider(),
                       ListTile(
@@ -91,14 +92,14 @@ class _ProScreenState extends ConsumerState<ProScreen> {
             const SizedBox(height: 22),
             if (!data.enabled)
               Text(
-                data.message ?? 'Tài khoản dưới 18 tuổi không hiển thị ưu đãi.',
+                data.message ?? context.l10n.proMinorNotice,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: p.muted),
               )
             else ...[
               if (data.webProducts.isEmpty)
                 Text(
-                  'Chưa có sản phẩm bán qua web.',
+                  context.l10n.proNoWebProducts,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: p.muted),
                 ),
@@ -113,8 +114,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                   ),
                 ),
               Text(
-                'Thanh toán trên trang web của Animal Locket (VietQR/PayPal). '
-                'Xong bấm "Quay lại app".',
+                context.l10n.proWebPaymentNote,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: p.muted, fontSize: 12),
               ),
@@ -126,8 +126,10 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                       padding: const EdgeInsets.only(bottom: 14),
                       child: Center(
                         child: PaperButton.tape(
-                          label:
-                              'Qua cửa hàng: ${product.label} · ${data.details[product.sku]!.price}',
+                          label: context.l10n.proViaStore(
+                            product.label,
+                            data.details[product.sku]!.price,
+                          ),
                           onPressed: data.busy
                               ? null
                               : () => controller.buy(product.sku),
@@ -136,7 +138,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                     ),
                 TextButton(
                   onPressed: data.busy ? null : controller.restore,
-                  child: const Text('Khôi phục giao dịch cửa hàng'),
+                  child: Text(context.l10n.proRestore),
                 ),
               ],
             ],
@@ -167,13 +169,17 @@ class _CurrentPlan extends StatelessWidget {
         children: [
           Text(
             me.plan == 'PRO'
-                ? 'Bạn đang dùng Pro${expires == null ? '' : ' đến ${expires.day}/${expires.month}/${expires.year}'}'
-                : 'Bạn đang dùng gói Free',
+                ? (expires == null
+                      ? context.l10n.proCurrentPro
+                      : context.l10n.proCurrentProUntil(
+                          '${expires.day}/${expires.month}/${expires.year}',
+                        ))
+                : context.l10n.proCurrentFree,
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
-            'Boost: $boosts · Lời mời ưu tiên: $invites',
+            context.l10n.proWallet(boosts, invites),
             style: TextStyle(color: context.album.muted),
           ),
         ],

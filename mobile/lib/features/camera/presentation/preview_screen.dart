@@ -12,6 +12,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Xem trước: ảnh in dán băng, lời nhắn viết tay ở lề dưới (spec §7.4).
 class PreviewScreen extends ConsumerStatefulWidget {
@@ -39,9 +40,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         .read(uploadControllerProvider.notifier)
         .publish(input: XFile(path), caption: _caption.text);
     if (!started) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đang gửi ảnh trước, đợi chút nhé.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.previewSendingFirst)));
       return;
     }
     context.pop();
@@ -72,7 +73,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             },
           );
     return AppPage(
-      title: 'Xem trước',
+      title: context.l10n.previewTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -94,8 +95,8 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                 color: p.ink,
               ),
               decoration: InputDecoration(
-                labelText: 'Lời nhắn',
-                hintText: 'Viết gì đó cho bạn bè…',
+                labelText: context.l10n.messageLabel,
+                hintText: context.l10n.messageHintFriends,
                 hintStyle: TextStyle(
                   fontFamily: AppFonts.hand,
                   fontSize: 21,
@@ -117,20 +118,22 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
           ),
           const SizedBox(height: 24),
           PaperButton(
-            label: sending ? 'Đang gửi ảnh trước…' : 'Gửi cho bạn bè',
+            label: sending
+                ? context.l10n.sendingPhoto
+                : context.l10n.sendToFriends,
             icon: AlbumIcons.send,
             onPressed: sending ? null : _publish,
           ),
           const SizedBox(height: 18),
           Center(
             child: PaperButton.tape(
-              label: 'Chụp lại',
+              label: context.l10n.retake,
               onPressed: () => context.pop(),
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'Ảnh được gửi cho toàn bộ bạn bè. Bản đầu chưa hỗ trợ chọn từng người nhận.',
+            context.l10n.previewNote,
             textAlign: TextAlign.center,
             style: TextStyle(color: p.muted, fontSize: 11),
           ),

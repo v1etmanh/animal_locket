@@ -10,8 +10,7 @@ import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-
-const _terms = 'Tôi đồng ý Điều khoản sử dụng và Chính sách riêng tư.';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Ngày sinh + đồng ý điều khoản trên một phiếu giấy dán băng (spec §7.3).
 class BirthConsentScreen extends StatefulWidget {
@@ -32,7 +31,7 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
       initialDate: _birthDate ?? DateTime(now.year - 18),
       firstDate: DateTime(now.year - 100),
       lastDate: now,
-      helpText: 'Chọn ngày sinh',
+      helpText: context.l10n.pickBirthdate,
     );
     if (selected != null) setState(() => _birthDate = selected);
   }
@@ -44,7 +43,7 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
     final p = context.album;
     final date = _birthDate;
     return AppPage(
-      title: 'Thiết lập an toàn',
+      title: context.l10n.safetySetupTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -53,15 +52,15 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SectionLabel('Ngày sinh'),
+                SectionLabel(context.l10n.birthdateSection),
                 const SizedBox(height: 10),
                 Text(
-                  'Mỗi độ tuổi có một không gian phù hợp.',
+                  context.l10n.birthAgeSpace,
                   style: Theme.of(context).textTheme.headlineLarge,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Ngày sinh chỉ dùng để xác định nhóm tuổi. Thông tin này không xuất hiện trên hồ sơ.',
+                  context.l10n.birthPrivacy,
                   style: TextStyle(color: p.muted, height: 1.5),
                 ),
                 const SizedBox(height: 18),
@@ -69,7 +68,7 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
                   key: const Key('birth-date'),
                   button: true,
                   label: date == null
-                      ? 'Chọn ngày sinh'
+                      ? context.l10n.pickBirthdate
                       : DateFormat('dd/MM/yyyy').format(date),
                   excludeSemantics: true,
                   onTap: _pickDate,
@@ -80,17 +79,17 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
                         Row(
                           children: [
                             _DateBox(
-                              'Ngày',
+                              context.l10n.dayLabel,
                               date == null ? '--' : _two(date.day),
                             ),
                             const SizedBox(width: 10),
                             _DateBox(
-                              'Tháng',
+                              context.l10n.monthLabel,
                               date == null ? '--' : _two(date.month),
                             ),
                             const SizedBox(width: 10),
                             _DateBox(
-                              'Năm',
+                              context.l10n.yearLabel,
                               date == null ? '----' : '${date.year}',
                               flex: 7,
                             ),
@@ -98,7 +97,7 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Chạm để chọn ngày sinh',
+                          context.l10n.tapToPickBirthdate,
                           textAlign: TextAlign.center,
                           style: TextStyle(color: p.muted, fontSize: 12),
                         ),
@@ -123,15 +122,18 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
                 children: [
                   HankoStamp(
                     stamped: _accepted,
-                    tooltip: _terms,
+                    tooltip: context.l10n.termsAgree,
                     mark: AlbumIcons.check,
                     size: 38,
                     onPressed: _toggleConsent,
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: ExcludeSemantics(
-                      child: Text(_terms, style: TextStyle(height: 1.45)),
+                      child: Text(
+                        context.l10n.termsAgree,
+                        style: TextStyle(height: 1.45),
+                      ),
                     ),
                   ),
                 ],
@@ -140,7 +142,7 @@ class _BirthConsentScreenState extends State<BirthConsentScreen> {
           ),
           const SizedBox(height: 28),
           PaperButton(
-            label: 'Tiếp tục',
+            label: context.l10n.continueLabel,
             trailingIcon: AlbumIcons.arrowRight,
             onPressed: date != null && _accepted
                 ? () => context.go(

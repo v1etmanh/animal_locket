@@ -1,44 +1,48 @@
-const _messages = <String, String>{
-  'PROFILE_REQUIRED': 'Bạn cần hoàn tất hồ sơ trước khi tiếp tục.',
-  'INVALID_ALIAS': 'Biệt danh cần từ 3 đến 20 ký tự hợp lệ.',
-  'INVALID_BIRTHDATE': 'Ngày sinh không hợp lệ.',
-  'ALIAS_COOLDOWN': 'Bạn chỉ có thể đổi biệt danh một lần mỗi 24 giờ.',
-  'PRO_REQUIRED': 'Tính năng này dành cho thành viên Pro.',
-  'ANIMAL_NOT_OWNED': 'Bạn chưa sở hữu con vật này.',
-  'SPIN_COOLDOWN': 'Chưa đến lượt quay tiếp theo.',
-  'COLLECTION_COMPLETE': 'Bạn đã hoàn thành bộ sưu tập.',
-  'FILE_TOO_LARGE': 'Ảnh vượt quá giới hạn 10 MB.',
-  'UNSUPPORTED_MEDIA_TYPE': 'Định dạng ảnh chưa được hỗ trợ.',
-  'UPLOAD_LIMIT': 'Bạn đã đạt giới hạn tải ảnh trong giờ này.',
-  'PHOTO_LIMIT': 'Bạn đã đạt giới hạn đăng ảnh hôm nay.',
-  'SWIPE_LIMIT': 'Bạn đã hết lượt quẹt phải hôm nay.',
-  'TOO_MANY_SEARCHES': 'Bạn đang tìm quá nhanh. Hãy chờ một chút.',
-  'NO_BOOST': 'Bạn không còn Boost.',
-  'INVITE_LIMIT': 'Bạn đã đạt giới hạn lời mời hôm nay.',
-  'REPORT_LIMIT': 'Bạn đã đạt giới hạn báo cáo hôm nay.',
-  'CHAT_RATE_LIMIT': 'Bạn đang gửi tin quá nhanh.',
-  'MEDIA_NOT_READY': 'Ảnh vẫn đang được xử lý.',
-  'INVALID_MESSAGE': 'Tin nhắn không hợp lệ.',
-  'GLYPH_INVALID_POINTS': 'Nét vẽ ký hiệu không hợp lệ.',
-  'GLYPH_INVALID_COLOR': 'Màu ký hiệu không được hỗ trợ.',
-  'GLYPH_DUPLICATE': 'Ký hiệu này đã có trong hội thoại.',
-  'GLYPH_LIMIT': 'Hội thoại đã đạt giới hạn ký hiệu.',
-  'GLYPH_NOT_FOUND': 'Không tìm thấy ký hiệu này.',
-  'GLYPH_NOT_ACTIVE': 'Ký hiệu này không còn được sử dụng.',
-  'GLYPH_NOT_OWNER': 'Bạn không thể xóa ký hiệu của người khác.',
-  'GLYPH_SEQUENCE_TOO_LONG': 'Câu có quá nhiều ký hiệu.',
-  'INVALID_GLYPH_MESSAGE': 'Tin nhắn ký hiệu không hợp lệ.',
-  'GLYPH_CREATE_RATE_LIMIT': 'Bạn đang tạo ký hiệu quá nhanh.',
-  'RECEIPT_ALREADY_USED': 'Giao dịch này đã được sử dụng.',
-  'STORE_UNAVAILABLE': 'Cửa hàng đang tạm gián đoạn. Vui lòng thử lại.',
-  'INVALID_RECEIPT': 'Không thể xác minh giao dịch.',
-  'SERVICE_UNAVAILABLE': 'Dịch vụ đang tạm gián đoạn.',
-  'IDENTITY_UNAVAILABLE': 'Không thể xác minh tài khoản lúc này.',
+import 'package:animal_locket/core/l10n/tr.dart';
+
+/// Thông báo theo mã lỗi của server, theo ngôn ngữ đang chọn.
+Map<String, String> _messages() => {
+  'PROFILE_REQUIRED': tr.errProfileRequired,
+  'INVALID_ALIAS': tr.errInvalidAlias,
+  'INVALID_BIRTHDATE': tr.errInvalidBirthdate,
+  'ALIAS_COOLDOWN': tr.errAliasCooldown,
+  'PRO_REQUIRED': tr.errProRequired,
+  'ANIMAL_NOT_OWNED': tr.errAnimalNotOwned,
+  'SPIN_COOLDOWN': tr.errSpinCooldown,
+  'COLLECTION_COMPLETE': tr.errCollectionComplete,
+  'FILE_TOO_LARGE': tr.errFileTooLarge,
+  'UNSUPPORTED_MEDIA_TYPE': tr.errUnsupportedMediaType,
+  'UPLOAD_LIMIT': tr.errUploadLimit,
+  'PHOTO_LIMIT': tr.errPhotoLimit,
+  'SWIPE_LIMIT': tr.errSwipeLimit,
+  'TOO_MANY_SEARCHES': tr.errTooManySearches,
+  'NO_BOOST': tr.errNoBoost,
+  'INVITE_LIMIT': tr.errInviteLimit,
+  'REPORT_LIMIT': tr.errReportLimit,
+  'CHAT_RATE_LIMIT': tr.errChatRateLimit,
+  'MEDIA_NOT_READY': tr.errMediaNotReady,
+  'INVALID_MESSAGE': tr.errInvalidMessage,
+  'GLYPH_INVALID_POINTS': tr.errGlyphInvalidPoints,
+  'GLYPH_INVALID_COLOR': tr.errGlyphInvalidColor,
+  'GLYPH_DUPLICATE': tr.errGlyphDuplicate,
+  'GLYPH_LIMIT': tr.errGlyphLimit,
+  'GLYPH_NOT_FOUND': tr.errGlyphNotFound,
+  'GLYPH_NOT_ACTIVE': tr.errGlyphNotActive,
+  'GLYPH_NOT_OWNER': tr.errGlyphNotOwner,
+  'GLYPH_SEQUENCE_TOO_LONG': tr.errGlyphSequenceTooLong,
+  'INVALID_GLYPH_MESSAGE': tr.errInvalidGlyphMessage,
+  'GLYPH_CREATE_RATE_LIMIT': tr.errGlyphCreateRateLimit,
+  'RECEIPT_ALREADY_USED': tr.errReceiptAlreadyUsed,
+  'STORE_UNAVAILABLE': tr.errStoreUnavailable,
+  'INVALID_RECEIPT': tr.errInvalidReceipt,
+  'SERVICE_UNAVAILABLE': tr.errServiceUnavailable,
+  'IDENTITY_UNAVAILABLE': tr.errIdentityUnavailable,
 };
 
 String messageForApiCode(String? code, {int? status}) {
-  if (code != null && _messages.containsKey(code)) return _messages[code]!;
-  if (status == 429) return 'Thao tác quá nhanh. Vui lòng chờ rồi thử lại.';
-  if (status == 503) return 'Dịch vụ đang tạm gián đoạn. Vui lòng thử lại.';
-  return 'Có lỗi xảy ra. Vui lòng thử lại.';
+  final messages = _messages();
+  if (code != null && messages.containsKey(code)) return messages[code]!;
+  if (status == 429) return tr.errTooFast;
+  if (status == 503) return tr.errServiceRetry;
+  return tr.genericError;
 }

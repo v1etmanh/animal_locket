@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:animal_locket/core/auth/auth_controller.dart';
+import 'package:animal_locket/core/l10n/locale_controller.dart';
 import 'package:animal_locket/features/chat/data/chat_realtime_service.dart';
 import 'package:animal_locket/features/chat/data/glyph_repository_impl.dart';
 import 'package:animal_locket/features/chat/domain/glyph.dart';
@@ -12,6 +13,9 @@ String glyphAccountId(Ref ref) =>
 class PersonalGlyphsController extends AsyncNotifier<List<GlyphDefinition>> {
   @override
   Future<List<GlyphDefinition>> build() async {
+    ref.watch(
+      appLocaleProvider,
+    ); // dịch lại nghĩa ký hiệu hệ thống khi đổi ngôn ngữ
     final accountId = glyphAccountId(ref);
     final repository = ref.watch(glyphRepositoryProvider);
     await repository.ensureSystemGlyphs();
@@ -60,6 +64,9 @@ class ConversationGlyphsController
 
   @override
   Future<List<GlyphDefinition>> build() async {
+    ref.watch(
+      appLocaleProvider,
+    ); // dịch lại nghĩa ký hiệu hệ thống khi đổi ngôn ngữ
     final repository = ref.watch(glyphRepositoryProvider);
     final accountId = glyphAccountId(ref);
     _events = ref.watch(chatRealtimeProvider).events.listen((frame) {

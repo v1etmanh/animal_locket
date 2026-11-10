@@ -14,6 +14,7 @@ import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 final publicProfileProvider = FutureProvider.family<PublicProfile, String>(
   (ref, id) => ref.watch(userRepositoryProvider).publicProfile(id),
@@ -37,23 +38,23 @@ class PublicProfileScreen extends ConsumerWidget {
     final value = ref.watch(publicProfileProvider(publicId));
     final isFriend = ref.watch(isFriendProvider(publicId)).value ?? false;
     return AppPage(
-      title: 'Hồ sơ',
+      title: context.l10n.profileTab,
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Không thể tải hồ sơ.')),
+        error: (_, _) => Center(child: Text(context.l10n.profileLoadFailed)),
         data: (profile) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(context, ref, profile, isFriend),
             const SizedBox(height: 24),
             Text(
-              'Ảnh của ${profile.displayAlias}',
+              context.l10n.photosOf(profile.displayAlias),
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 12),
             PostsGrid(
               publicId: publicId,
-              emptyText: '${profile.displayAlias} chưa đăng ảnh nào.',
+              emptyText: context.l10n.noPhotosOf(profile.displayAlias),
             ),
             // Chừa chỗ cho thanh điều hướng.
             const SizedBox(height: 24),
@@ -99,10 +100,13 @@ class PublicProfileScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
                   const SizedBox(height: 4),
-                  Text('Hồ sơ ẩn danh', style: TextStyle(color: p.muted)),
+                  Text(
+                    context.l10n.anonymousProfile,
+                    style: TextStyle(color: p.muted),
+                  ),
                   const SizedBox(height: 14),
                   PaperButton(
-                    label: 'Nhắn tin',
+                    label: context.l10n.message,
                     icon: AlbumIcons.chat,
                     onPressed: () => _chat(context, ref),
                   ),
@@ -119,7 +123,7 @@ class PublicProfileScreen extends ConsumerWidget {
           children: [
             if (isFriend)
               PaperButton.tape(
-                label: 'Huỷ kết bạn',
+                label: context.l10n.unfriend,
                 onPressed: () async {
                   await ref.read(friendsRepositoryProvider).remove(publicId);
                   ref
@@ -133,13 +137,13 @@ class PublicProfileScreen extends ConsumerWidget {
               style: TextButton.styleFrom(foregroundColor: p.muted),
               onPressed: () => _report(context, ref),
               icon: AlbumIcon(AlbumIcons.flag, size: 18, color: p.muted),
-              label: const Text('Báo cáo'),
+              label: Text(context.l10n.report),
             ),
             TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: p.danger),
               onPressed: () => _block(context, ref),
               icon: AlbumIcon(AlbumIcons.block, size: 18, color: p.danger),
-              label: const Text('Chặn'),
+              label: Text(context.l10n.block),
             ),
           ],
         ),
@@ -158,18 +162,16 @@ class PublicProfileScreen extends ConsumerWidget {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Chặn người này?'),
-        content: const Text(
-          'Hai người sẽ không thể tìm thấy hoặc nhắn tin cho nhau.',
-        ),
+        title: Text(context.l10n.blockQ),
+        content: Text(context.l10n.blockBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Huỷ'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Chặn'),
+            child: Text(context.l10n.block),
           ),
         ],
       ),
@@ -185,21 +187,21 @@ class PublicProfileScreen extends ConsumerWidget {
     final submit = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Báo cáo'),
+        title: Text(context.l10n.report),
         content: TextField(
           controller: details,
           maxLength: 500,
           maxLines: 4,
-          decoration: const InputDecoration(labelText: 'Chi tiết'),
+          decoration: InputDecoration(labelText: context.l10n.reportDetails),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Huỷ'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Gửi báo cáo'),
+            child: Text(context.l10n.sendReport),
           ),
         ],
       ),
@@ -217,7 +219,7 @@ class PublicProfileScreen extends ConsumerWidget {
           );
       if (context.mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Đã gửi báo cáo.')));
+            .showSnackBar(SnackBar(content: Text(context.l10n.reportSent)));
       }
     }
   }

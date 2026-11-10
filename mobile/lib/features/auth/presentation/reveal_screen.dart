@@ -15,6 +15,7 @@ import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Nhận avatar như một tấm polaroid đang rửa (spec §7.3).
 class RevealScreen extends ConsumerStatefulWidget {
@@ -26,11 +27,11 @@ class RevealScreen extends ConsumerStatefulWidget {
 }
 
 class _RevealScreenState extends ConsumerState<RevealScreen> {
-  static const aliases = [
-    'Mây Tinh Nghịch',
-    'Cáo Mơ Màng',
-    'Nắng Lấp Lánh',
-    'Gấu Bồng Bềnh',
+  static List<String> get aliases => [
+    tr.aliasSuggestion1,
+    tr.aliasSuggestion2,
+    tr.aliasSuggestion3,
+    tr.aliasSuggestion4,
   ];
   late final TextEditingController _alias = TextEditingController(
     text: aliases.first,
@@ -108,13 +109,13 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 20),
-          const Center(child: SectionLabel('Avatar của riêng bạn')),
+          Center(child: SectionLabel(context.l10n.revealSection)),
           const SizedBox(height: 30),
           Center(
             child: Polaroid(
               width: photo,
               caption: profile == null
-                  ? 'ảnh chưa rửa…'
+                  ? context.l10n.photoDeveloping
                   : (libs.animalName(shown) ?? animalName ?? ''),
               child: profile == null
                   ? ColoredBox(
@@ -142,18 +143,20 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
           const SizedBox(height: 26),
           Text(
             profile == null
-                ? 'Sẵn sàng nhận con vật?'
-                : 'Chào ${profile.displayAlias}',
+                ? context.l10n.revealReady
+                : context.l10n.revealGreeting(profile.displayAlias),
             style: Theme.of(context).textTheme.headlineLarge,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             profile == null
-                ? 'Biệt danh của bạn không cần là tên thật.'
+                ? context.l10n.aliasNotRealName
                 : spinning
-                ? 'Đang quay…'
-                : '${animalName ?? 'Con vật'} · không ai khác có avatar này',
+                ? context.l10n.spinning
+                : context.l10n.animalUniqueAvatar(
+                    animalName ?? context.l10n.unknownAnimal,
+                  ),
             textAlign: TextAlign.center,
             style: TextStyle(color: p.muted),
           ),
@@ -169,7 +172,7 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
                 color: p.ink,
               ),
               decoration: InputDecoration(
-                labelText: 'Biệt danh',
+                labelText: context.l10n.nicknameLabel,
                 errorText: _error,
                 filled: true,
                 fillColor: p.paper,
@@ -183,7 +186,7 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
                   borderSide: BorderSide(color: p.accent, width: 2),
                 ),
                 suffixIcon: Semantics(
-                  label: 'Tạo biệt danh ngẫu nhiên',
+                  label: context.l10n.randomNickname,
                   button: true,
                   child: IconButton(
                     onPressed: () => setState(() {
@@ -197,8 +200,8 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
           const SizedBox(height: 18),
           PaperButton(
             label: profile == null
-                ? (_busy ? 'Đang đăng ký…' : 'Quay avatar')
-                : 'Vào app',
+                ? (_busy ? context.l10n.registering : context.l10n.spinAvatar)
+                : context.l10n.enterApp,
             trailingIcon: AlbumIcons.arrowRight,
             onPressed: _busy || spinning
                 ? null

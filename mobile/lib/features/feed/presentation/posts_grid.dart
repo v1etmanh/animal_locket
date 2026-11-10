@@ -11,6 +11,7 @@ import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class UserPostsState {
   const UserPostsState({
@@ -74,11 +75,11 @@ class PostsGrid extends ConsumerWidget {
     super.key,
     required this.publicId,
     this.mine = false,
-    this.emptyText = 'Chưa có ảnh nào.',
+    this.emptyText,
   });
   final String publicId;
   final bool mine;
-  final String emptyText;
+  final String? emptyText;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -89,16 +90,18 @@ class PostsGrid extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (error, _) => error is ApiProblem && error.status == 404
-          ? const _Note('Kết bạn để xem ảnh của người này.')
+          ? _Note(context.l10n.befriendToSee)
           : TextButton(
               onPressed: () => ref.invalidate(userPostsProvider(publicId)),
-              child: const Text('Không tải được ảnh · Thử lại'),
+              child: Text(context.l10n.photosLoadFailed),
             ),
       data: (data) {
         final visible = data.items
             .where((post) => post.status != PostStatus.deleted)
             .toList();
-        if (visible.isEmpty) return _Note(emptyText);
+        if (visible.isEmpty) {
+          return _Note(emptyText ?? context.l10n.noPhotosYet);
+        }
         return Column(
           children: [
             GridView.builder(
@@ -124,7 +127,7 @@ class PostsGrid extends ConsumerWidget {
                         onPressed: ref
                             .read(userPostsProvider(publicId).notifier)
                             .loadMore,
-                        child: const Text('Xem thêm ảnh'),
+                        child: Text(context.l10n.morePhotos),
                       ),
               ),
           ],
@@ -166,8 +169,11 @@ class _Thumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.album;
     final overlay = switch (post.status) {
-      PostStatus.pendingMedia => (AlbumIcons.hourglass, 'Đang xử lý'),
-      PostStatus.rejected => (AlbumIcons.block, 'Bị từ chối'),
+      PostStatus.pendingMedia => (
+        AlbumIcons.hourglass,
+        context.l10n.postProcessing,
+      ),
+      PostStatus.rejected => (AlbumIcons.block, context.l10n.postRejected),
       _ => null,
     };
     return Transform.rotate(
@@ -319,8 +325,8 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
                       child: Center(
                         child: Text(
                           post.status == PostStatus.rejected
-                              ? 'Ảnh bị từ chối'
-                              : 'Ảnh đang được xử lý',
+                              ? context.l10n.postRejectedPhoto
+                              : context.l10n.postProcessingPhoto,
                         ),
                       ),
                     ),
@@ -343,7 +349,7 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
               children: [
                 HankoStamp(
                   stamped: _liked,
-                  tooltip: _liked ? 'Bỏ thích' : 'Thích',
+                  tooltip: _liked ? context.l10n.unlike : context.l10n.like,
                   onPressed: post.status == PostStatus.published
                       ? _toggleLike
                       : null,
@@ -362,12 +368,12 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
                 ),
                 if (widget.mine)
                   Semantics(
-                    label: 'Xoá ảnh',
+                    label: context.l10n.deletePhoto,
                     button: true,
                     excludeSemantics: true,
                     onTap: _delete,
                     child: IconButton(
-                      tooltip: 'Xoá ảnh',
+                      tooltip: context.l10n.deletePhoto,
                       icon: AlbumIcon(AlbumIcons.trash, color: p.danger),
                       onPressed: _delete,
                     ),
@@ -404,16 +410,16 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Xoá ảnh này?'),
-        content: const Text('Bạn bè sẽ không còn thấy ảnh này nữa.'),
+        title: Text(context.l10n.deletePhotoQ),
+        content: Text(context.l10n.deletePhotoBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Huỷ'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Xoá'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -427,9 +433,9 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không xoá được ảnh. Thử lại sau.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.deletePhotoFailed)));
       }
     }
   }
@@ -441,8 +447,8 @@ String formatPostDay(DateTime local) {
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(local.year, local.month, local.day);
   final diff = today.difference(day).inDays;
-  if (diff == 0) return 'Hôm nay';
-  if (diff == 1) return 'Hôm qua';
+  if (diff == 0) return tr.dayToday;
+  if (diff == 1) return tr.dayYesterday;
   String two(int v) => v.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year}';
 }
