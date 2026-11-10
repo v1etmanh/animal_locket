@@ -40,3 +40,5 @@ Thumbs.db
 
 # Mockup tạm của brainstorming (superpowers visual companion)
 .superpowers/
+.impeccable/
+.playwright-mcp/
