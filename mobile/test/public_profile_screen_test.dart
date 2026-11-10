@@ -5,7 +5,6 @@ import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
@@ -87,7 +86,6 @@ void main() {
     expect(avatar.square, isTrue);
     expect(find.text('Ảnh của Cáo Lém Lỉnh'), findsOneWidget);
     expect(find.text('Cáo Lém Lỉnh chưa đăng ảnh nào.'), findsOneWidget);
-    expect(find.byType(GlassContainer), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 

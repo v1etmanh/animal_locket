@@ -3,7 +3,6 @@ import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
-import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:animal_locket/features/camera/presentation/preview_screen.dart';
 import 'package:animal_locket/features/camera/presentation/upload_controller.dart';
 import 'package:flutter/material.dart';
@@ -76,7 +75,6 @@ void main() {
       ),
       findsWidgets,
     );
-    expect(find.byType(GradientButton), findsNothing);
     // Only the app bar's system back arrow is a Material icon.
     expect(
       find.byType(Icon).evaluate().length,

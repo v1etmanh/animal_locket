@@ -4,7 +4,6 @@ import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/auth/presentation/sign_in_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,7 +35,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(GlassContainer), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 

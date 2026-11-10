@@ -1,6 +1,5 @@
 import 'package:animal_locket/core/assets/animal_asset_resolver.dart';
 import 'package:animal_locket/core/avatar/avatar_library.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -73,8 +72,10 @@ class AnimalAvatar extends StatelessWidget {
           shape: BoxShape.circle,
           color: locked
               ? Colors.transparent
-              : AppColors.pastels[colorIndex % AppColors.pastels.length],
-          border: locked ? Border.all(color: AppColors.border, width: 2) : null,
+              : _pastels[colorIndex % _pastels.length],
+          border: locked
+              ? Border.all(color: const Color(0xFFE8E5EE), width: 2)
+              : null,
         ),
         child: Text(
           locked ? '?' : glyph,
@@ -84,3 +85,13 @@ class AnimalAvatar extends StatelessWidget {
     );
   }
 }
+
+/// Nền dự phòng khi chưa có SVG avatar.
+const _pastels = <Color>[
+  Color(0xFFFFF1C2),
+  Color(0xFFB1EEF3),
+  Color(0xFFD0F7A3),
+  Color(0xFFF5D3B3),
+  Color(0xFFE6DDF5),
+  Color(0xFFFCE3CB),
+];

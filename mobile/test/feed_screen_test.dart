@@ -8,7 +8,6 @@ import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
 import 'package:animal_locket/features/feed/presentation/feed_screen.dart';
@@ -143,10 +142,6 @@ void main() {
   ) async {
     await _pump(tester, three);
     final feed = find.byType(FeedScreen);
-    expect(
-      find.descendant(of: feed, matching: find.byType(GlassContainer)),
-      findsNothing,
-    );
     expect(
       find.descendant(of: feed, matching: find.byType(Icon)),
       findsNothing,

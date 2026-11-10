@@ -6,7 +6,6 @@ import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/friends/domain/friends_repository.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:animal_locket/features/friends/presentation/friends_screen.dart';
@@ -117,7 +116,6 @@ void main() {
     final avatars = tester.widgetList<AnimalAvatar>(find.byType(AnimalAvatar));
     expect(avatars.every((a) => a.square), isTrue);
     expect(find.bySemanticsLabel('Xem hồ sơ'), findsNWidgets(2));
-    expect(find.byType(GlassContainer), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 

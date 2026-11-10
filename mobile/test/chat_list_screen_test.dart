@@ -3,7 +3,6 @@ import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_list.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/chat/domain/chat_repository.dart';
 import 'package:animal_locket/features/chat/presentation/chat_controllers.dart';
 import 'package:animal_locket/features/chat/presentation/chat_list_screen.dart';
@@ -81,7 +80,6 @@ void main() {
     expect(find.byType(MiniPolaroidAvatar), findsNWidgets(2));
     expect(find.byType(DashedDivider), findsOneWidget);
     expect(find.bySemanticsLabel('3 tin chưa đọc'), findsOneWidget);
-    expect(find.byType(GlassContainer), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 

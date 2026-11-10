@@ -8,7 +8,6 @@ import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
-import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:animal_locket/features/auth/presentation/reveal_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,7 +67,6 @@ void main() {
     );
     expect(find.text('Mây Tinh Nghịch'), findsOneWidget);
     expect(find.text('Quay avatar'), findsOneWidget);
-    expect(find.byType(GradientButton), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 

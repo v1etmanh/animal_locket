@@ -3,7 +3,6 @@ import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
-import 'package:animal_locket/core/widgets/gradient_button.dart';
 import 'package:animal_locket/features/auth/presentation/birth_consent_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -71,7 +70,6 @@ void main() {
     ]) {
       expect(find.text(text), findsOneWidget, reason: text);
     }
-    expect(find.byType(GradientButton), findsNothing);
     expect(find.byType(Icon), findsNothing);
     expect(find.byType(CheckboxListTile), findsNothing);
   });

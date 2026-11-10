@@ -6,7 +6,6 @@ import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/discovery/domain/discovery_repository.dart';
 import 'package:animal_locket/features/discovery/presentation/discovery_controller.dart';
 import 'package:animal_locket/features/discovery/presentation/discovery_screen.dart';
@@ -110,7 +109,6 @@ void main() {
     for (final t in ['Đang online', '1–3 km', 'Con vật ẩn danh', 'Boost']) {
       expect(find.text(t), findsOneWidget, reason: t);
     }
-    expect(find.byType(GlassContainer), findsNothing);
     expect(find.byType(Icon), findsNothing);
   });
 
