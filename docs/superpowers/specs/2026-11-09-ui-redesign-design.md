@@ -223,6 +223,30 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 
 **Icon mới** (nét 1.8 như bộ hiện có): `eye`, `eyeOff`, `book`, `plus`, `refresh`.
 
+### 7.7 Đợt 7 chi tiết · Hồ sơ (người viết tự quyết 2026-11-10, chủ dự án bỏ qua phần hỏi)
+
+**Hồ sơ của tôi**:
+- Góc phải trên là ô giấy icon bánh răng (nhãn "Cài đặt").
+- Đầu trang giống hồ sơ người khác (đợt 5): avatar **polaroid dán băng** nghiêng cạnh biệt danh. Đổi biệt danh là ô giấy icon bút (nhãn "Đổi biệt danh"). "Thành viên Pro/Free" chữ nhạt. Số avatar sở hữu là **mẩu giấy dán washi** thay ô kính.
+- **Bạn bè**: tiêu đề cũ + nhãn giấy "Xem tất cả"; hàng ngang avatar **polaroid nhỏ** nghiêng xen kẽ, chấm xanh online; trống thì nhãn giấy "Tìm bạn".
+- "Ảnh của tôi" dùng `PostsGrid` (đợt 5).
+- **Bộ sưu tập**: mỗi avatar là một polaroid nhỏ, chú thích viết tay là tên con vật, nghiêng xen kẽ như album sticker.
+- "Khám phá Animal Locket Pro" là nút giấy chính có icon tia sét. Lỗi tải: nút giấy "Không tải được · Thử lại".
+
+**Cài đặt**:
+- Mục chọn theme giữ như đợt 1. "Cho phép khám phá" nằm trên **một trang giấy**.
+- "Đã chặn": danh sách trên trang giấy, dòng cách nhau bằng gạch đứt, avatar polaroid nhỏ, "Bỏ chặn" là nhãn giấy.
+- "Đăng xuất" là nhãn giấy có icon cửa ra; "Xoá tài khoản" là chữ nhỏ màu `danger` icon thùng rác (giống "Chặn" đợt 5). Hộp thoại xoá giữ hai bước, nút "Tiếp tục" màu `danger`.
+
+**Pro**:
+- Đầu trang là **huy hiệu vàng** tròn lớn (cùng kiểu huy hiệu Boost đợt 5) ghi "Pro" với tia sét.
+- Quyền lợi nằm trên trang giấy, gạch đứt, icon tia sét / thư. Gói hiện tại là mẩu giấy dán washi.
+- Mỗi sản phẩm web là nút giấy chính; mua qua cửa hàng là nhãn giấy; "Khôi phục giao dịch cửa hàng" chữ nhỏ. Chữ giữ nguyên.
+
+**Dọn dẹp**: xoá `GlassContainer`, `GradientButton`, `AppColors` (màu nền dự phòng của avatar chuyển vào `AnimalAvatar`). Huy hiệu vàng và mẩu giấy dán washi thành thành phần dùng chung.
+
+**Icon mới** (nét 1.8): `settings`, `edit`, `logout`.
+
 ## 8. Ràng buộc
 
 - Flutter (SDK hiện có 3.41), Riverpod, go_router — giữ nguyên kiến trúc; không thêm thư viện UI lớn. Dùng gói đã cài trước khi thêm gói mới.
@@ -240,6 +264,7 @@ Tab Ảnh (`/camera`) là màn đầu tiên sau đăng nhập và có khung ng�
 - `PostsGrid` để sang đợt 5/7; chữ hiện tại thắng chữ mẫu trong mockup (§7.1).
 - Thanh tab giống nhau trên mọi tab, kể cả trên camera; tab Ảnh giữ nhãn (§7.2).
 - Toàn bộ §7.6 (Chat): tin nhắn dạng mẩu giấy ghi chú, ô vẽ chấm lưới, nét mặc định màu `accent`, bảng màu glyph giữ nguyên.
+- Toàn bộ §7.7 (Hồ sơ): bộ sưu tập dạng polaroid có tên con vật, huy hiệu vàng cho Pro, xoá hẳn `AppColors`.
 
 ## 10. Để builder quyết
 
