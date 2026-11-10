@@ -1,8 +1,10 @@
 import 'package:animal_locket/core/models/common_models.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/polaroid.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/chat/data/chat_repository_impl.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
 import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
@@ -61,68 +63,89 @@ class PublicProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// Avatar polaroid dán băng cạnh biệt danh; nút giấy; báo cáo/chặn là chữ nhỏ (spec §7.5).
   Widget _header(
     BuildContext context,
     WidgetRef ref,
     PublicProfile profile,
     bool isFriend,
-  ) => GlassContainer(
-    borderRadius: 34,
-    child: Column(
+  ) {
+    final p = context.album;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AnimalAvatar(
-          avatar: profile.avatar,
-          leadAnimal: profile.leadAnimal,
-          size: 130,
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Polaroid(
+              width: 116,
+              tiltDegrees: -4,
+              caption: '',
+              child: AnimalAvatar(
+                avatar: profile.avatar,
+                leadAnimal: profile.leadAnimal,
+                size: 116,
+                square: true,
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile.displayAlias,
+                    style: Theme.of(context).textTheme.headlineLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Hồ sơ ẩn danh', style: TextStyle(color: p.muted)),
+                  const SizedBox(height: 14),
+                  PaperButton(
+                    label: 'Nhắn tin',
+                    icon: AlbumIcons.chat,
+                    onPressed: () => _chat(context, ref),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 18),
-        Text(
-          profile.displayAlias,
-          style: Theme.of(context).textTheme.headlineLarge,
-        ),
-        const SizedBox(height: 8),
-        const Text('Hồ sơ ẩn danh', style: TextStyle(color: AppColors.muted)),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: () => _chat(context, ref),
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: const Text('Nhắn tin'),
-        ),
-        if (isFriend) ...[
-          const SizedBox(height: 10),
-          OutlinedButton(
-            onPressed: () async {
-              await ref.read(friendsRepositoryProvider).remove(publicId);
-              ref
-                ..invalidate(isFriendProvider(publicId))
-                ..invalidate(userPostsProvider(publicId))
-                ..invalidate(feedControllerProvider);
-              if (context.mounted) context.pop();
-            },
-            child: const Text('Huỷ kết bạn'),
-          ),
-        ],
-        const Divider(height: 34),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
           children: [
+            if (isFriend)
+              PaperButton.tape(
+                label: 'Huỷ kết bạn',
+                onPressed: () async {
+                  await ref.read(friendsRepositoryProvider).remove(publicId);
+                  ref
+                    ..invalidate(isFriendProvider(publicId))
+                    ..invalidate(userPostsProvider(publicId))
+                    ..invalidate(feedControllerProvider);
+                  if (context.mounted) context.pop();
+                },
+              ),
             TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: p.muted),
               onPressed: () => _report(context, ref),
-              icon: const Icon(Icons.flag_outlined),
+              icon: AlbumIcon(AlbumIcons.flag, size: 18, color: p.muted),
               label: const Text('Báo cáo'),
             ),
-            const SizedBox(width: 10),
             TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              style: TextButton.styleFrom(foregroundColor: p.danger),
               onPressed: () => _block(context, ref),
-              icon: const Icon(Icons.block),
+              icon: AlbumIcon(AlbumIcons.block, size: 18, color: p.danger),
               label: const Text('Chặn'),
             ),
           ],
         ),
       ],
-    ),
-  );
+    );
+  }
 
   Future<void> _chat(BuildContext context, WidgetRef ref) async {
     final conversation = await ref
