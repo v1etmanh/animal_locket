@@ -1,0 +1,236 @@
+{
+  "info": {
+    "_postman_id": "d2ee4c1c-15cc-4a40-a926-8306f9655838",
+    "name": "Animal Locket Service Tests (user, post, notification)",
+    "description": "Kiểm thử chức năng qua API Gateway cho user-service và post-service; notification-service được kiểm thử E2E qua FCM/Kafka vì không có REST API public. Cùng convention với Animal-Locket-Service-Tests.postman_collection.json. Chọn environment Animal Locket Demo và đặt access_token trước khi chạy.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "test_alias", "value": "postman_demo" },
+    { "key": "test_birth_date", "value": "2000-01-01" },
+    { "key": "my_public_id", "value": "" },
+    { "key": "unknown_post_id", "value": "00000000-0000-0000-0000-000000000000" },
+    { "key": "unknown_public_id", "value": "aaaaaaaaaaaaaaaaaaaa" }
+  ],
+  "event": [{
+    "listen": "prerequest",
+    "script": { "type": "text/javascript", "exec": [
+      "if (!pm.environment.get('access_token')) { console.warn('access_token is empty. Obtain a Keycloak Authorization Code + PKCE token before running this collection.'); }"
+    ] }
+  }],
+  "item": [
+    {
+      "name": "00 - Setup",
+      "item": [
+        {
+          "name": "Gateway rejects missing JWT",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/users/me" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 401 without bearer token', () => pm.response.to.have.status(401));"
+          ] } }]
+        },
+        {
+          "name": "Register profile (idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"alias\": \"{{test_alias}}\",\n  \"birthDate\": \"{{test_birth_date}}\"\n}" },
+            "url": "{{api_base_url}}/api/v1/users/register"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('Profile contains publicId and alias', () => { pm.expect(body.publicId).to.be.a('string').and.not.empty; pm.expect(body.alias).to.be.a('string').and.not.empty; });",
+            "pm.environment.set('public_id', body.publicId);",
+            "pm.collectionVariables.set('my_public_id', body.publicId);"
+          ] } }]
+        },
+        {
+          "name": "Load my profile",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/users/me" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns my profile', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Profile contains privacy-safe fields', () => { pm.expect(body).to.include.keys('publicId', 'alias', 'leadAnimal', 'ageGroup', 'discoverable', 'plan', 'createdAt'); pm.expect(body).not.to.have.property('birthDate'); });",
+            "pm.environment.set('public_id', body.publicId);",
+            "pm.collectionVariables.set('my_public_id', body.publicId);"
+          ] } }]
+        },
+        {
+          "name": "Load a friend for social tests",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/friends" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const friends = pm.response.json();",
+            "pm.test('Friends is an array', () => pm.expect(friends).to.be.an('array'));",
+            "if (friends.length) pm.collectionVariables.set('friend_public_id', friends[0].publicId);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 - user-service",
+      "item": [
+        {
+          "name": "List avatar collection",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/users/me/avatars" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns avatar array', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "List animals",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/animals" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns animal catalog', () => pm.response.to.have.status(200));",
+            "pm.test('Catalog is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "List friends",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/friends" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns friends array', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "List outgoing friend requests",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/friends/requests/outgoing" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "List incoming friend requests",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/friends/requests/incoming" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns incoming requests', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "List blocked users",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/blocks" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns blocked-user array', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "Public profile of myself",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/users/{{my_public_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Public profile excludes private fields', () => { pm.expect(body).to.include.keys('publicId', 'alias', 'leadAnimal'); pm.expect(body).not.to.have.property('birthDate'); });"
+          ] } }]
+        },
+        {
+          "name": "Unknown public profile returns 404",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/users/{{unknown_public_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('Problem code is NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('NOT_FOUND'));"
+          ] } }]
+        },
+        {
+          "name": "Friend request to myself is rejected",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"toPublicId\": \"{{my_public_id}}\"\n}" }, "url": "{{api_base_url}}/api/v1/friends/requests" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Problem code is SELF_REQUEST', () => pm.expect(pm.response.json().code).to.eql('SELF_REQUEST'));"
+          ] } }]
+        },
+        {
+          "name": "Block myself is rejected",
+          "request": { "method": "PUT", "header": [], "url": "{{api_base_url}}/api/v1/blocks/{{my_public_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Problem code is SELF_BLOCK', () => pm.expect(pm.response.json().code).to.eql('SELF_BLOCK'));"
+          ] } }]
+        },
+        {
+          "name": "Legacy spin is retired",
+          "request": { "method": "POST", "header": [], "url": "{{api_base_url}}/api/v1/users/me/spin" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 410', () => pm.response.to.have.status(410));",
+            "pm.test('Problem code is FEATURE_RETIRED', () => pm.expect(pm.response.json().code).to.eql('FEATURE_RETIRED'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - post-service",
+      "item": [
+        {
+          "name": "My posts",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/posts/mine?limit=5" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns my posts', () => pm.response.to.have.status(200));",
+            "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }]
+        },
+        {
+          "name": "Friend feed",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/feed?limit=5" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Returns feed', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Feed has the documented shape', () => { pm.expect(body).to.have.property('items').that.is.an('array'); pm.expect(body).to.have.property('degraded').that.is.a('boolean'); });"
+          ] } }]
+        },
+        {
+          "name": "Post rejects missing mediaId",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"caption\": \"Postman validation test\"\n}" }, "url": "{{api_base_url}}/api/v1/posts" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Problem code is VALIDATION_FAILED', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_FAILED'));"
+          ] } }]
+        },
+        {
+          "name": "Unknown post returns 404",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/posts/{{unknown_post_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('Problem code is NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('NOT_FOUND'));"
+          ] } }]
+        },
+        {
+          "name": "Unknown post comments return 404",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/posts/{{unknown_post_id}}/comments?after=0&limit=5" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('Problem code is NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('NOT_FOUND'));"
+          ] } }]
+        },
+        {
+          "name": "Internal post routes are not exposed",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/internal/posts/{{unknown_post_id}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Gateway does not expose post internals', () => pm.expect(pm.response.code).to.be.oneOf([404, 405]));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - notification-service (E2E/manual)",
+      "description": "notification-service consumes Kafka internally and has no public REST endpoint. Postman cannot assert FCM receipt. Use a real Android/iOS build: register its FCM token through PUT /api/v1/devices, then generate a supported event (e.g. another account likes/comments on a published post). Verify the generic, privacy-safe notification arrives on the device and check notification-service logs/metrics on the server. Do not call /internal endpoints or expose port 8107.",
+      "item": [
+        {
+          "name": "Public notification route is not exposed",
+          "request": { "method": "GET", "header": [], "url": "{{api_base_url}}/api/v1/notifications" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('No public notification REST API exists', () => pm.expect(pm.response.code).to.be.oneOf([404, 405]));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

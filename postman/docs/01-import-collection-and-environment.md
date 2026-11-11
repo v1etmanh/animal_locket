@@ -33,6 +33,15 @@ test_alias = postman_demo
 test_birth_date = 2000-01-01
 ```
 
+`Register profile` gửi body sau. Không xóa hai biến `test_alias` và `test_birth_date`; nếu biến chưa được thay thế, backend trả `400 Bad Request`.
+
+```json
+{
+  "alias": "{{test_alias}}",
+  "birthDate": "{{test_birth_date}}"
+}
+```
+
 Nếu tạo Droplet mới, thay `public_domain` và cả ba URL bằng hostname dựa trên IP mới. Nhấn **Save** sau khi sửa.
 
 ## Kiểm tra public trước OAuth

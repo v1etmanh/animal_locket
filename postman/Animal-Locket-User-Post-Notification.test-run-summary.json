@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "collection": "Animal-Locket-Demo-User-Post-Notification.postman_collection.json",
+  "environment": "Animal-Locket-Service-Tests.postman_environment.json",
+  "serviceScope": [
+    "user-service",
+    "post-service",
+    "notification-service"
+  ],
+  "runReportedAt": "2026-11-10",
+  "executionSource": "Postman Collection Runner",
+  "result": {
+    "requests": 22,
+    "assertions": 41,
+    "reportedStatus": "passed"
+  },
+  "coverage": {
+    "setup": 4,
+    "userService": 11,
+    "postService": 6,
+    "notificationService": 1
+  },
+  "notes": [
+    "Negative test cases are successful when the documented HTTP status and stable RFC 7807 code match. For example, blocking oneself passes only when the response is 400 with code SELF_BLOCK.",
+    "notification-service has no public REST endpoint. Its collection request verifies that no public notification endpoint is exposed; FCM delivery remains an Android/iOS end-to-end check.",
+    "No access token, refresh token, user profile data, media URL, or response payload is stored in this report."
+  ]
+}
