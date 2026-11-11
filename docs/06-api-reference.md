@@ -46,14 +46,19 @@ Mọi đường dẫn dưới đây đi qua gateway (`https://<domain>`) trừ p
 | `GET /users/me/animals` | Con vật đã sở hữu (legacy) | — | `[AnimalView]` | |
 | `POST /users/me/spin` | **Đã ngừng** (avatar quay một lần lúc đăng ký) | — | — | `410 FEATURE_RETIRED` |
 | `GET /users/me/avatars` | Bộ sưu tập avatar (docs/19) | — | `[{avatar, source, acquiredAt}]` | |
+| `POST /users/me/avatar/spin` | Quay một avatar mới bằng một lượt đã mua (docs/19 §8). Avatar vào bộ sưu tập; avatar **đang dùng không đổi** | — | `{avatar, remaining}` | `409 NO_AVATAR_SPIN`, `503 AVATAR_POOL_EXHAUSTED`, `503 AVATAR_BUSY` |
+| `PUT /users/me/avatar` | Đổi avatar đang dùng sang một avatar trong bộ sưu tập. Phát `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED` | `{avatar}` | `MeProfile` | `400 AVATAR_NOT_OWNED` |
 | `GET /animals/avatar-lib/{version}` | Thư viện avatar (JSON, `Cache-Control: immutable`) | — | JSON thư viện | `404` |
 | `GET /animals` | Danh mục con vật | — | `[AnimalView]` | |
 
 ```
-MeProfile    {publicId, alias, leadAnimal, ageGroup: "MINOR|ADULT", discoverable, plan: "FREE|PRO", createdAt}
-PublicProfile{publicId, alias, leadAnimal}
+MeProfile    {publicId, alias, leadAnimal, avatar, ageGroup: "MINOR|ADULT", discoverable, plan: "FREE|PRO",
+              avatarSpins: int, createdAt}
+PublicProfile{publicId, alias, leadAnimal, avatar}
 AnimalView   {code, name, rarity: "COMMON|RARE|EPIC", packCode|null}
 ```
+
+`avatarSpins` = số lượt quay avatar còn lại (docs/19 §8). Client cũ không có trường này thì coi như 0.
 
 `MeProfile` không có `birthDate`, `sub`, email.
 

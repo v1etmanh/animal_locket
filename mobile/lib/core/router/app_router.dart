@@ -11,6 +11,7 @@ import 'package:animal_locket/features/chat/presentation/conversation_screen.dar
 import 'package:animal_locket/features/discovery/presentation/discovery_screen.dart';
 import 'package:animal_locket/features/feed/presentation/feed_screen.dart';
 import 'package:animal_locket/features/friends/presentation/friends_screen.dart';
+import 'package:animal_locket/features/profile/presentation/avatar_spin_screen.dart';
 import 'package:animal_locket/features/profile/presentation/profile_screen.dart';
 import 'package:animal_locket/features/profile/presentation/public_profile_screen.dart';
 import 'package:animal_locket/features/profile/presentation/settings_screen.dart';
@@ -140,6 +141,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: rootNavigatorKey,
         path: '/pro',
         builder: (_, _) => const ProScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/avatar-spin',
+        builder: (_, _) => const AvatarSpinScreen(),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

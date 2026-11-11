@@ -17,9 +17,10 @@ Monorepo microservice (Java 17 / Spring Boot 3.3 / Spring Cloud 2023.0) + một 
 - Lỗi nghiệp vụ: ném `ApiException` (mã `code` ổn định) → RFC 7807.
 - Event: `outbox.publish(topic, type, key, payload)` trong transaction; consumer gọi `idempotency.firstTime(eventId)`.
 - Service không dùng JPA (discovery, chat, notification) phát/nhận Kafka trực tiếp, thao tác phải idempotent.
+- `SUBSCRIPTION_ACTIVATED` là "đặt trạng thái", được phát lại mỗi lần thuê bao đổi: **không cộng dồn thứ gì theo nó**. Thứ cấp một lần mỗi kỳ thì gắn vào `BillingService` (xem `grantSpinForPeriod`) và chống trùng bằng một dòng `ledger` (`UNIQUE (reason, ref, item)`), chốt hạn hết theo **giây** vì biên lai store có độ phân giải giây còn webhook có mili.
 - Migration Flyway ở `src/main/resources/db/migration`; test dùng H2 `create-drop` nên **entity khớp SQL không được test bắt** — đổi entity thì sửa SQL.
 - Mọi cấu hình bí mật qua biến môi trường; không commit `.env`.
-- Avatar (docs/19): mỗi avatar thuộc tối đa một người, cấp qua `AvatarAllocator` (UPDATE có điều kiện trên `avatar_pool`). Thư viện sửa ở `libs/avatar-lib/lib-vN.mjs` rồi `node libs/avatar-lib/build-lib.mjs` và `node libs/avatar-lib/check.mjs`; file phiên bản đã phát hành không được đổi một byte; phiên bản mới được vẽ lại hình nhưng phải giữ đủ bộ khoá cũ (ADR-015); app vẽ mọi mã bằng thư viện mới nhất có khoá đó.
+- Avatar (docs/19): mỗi avatar thuộc tối đa một người, cấp qua `AvatarAllocator` (UPDATE có điều kiện trên `avatar_pool`). Lượt quay mua được: số dư ở `avatar_spin_credit` của **user-service**, cố ý không ở ví billing, để `AvatarSpinService.spin()` trừ lượt và cấp avatar trong cùng transaction — kho cạn thì lượt tự rollback (docs/19 §8). Thư viện sửa ở `libs/avatar-lib/lib-vN.mjs` rồi `node libs/avatar-lib/build-lib.mjs` và `node libs/avatar-lib/check.mjs`; file phiên bản đã phát hành không được đổi một byte; phiên bản mới được vẽ lại hình nhưng phải giữ đủ bộ khoá cũ (ADR-015); app vẽ mọi mã bằng thư viện mới nhất có khoá đó.
 
 ## Cạm bẫy đã gặp
 

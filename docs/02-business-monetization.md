@@ -16,7 +16,7 @@
 | Đăng ảnh / ngày | 10 | 50 |
 | Quẹt phải / ngày | 30 | 150 |
 | Lời mời kết bạn / ngày | 20 | 80 |
-| Avatar | Một avatar duy nhất, quay một lần lúc đăng ký | Như Free (đổi con vật chủ đạo và quay thưởng **đã ngừng**; quay thêm sẽ gắn với nạp tiền, docs/19 §8) |
+| Avatar | Một avatar duy nhất, quay một lần lúc đăng ký | Thêm **một lượt quay avatar mỗi kỳ** thuê bao; avatar quay được vào bộ sưu tập, đổi avatar đang dùng lúc nào cũng được (docs/19 §8) |
 | Hoàn tác quẹt trái | Không | Có (câu hỏi mở) |
 | Quảng cáo | Không (đề xuất giữ app sạch) | Không |
 
@@ -29,6 +29,8 @@ Giá tham khảo (đề xuất): Pro tháng 49.000đ, năm 399.000đ. **Lưu ý*
 | **Boost** | Ưu tiên xuất hiện trong bộ thẻ người khác 30 phút | 1 đơn vị = 1 lần dùng |
 | **Lời mời ưu tiên** | Lời mời được đẩy lên đầu danh sách người nhận | 1 đơn vị = 1 lời mời |
 | **Gói con vật** | Thêm một nhóm con vật vào bộ sưu tập (theo chủ đề, độ hiếm) | Mua một lần, vĩnh viễn |
+
+Lượt quay avatar (`AVATAR_SPIN`) **không bán lẻ**: chỉ đi kèm thuê bao, một lượt mỗi kỳ. Số dư do user-service giữ (không nằm trong ví của billing) nên không hiện ở `GET /billing/me`; xem docs/19 §8.2 để biết lý do. Hoàn tiền không thu hồi lượt chưa dùng.
 
 Số dư vật phẩm ghi trong **sổ cái** của billing-service (mỗi lần cộng/trừ là một dòng, không sửa số dư trực tiếp).
 

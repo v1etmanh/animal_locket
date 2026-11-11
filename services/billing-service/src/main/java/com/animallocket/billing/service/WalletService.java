@@ -39,6 +39,22 @@ public class WalletService {
     }
 
     /**
+     * Ghi một dòng sổ cái mà KHÔNG đổi số dư của ví này: dùng cho vật phẩm mà số dư do service khác giữ
+     * (hiện là {@code AVATAR_SPIN}, số dư nằm ở user-service). Sổ cái vẫn là nơi chốt "việc này đã xảy ra chưa",
+     * nhờ khoá duy nhất (reason, ref, item).
+     *
+     * @return true nếu đây là lần đầu ghi; false nếu (reason, ref, item) đã có
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean recordOnce(String publicId, String item, int qty, String reason, String ref) {
+        if (qty <= 0 || ledger.existsByReasonAndRefAndItem(reason, ref, item)) {
+            return false;
+        }
+        ledger.save(new LedgerEntry(publicId, item, qty, reason, ref));
+        return true;
+    }
+
+    /**
      * Trừ n đơn vị. Idempotent theo (reason, ref): gọi lại với cùng ref coi như đã trừ.
      *
      * @return true nếu đã trừ (hoặc đã trừ từ trước); false nếu số dư không đủ

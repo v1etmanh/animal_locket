@@ -27,4 +27,14 @@ public interface UserRepository extends JpaRepository<UserAccount, Long> {
             + "where u.publicId = :id and u.avatarKey is null")
     int assignAvatarIfMissing(@Param("id") String publicId, @Param("key") String key,
                               @Param("version") int version, @Param("animal") String animal);
+
+    /**
+     * Đổi avatar đang dùng sang một avatar KHÁC đã có chủ là chính người này (người gọi phải kiểm tra sở hữu
+     * trong {@code user_avatars} trước). Không dùng cho lần gán đầu: lần đó là {@link #assignAvatarIfMissing}.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update UserAccount u set u.avatarKey = :key, u.avatarVersion = :version, u.leadAnimal = :animal "
+            + "where u.publicId = :id")
+    int setAvatar(@Param("id") String publicId, @Param("key") String key,
+                  @Param("version") int version, @Param("animal") String animal);
 }

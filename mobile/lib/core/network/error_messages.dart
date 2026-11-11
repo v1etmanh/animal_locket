@@ -6,6 +6,11 @@ const _messages = <String, String>{
   'PRO_REQUIRED': 'Tính năng này dành cho thành viên Pro.',
   'ANIMAL_NOT_OWNED': 'Bạn chưa sở hữu con vật này.',
   'SPIN_COOLDOWN': 'Chưa đến lượt quay tiếp theo.',
+  'NO_AVATAR_SPIN': 'Bạn không còn lượt quay avatar nào.',
+  'AVATAR_NOT_OWNED': 'Avatar này không có trong bộ sưu tập của bạn.',
+  'AVATAR_POOL_EXHAUSTED':
+      'Tạm thời hết avatar mới để cấp. Lượt quay của bạn vẫn còn, hãy thử lại sau.',
+  'AVATAR_BUSY': 'Hệ thống đang bận cấp avatar. Hãy thử lại.',
   'COLLECTION_COMPLETE': 'Bạn đã hoàn thành bộ sưu tập.',
   'FILE_TOO_LARGE': 'Ảnh vượt quá giới hạn 10 MB.',
   'UNSUPPORTED_MEDIA_TYPE': 'Định dạng ảnh chưa được hỗ trợ.',
