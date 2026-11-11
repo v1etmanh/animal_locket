@@ -19,7 +19,7 @@ Mọi message là một chuỗi JSON (key và value đều `String`):
 }
 ```
 
-- `eventId` dùng để khử trùng lặp; `producer` = `spring.application.name` (face-worker ghi `face-worker`).
+- `eventId` dùng để khử trùng lặp; `producer` = `spring.application.name`.
 - Payload **chỉ chứa `publicId`** và mã nghiệp vụ; không bao giờ chứa email, SĐT, `sub`, toạ độ.
 - `FAIL_ON_UNKNOWN_PROPERTIES` tắt: thêm trường mới vào payload là tương thích ngược.
 - `version` hiện luôn là 1; chưa có cơ chế đa phiên bản.
@@ -30,9 +30,9 @@ Mọi message là một chuỗi JSON (key và value đều `String`):
 |---|---|---|---|---|
 | `user.events` | `Topics.USER` | user-service (Outbox) | `publicId` | |
 | `friend.events` | `Topics.FRIEND` | user-service (Outbox) | `toPublicId` (request) / id thấp (accepted) | |
-| `media.events` | `Topics.MEDIA` | media-service (Outbox) | `mediaId` | face-worker nghe topic này |
-| `media.results` | `Topics.MEDIA_RESULTS` | face-worker | `mediaId` | kết quả thô của worker |
-| `media.events.dlq` | `Topics.MEDIA_DLQ` | face-worker | `mediaId` | message xử lý lỗi sau 3 lần thử, hoặc không phải JSON |
+| `media.events` | `Topics.MEDIA` | media-service (Outbox) | `mediaId` | |
+| `<topic>.dlq` | `KafkaErrorHandlingAutoConfiguration.DLQ_SUFFIX` | consumer Java khi xử lý lỗi | khoá gốc | xem 7.7 |
+| `media.results` | `Topics.MEDIA_RESULTS` | (không ai) | | **Không còn dùng**: của face-worker đã gỡ. Hằng số vẫn còn trong code |
 | `post.events` | `Topics.POST` | post-service (Outbox) | `postId` | |
 | `chat.events` | `Topics.CHAT` | chat-service (**trực tiếp**, không Outbox) | `recipientPublicId` | |
 | `billing.events` | `Topics.BILLING` | billing-service (Outbox) | `publicId` | |
@@ -62,19 +62,16 @@ Thứ tự được đảm bảo **theo từng khoá** trong một topic; **khô
 
 > **Không có event "huỷ kết bạn"**: `DELETE /friends/{id}` không phát gì. Cache bạn bè (post 45 giây; chat 30 giây) tự hết hạn; hội thoại chat vẫn `ACTIVE` nhưng gửi tin sẽ bị `403` sau khi cache hết. Nên bổ sung `FRIEND_REMOVED`.
 
-### Ảnh (`media.events`, `media.results`)
+### Ảnh (`media.events`)
 
-| `type` | Topic | Payload | Producer | Consumer |
-|---|---|---|---|---|
-| `PHOTO_UPLOADED` | media.events | `{mediaId, ownerPublicId, rawKey, leadAnimal, context, refId}` | media-service | face-worker |
-| `FACE_PROCESSED` | media.results | `{mediaId, ownerPublicId, publicKey, method, facesDetected}` | face-worker | media-service |
-| `FACE_FAILED` | media.results | `{mediaId, ownerPublicId, reason}` | face-worker | media-service |
-| `PHOTO_READY` | media.events | `{mediaId, ownerPublicId, publicKey, method, facesDetected, context, refId}` | media-service | post (`context=POST`) |
-| `PHOTO_REJECTED` | media.events | `{mediaId, ownerPublicId, reason, context, refId}` | media-service | post (`context=POST`), notification |
+| `type` | Payload | Producer | Consumer |
+|---|---|---|---|
+| `PHOTO_READY` | `{mediaId, ownerPublicId, publicKey, method, facesDetected, context, refId}` | media-service (`complete`) | post (`context=POST`) |
+| `PHOTO_REJECTED` | `{mediaId, ownerPublicId, reason, context, refId}` | media-service (`complete`) | post (`context=POST`), notification |
 
-`context` là `POST` hoặc `CHAT`; `method` là `AI`, `STICKER` hoặc `NONE` (không có mặt).
+`context` là `POST` hoặc `CHAT`. `method` luôn là `NONE` và `facesDetected` luôn là `0` (giữ trường cho tương thích; không còn ẩn mặt). `reason` của `PHOTO_REJECTED`: `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`.
 
-**Khác kế hoạch**: kế hoạch để worker phát `PHOTO_READY/REJECTED`. Code dùng hai bước để trạng thái job trong DB của media-service và event phát ra luôn đi cùng một transaction (Outbox). Xem ADR-006.
+`PHOTO_UPLOADED`, `FACE_PROCESSED`, `FACE_FAILED` vẫn còn trong `EventTypes` nhưng **không service nào phát hay nghe** (di sản của face-worker đã gỡ, xem ADR-014 trong [15-adr.md](15-adr.md)).
 
 ### Bài đăng (`post.events`)
 
@@ -98,22 +95,23 @@ Không chứa nội dung tin nhắn.
 |---|---|---|
 | `SUBSCRIPTION_ACTIVATED` | `{publicId, plan:"PRO", expiresAt}` | user (`entitlements`), post (`pro:`), discovery (`pro:`), notification |
 | `SUBSCRIPTION_EXPIRED` | `{publicId, plan:"FREE", expiresAt:null}` | user, post, discovery |
-| `CONSUMABLE_GRANTED` | `{publicId, item, quantity}`; `item` = `BOOST` \| `PRIORITY_INVITE` \| `ANIMAL_PACK:<mã>` | user (chỉ `ANIMAL_PACK:*` → mở con vật) |
+| `CONSUMABLE_GRANTED` | `{publicId, item, quantity}`; `item` = `BOOST` \| `PRIORITY_INVITE` \| `ANIMAL_PACK:<mã>` \| `AVATAR_SPIN` | user (`ANIMAL_PACK:*` → mở con vật; `AVATAR_SPIN` → cộng lượt quay) |
 
 `SUBSCRIPTION_ACTIVATED/EXPIRED` được phát lại theo **trạng thái Pro hiện tại** của người dùng mỗi khi có thay đổi (một người có thể có thuê bao ở nhiều store), nên consumer phải coi đây là "đặt trạng thái", không phải "cộng dồn".
+
+Hệ quả: **không được cộng dồn thứ gì theo `SUBSCRIPTION_ACTIVATED`.** Lượt quay avatar tặng kèm thuê bao vì thế đi bằng `CONSUMABLE_GRANTED {item: "AVATAR_SPIN"}`, phát **một lần cho mỗi kỳ** từ `BillingService.grantSpinForPeriod` (khoá chống trùng: một dòng sổ cái `(SUB_PERIOD, sub:<id>:<giây hết hạn>, AVATAR_SPIN)`). Số dư lượt quay nằm ở user-service, không ở ví của billing (docs/19 §8).
 
 ## 7.4 Ai nghe topic nào
 
 | Consumer group | Topic | Idempotency |
 |---|---|---|
 | `user-service` | `billing.events` | `processed_events` |
-| `media-service` | `user.events`, `media.results` | `processed_events` |
+| `media-service` | `user.events` | `processed_events` |
 | `post-service` | `media.events`, `user.events`, `friend.events`, `billing.events` | `processed_events` |
 | `billing-service` | `user.events` (chỉ `USER_DELETED`) | `processed_events` |
 | `discovery-service` | `user.events`, `billing.events` | thao tác tự idempotent |
 | `chat-service` | `user.events`, `friend.events` | thao tác tự idempotent |
 | `notification-service` | `user, friend, post, chat, media, billing` | cache `eventId` (best-effort) |
-| `face-worker` | `media.events` | kiểm tra `pub/{mediaId}.jpg` đã tồn tại |
 
 Cấu hình consumer: `enable-auto-commit=false`, `ack-mode=record`, `auto-offset-reset=earliest` (riêng notification `latest`).
 
@@ -136,12 +134,13 @@ public void onMessage(String json) {
 }
 ```
 
-`IdempotencyService.firstTime` chạy **cùng transaction** với xử lý: lỗi thì cả dấu vết lẫn thay đổi rollback và event được giao lại. Khi lỗi liên tục, Spring Kafka mặc định thử lại rồi bỏ qua message — **chưa cấu hình DLQ cho consumer Java** (chỉ face-worker có DLQ). Đây là việc cần làm (`DefaultErrorHandler` + `DeadLetterPublishingRecoverer`).
+`IdempotencyService.firstTime` chạy **cùng transaction** với xử lý: lỗi thì cả dấu vết lẫn thay đổi rollback và event được giao lại. Khi lỗi liên tục, message đi vào DLQ (mục 7.7).
 
 ## 7.7 Dead-letter
 
-- face-worker: sau `MAX_ATTEMPTS` (3) lần lỗi hạ tầng hoặc khi nhận chuỗi không phải JSON, gửi nguyên message gốc vào `media.events.dlq` rồi phát `FACE_FAILED(PROCESSING_FAILED)` để ảnh bị `REJECTED` rõ ràng.
-- Phát lại từ DLQ: xem runbook trong [11-observability-resilience.md](11-observability-resilience.md). Vì worker idempotent, phát lại message `PHOTO_UPLOADED` gốc vào `media.events` là an toàn (nhưng ảnh gốc đã bị xoá nên thường dẫn tới `RAW_MISSING`; người dùng cần upload lại).
+- Mọi consumer Java dùng `KafkaErrorHandlingAutoConfiguration` (`libs/common`): `DefaultErrorHandler` thử lại **3 lần, cách nhau 1 giây**, rồi `DeadLetterPublishingRecoverer` chuyển message sang topic `<topic gốc>.dlq` (ví dụ `user.events.dlq`). Lỗi giải mã envelope vào DLQ ngay, không thử lại. Service tự khai báo `CommonErrorHandler` thì thay thế được.
+- **Lưu ý**: `kafka-init` chỉ tạo `media.events.dlq`, còn `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false`, nên DLQ của các topic khác (`user.events.dlq`, `friend.events.dlq`, …) **chưa tồn tại** và việc ghi DLQ cho chúng sẽ lỗi. Cần thêm vào `kafka-init`. Chưa kiểm chứng trên Kafka thật.
+- Phát lại từ DLQ: xem runbook trong [11-observability-resilience.md](11-observability-resilience.md). Consumer idempotent nên phát lại message gốc vào topic gốc là an toàn.
 
 ## 7.8 Thêm một event mới
 

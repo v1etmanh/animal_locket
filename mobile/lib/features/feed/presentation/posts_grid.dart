@@ -1,10 +1,17 @@
+import 'dart:math' as math;
+
 import 'package:animal_locket/core/network/api_problem.dart';
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/double_tap_like.dart';
+import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/features/feed/data/post_repository_impl.dart';
 import 'package:animal_locket/features/feed/domain/post_repository.dart';
 import 'package:animal_locket/features/feed/presentation/feed_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class UserPostsState {
   const UserPostsState({
@@ -62,17 +69,17 @@ final userPostsProvider =
       UserPostsController.new,
     );
 
-/// Lưới 3 cột ảnh của một người. [mine]: hiện cả bài đang xử lý/bị từ chối và cho xoá.
+/// Lưới 3 cột ảnh in nhỏ dán nghiêng của một người (spec §7.5). [mine]: hiện cả bài đang xử lý/bị từ chối và cho xoá.
 class PostsGrid extends ConsumerWidget {
   const PostsGrid({
     super.key,
     required this.publicId,
     this.mine = false,
-    this.emptyText = 'Chưa có ảnh nào.',
+    this.emptyText,
   });
   final String publicId;
   final bool mine;
-  final String emptyText;
+  final String? emptyText;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -83,16 +90,18 @@ class PostsGrid extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       error: (error, _) => error is ApiProblem && error.status == 404
-          ? const _Note('Kết bạn để xem ảnh của người này.')
+          ? _Note(context.l10n.befriendToSee)
           : TextButton(
               onPressed: () => ref.invalidate(userPostsProvider(publicId)),
-              child: const Text('Không tải được ảnh · Thử lại'),
+              child: Text(context.l10n.photosLoadFailed),
             ),
       data: (data) {
         final visible = data.items
             .where((post) => post.status != PostStatus.deleted)
             .toList();
-        if (visible.isEmpty) return _Note(emptyText);
+        if (visible.isEmpty) {
+          return _Note(emptyText ?? context.l10n.noPhotosYet);
+        }
         return Column(
           children: [
             GridView.builder(
@@ -102,11 +111,12 @@ class PostsGrid extends ConsumerWidget {
               itemCount: visible.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 4 / 5,
               ),
               itemBuilder: (context, index) =>
-                  _Thumbnail(post: visible[index], mine: mine),
+                  _Thumbnail(post: visible[index], mine: mine, index: index),
             ),
             if (data.nextBefore != null)
               Padding(
@@ -117,7 +127,7 @@ class PostsGrid extends ConsumerWidget {
                         onPressed: ref
                             .read(userPostsProvider(publicId).notifier)
                             .loadMore,
-                        child: const Text('Xem thêm ảnh'),
+                        child: Text(context.l10n.morePhotos),
                       ),
               ),
           ],
@@ -137,52 +147,101 @@ class _Note extends StatelessWidget {
     child: Text(
       text,
       textAlign: TextAlign.center,
-      style: const TextStyle(color: AppColors.muted),
+      style: TextStyle(color: context.album.muted),
     ),
   );
 }
 
+/// Ảnh in nhỏ: viền giấy, bóng mềm, nghiêng xen kẽ theo vị trí.
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.post, required this.mine});
+  const _Thumbnail({
+    required this.post,
+    required this.mine,
+    required this.index,
+  });
   final Post post;
   final bool mine;
+  final int index;
+
+  static const _tilts = [-2.0, 1.5, -1.0, 2.0, -1.5, 1.0];
 
   @override
   Widget build(BuildContext context) {
+    final p = context.album;
     final overlay = switch (post.status) {
-      PostStatus.pendingMedia => (Icons.hourglass_top, 'Đang xử lý'),
-      PostStatus.rejected => (Icons.block, 'Bị từ chối'),
+      PostStatus.pendingMedia => (
+        AlbumIcons.hourglass,
+        context.l10n.postProcessing,
+      ),
+      PostStatus.rejected => (AlbumIcons.block, context.l10n.postRejected),
       _ => null,
     };
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: () => showDialog<void>(
-          context: context,
-          builder: (_) => _PostDialog(post: post, mine: mine),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            post.status == PostStatus.published
-                ? _PostImage(mediaId: post.mediaId)
-                : const ColoredBox(color: AppColors.border),
-            if (overlay != null)
-              ColoredBox(
-                color: Colors.black.withValues(alpha: .35),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(overlay.$1, color: Colors.white, size: 22),
-                    const SizedBox(height: 4),
-                    Text(
-                      overlay.$2,
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
+    return Transform.rotate(
+      key: const ValueKey('post-print'),
+      angle: _tilts[index % _tilts.length] * math.pi / 180,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: p.paper,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x2E5A3C1E),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (_) => _PostDialog(post: post, mine: mine),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  post.status == PostStatus.published
+                      ? _PostImage(mediaId: post.mediaId)
+                      : ColoredBox(color: p.fold2),
+                  if (overlay != null)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: p.paper),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AlbumIcon(overlay.$1, size: 18, color: p.ink),
+                                const SizedBox(height: 2),
+                                Text(
+                                  overlay.$2,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: p.ink,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -195,32 +254,30 @@ class _PostImage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.album;
+    Widget placeholder(Widget child) => ColoredBox(
+      color: p.fold2,
+      child: Center(child: child),
+    );
     final url = ref.watch(mediaUrlProvider(mediaId));
     return url.when(
-      loading: () => const ColoredBox(
-        color: AppColors.border,
-        child: Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+      loading: () => placeholder(
+        const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
-      error: (_, _) => const ColoredBox(
-        color: AppColors.border,
-        child: Center(child: Icon(Icons.broken_image_outlined)),
-      ),
+      error: (_, _) =>
+          placeholder(AlbumIcon(AlbumIcons.imageBroken, color: p.muted)),
       data: (value) => value == null
-          ? const ColoredBox(
-              color: AppColors.border,
-              child: Center(child: Icon(Icons.image_outlined)),
-            )
+          ? placeholder(AlbumIcon(AlbumIcons.image, color: p.muted))
           : Image.network(
               value,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) =>
-                  const Center(child: Icon(Icons.broken_image_outlined)),
+              errorBuilder: (_, _, _) => placeholder(
+                AlbumIcon(AlbumIcons.imageBroken, color: p.muted),
+              ),
             ),
     );
   }
@@ -243,76 +300,88 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.album;
     final time = (post.publishedAt ?? post.createdAt).toLocal();
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AspectRatio(
-            aspectRatio: 4 / 5,
-            child: post.status == PostStatus.published
-                ? _PostImage(mediaId: post.mediaId)
-                : ColoredBox(
-                    color: AppColors.border,
-                    child: Center(
-                      child: Text(
-                        post.status == PostStatus.rejected
-                            ? 'Ảnh bị từ chối'
-                            : 'Ảnh đang được xử lý',
+      backgroundColor: p.paper,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 5,
+              child: post.status == PostStatus.published
+                  ? DoubleTapLike(
+                      liked: _liked,
+                      onLike: _toggleLike,
+                      child: _PostImage(mediaId: post.mediaId),
+                    )
+                  : ColoredBox(
+                      color: p.fold2,
+                      child: Center(
+                        child: Text(
+                          post.status == PostStatus.rejected
+                              ? context.l10n.postRejectedPhoto
+                              : context.l10n.postProcessingPhoto,
+                        ),
                       ),
                     ),
-                  ),
-          ),
-          if (post.caption?.trim().isNotEmpty == true)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: Text(post.caption!),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
-            child: Row(
+            if (post.caption?.trim().isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+                child: Text(
+                  post.caption!,
+                  style: TextStyle(
+                    fontFamily: AppFonts.hand,
+                    fontSize: 19,
+                    height: 1.25,
+                    color: p.ink,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Row(
               children: [
-                IconButton(
-                  tooltip: _liked ? 'Bỏ thích' : 'Thích',
+                HankoStamp(
+                  stamped: _liked,
+                  tooltip: _liked ? context.l10n.unlike : context.l10n.like,
                   onPressed: post.status == PostStatus.published
                       ? _toggleLike
                       : null,
-                  icon: Icon(
-                    _liked ? Icons.favorite : Icons.favorite_border,
-                    color: _liked ? AppColors.danger : null,
-                  ),
                 ),
-                Text('$_likes'),
+                Text('$_likes', style: TextStyle(color: p.muted)),
                 const SizedBox(width: 12),
-                const Icon(Icons.chat_bubble_outline, size: 18),
+                AlbumIcon(AlbumIcons.comment, size: 18, color: p.muted),
                 const SizedBox(width: 4),
-                Text('${post.commentCount}'),
+                Text('${post.commentCount}', style: TextStyle(color: p.muted)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     formatPostDay(time),
-                    style: const TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: p.muted, fontSize: 12),
                   ),
                 ),
                 if (widget.mine)
-                  IconButton(
-                    tooltip: 'Xoá ảnh',
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: AppColors.danger,
+                  Semantics(
+                    label: context.l10n.deletePhoto,
+                    button: true,
+                    excludeSemantics: true,
+                    onTap: _delete,
+                    child: IconButton(
+                      tooltip: context.l10n.deletePhoto,
+                      icon: AlbumIcon(AlbumIcons.trash, color: p.danger),
+                      onPressed: _delete,
                     ),
-                    onPressed: _delete,
                   ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -341,16 +410,16 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Xoá ảnh này?'),
-        content: const Text('Bạn bè sẽ không còn thấy ảnh này nữa.'),
+        title: Text(context.l10n.deletePhotoQ),
+        content: Text(context.l10n.deletePhotoBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Huỷ'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Xoá'),
+            child: Text(context.l10n.delete),
           ),
         ],
       ),
@@ -364,9 +433,9 @@ class _PostDialogState extends ConsumerState<_PostDialog> {
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không xoá được ảnh. Thử lại sau.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.deletePhotoFailed)));
       }
     }
   }
@@ -378,8 +447,8 @@ String formatPostDay(DateTime local) {
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(local.year, local.month, local.day);
   final diff = today.difference(day).inDays;
-  if (diff == 0) return 'Hôm nay';
-  if (diff == 1) return 'Hôm qua';
+  if (diff == 0) return tr.dayToday;
+  if (diff == 1) return tr.dayYesterday;
   String two(int v) => v.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year}';
 }

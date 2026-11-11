@@ -8,6 +8,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -40,6 +41,11 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleMissingHeader(MissingRequestHeaderException e) {
         // Thiếu X-Public-Id nghĩa là người dùng đã xác thực nhưng chưa tạo hồ sơ.
         return problem(HttpStatus.FORBIDDEN, "PROFILE_REQUIRED", "Cần hoàn tất đăng ký hồ sơ trước");
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ProblemDetail> handleMissingParam(MissingServletRequestParameterException e) {
+        return problem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thiếu tham số " + e.getParameterName());
     }
 
     @ExceptionHandler(Exception.class)

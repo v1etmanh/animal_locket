@@ -1,10 +1,16 @@
-import 'package:animal_locket/core/theme/app_colors.dart';
+import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/gold_badge.dart';
+import 'package:animal_locket/core/widgets/album/paper_button.dart';
+import 'package:animal_locket/core/widgets/album/paper_list.dart';
+import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
-import 'package:animal_locket/core/widgets/glass_container.dart';
 import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:animal_locket/features/billing/presentation/billing_controller.dart';
+import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
+import 'package:go_router/go_router.dart';
 
 class ProScreen extends ConsumerStatefulWidget {
   const ProScreen({super.key});
@@ -16,8 +22,11 @@ class ProScreen extends ConsumerStatefulWidget {
 class _ProScreenState extends ConsumerState<ProScreen> {
   // Thanh toán diễn ra trong trình duyệt; quay lại app (nút "Quay lại app" hoặc tự chuyển) thì tải lại gói/ví.
   late final AppLifecycleListener _lifecycle = AppLifecycleListener(
-    onResume: () =>
-        ref.read(billingControllerProvider.notifier).refreshAfterCheckout(),
+    onResume: () {
+      ref.read(billingControllerProvider.notifier).refreshAfterCheckout();
+      // Lượt quay avatar tới user-service qua Kafka nên có thể trễ vài giây; tải lại để nút quay hiện ra.
+      ref.invalidate(profileControllerProvider);
+    },
   );
 
   @override
@@ -35,101 +44,107 @@ class _ProScreenState extends ConsumerState<ProScreen> {
   @override
   Widget build(BuildContext context) {
     final value = ref.watch(billingControllerProvider);
+    final p = context.album;
+    final controller = ref.read(billingControllerProvider.notifier);
     return AppPage(
       title: 'Animal Locket Pro',
       child: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
-          child: FilledButton(
+          child: PaperButton(
+            label: context.l10n.proLoadFailed,
             onPressed: () => ref.invalidate(billingControllerProvider),
-            child: const Text('Không thể tải cửa hàng · Thử lại'),
           ),
         ),
         data: (data) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.auto_awesome, size: 80, color: AppColors.purple),
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
+            const Center(child: GoldBadge(label: 'Pro', size: 104)),
+            const SizedBox(height: 20),
             Text(
-              'Nhiều cách kết nối hơn',
+              context.l10n.proHeadline,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineLarge,
             ),
             const SizedBox(height: 18),
-            const GlassContainer(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(Icons.bolt),
-                    title: Text('Boost khám phá'),
-                  ),
-                  ListTile(
-                    leading: Icon(Icons.mark_email_unread_outlined),
-                    title: Text('Lời mời kết bạn ưu tiên'),
-                  ),
-                ],
+            PaperSheet(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    for (final (i, (icon, text)) in [
+                      (AlbumIcons.bolt, context.l10n.proPerkBoost),
+                      (AlbumIcons.mail, context.l10n.proPerkInvite),
+                    ].indexed) ...[
+                      if (i > 0) const DashedDivider(),
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                        ),
+                        leading: AlbumIcon(icon, color: p.accent),
+                        title: Text(text),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
             if (data.me != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 22),
               _CurrentPlan(me: data.me!),
             ],
-            const SizedBox(height: 18),
+            const _AvatarSpinsNote(),
+            const SizedBox(height: 22),
             if (!data.enabled)
               Text(
-                data.message ?? 'Tài khoản dưới 18 tuổi không hiển thị ưu đãi.',
+                data.message ?? context.l10n.proMinorNotice,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted),
+                style: TextStyle(color: p.muted),
               )
             else ...[
               if (data.webProducts.isEmpty)
-                const Text(
-                  'Chưa có sản phẩm bán qua web.',
+                Text(
+                  context.l10n.proNoWebProducts,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.muted),
+                  style: TextStyle(color: p.muted),
                 ),
               for (final product in data.webProducts)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: OutlinedButton(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: PaperButton(
+                    label: '${product.label} · ${product.priceLabel ?? ''}',
                     onPressed: data.busy
                         ? null
-                        : () => ref
-                              .read(billingControllerProvider.notifier)
-                              .buyOnWeb(product.sku),
-                    child: Text(
-                      '${product.label} · ${product.priceLabel ?? ''}',
-                    ),
+                        : () => controller.buyOnWeb(product.sku),
                   ),
                 ),
-              const Text(
-                'Thanh toán trên trang web của Animal Locket (VietQR/PayPal). '
-                'Xong bấm "Quay lại app".',
+              Text(
+                context.l10n.proWebPaymentNote,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
+                style: TextStyle(color: p.muted, fontSize: 12),
               ),
               if (data.storeEnabled) ...[
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 for (final product in data.products)
                   if (data.details[product.sku] != null)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: TextButton(
-                        onPressed: data.busy
-                            ? null
-                            : () => ref
-                                  .read(billingControllerProvider.notifier)
-                                  .buy(product.sku),
-                        child: Text(
-                          'Qua cửa hàng: ${product.label} · ${data.details[product.sku]!.price}',
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Center(
+                        child: PaperButton.tape(
+                          label: context.l10n.proViaStore(
+                            product.label,
+                            data.details[product.sku]!.price,
+                          ),
+                          onPressed: data.busy
+                              ? null
+                              : () => controller.buy(product.sku),
                         ),
                       ),
                     ),
                 TextButton(
-                  onPressed: data.busy
-                      ? null
-                      : ref.read(billingControllerProvider.notifier).restore,
-                  child: const Text('Khôi phục giao dịch cửa hàng'),
+                  onPressed: data.busy ? null : controller.restore,
+                  child: Text(context.l10n.proRestore),
                 ),
               ],
             ],
@@ -145,6 +160,26 @@ class _ProScreenState extends ConsumerState<ProScreen> {
   }
 }
 
+/// Lượt quay avatar tặng kèm mỗi kỳ thuê bao (docs/19 §8). Hiện ngay sau khi mua, lúc người dùng còn ở đây.
+class _AvatarSpinsNote extends ConsumerWidget {
+  const _AvatarSpinsNote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spins =
+        ref.watch(profileControllerProvider).value?.profile.avatarSpins ?? 0;
+    if (spins == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: PaperButton(
+        label: 'Quay avatar mới ($spins lượt)',
+        icon: AlbumIcons.dice,
+        onPressed: () => context.push('/avatar-spin'),
+      ),
+    );
+  }
+}
+
 class _CurrentPlan extends StatelessWidget {
   const _CurrentPlan({required this.me});
   final BillingMe me;
@@ -154,20 +189,24 @@ class _CurrentPlan extends StatelessWidget {
     final expires = me.planExpiresAt?.toLocal();
     final boosts = me.wallet['BOOST'] ?? 0;
     final invites = me.wallet['PRIORITY_INVITE'] ?? 0;
-    return GlassContainer(
+    return TapedNote(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             me.plan == 'PRO'
-                ? 'Bạn đang dùng Pro${expires == null ? '' : ' đến ${expires.day}/${expires.month}/${expires.year}'}'
-                : 'Bạn đang dùng gói Free',
+                ? (expires == null
+                      ? context.l10n.proCurrentPro
+                      : context.l10n.proCurrentProUntil(
+                          '${expires.day}/${expires.month}/${expires.year}',
+                        ))
+                : context.l10n.proCurrentFree,
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
-            'Boost: $boosts · Lời mời ưu tiên: $invites',
-            style: const TextStyle(color: AppColors.muted),
+            context.l10n.proWallet(boosts, invites),
+            style: TextStyle(color: context.album.muted),
           ),
         ],
       ),

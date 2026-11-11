@@ -1,3 +1,5 @@
+import 'package:animal_locket/core/l10n/tr.dart';
+
 class DiscoveryCard {
   const DiscoveryCard({
     required this.publicId,
@@ -10,7 +12,7 @@ class DiscoveryCard {
   });
   factory DiscoveryCard.fromJson(Map<String, dynamic> json) => DiscoveryCard(
     publicId: json['publicId'] as String? ?? '',
-    alias: json['alias'] as String? ?? 'Người bạn ẩn danh',
+    alias: json['alias'] as String? ?? tr.anonymousFriend,
     leadAnimal: json['leadAnimal'] as String?,
     avatar: json['avatar'] as String?,
     distanceBand: json['distanceBand'] as String?,
@@ -25,11 +27,11 @@ class DiscoveryCard {
   final bool online;
   final bool boosted;
   String? get distanceLabel => switch (distanceBand) {
-    'UNDER_1KM' => 'dưới 1 km',
-    '1_TO_3KM' => '1–3 km',
-    'UNDER_3KM' => 'dưới 3 km',
-    '3_TO_10KM' => '3–10 km',
-    'OVER_10KM' => 'trên 10 km',
+    'UNDER_1KM' => tr.distUnder1km,
+    '1_TO_3KM' => tr.dist1to3km,
+    'UNDER_3KM' => tr.distUnder3km,
+    '3_TO_10KM' => tr.dist3to10km,
+    'OVER_10KM' => tr.distOver10km,
     _ => null,
   };
 }

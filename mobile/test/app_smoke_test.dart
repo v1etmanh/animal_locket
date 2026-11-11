@@ -1,6 +1,7 @@
 import 'package:animal_locket/app.dart';
 import 'package:animal_locket/core/auth/session_manager.dart';
 import 'package:animal_locket/core/network/token_store.dart';
+import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,7 @@ void main() {
       ProviderScope(
         overrides: [
           tokenStoreProvider.overrideWithValue(_MemoryTokenStore()),
+          themeStoreProvider.overrideWithValue(MemoryThemeStore()),
         ],
         child: const AnimalLocketApp(),
       ),

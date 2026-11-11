@@ -156,6 +156,62 @@ class BillingFlowIntegrationTest {
         assertEquals(2, events(EventTypes.CONSUMABLE_GRANTED).size());
     }
 
+    /** docs/19 §8: một lượt quay avatar cho MỖI kỳ thuê bao, không phải mỗi lần phát SUBSCRIPTION_ACTIVATED. */
+    @Test
+    void subscriptionGrantsOneAvatarSpinPerPeriod() throws Exception {
+        Instant exp = Instant.now().plus(Duration.ofDays(30));
+        String body = verifyBody("DEV", MONTH, devSub("t1", "o1", exp));
+        mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE).content(body)).andExpect(status().isOk());
+
+        assertEquals(1, spinGrants().size(), "mua mới: đúng một lượt");
+
+        // Khôi phục giao dịch (client gửi lại cùng biên lai) không được cấp thêm.
+        mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE).content(body)).andExpect(status().isOk());
+        assertEquals(1, spinGrants().size(), "gửi lại cùng biên lai không cấp thêm lượt");
+
+        // Store gửi lại webhook của ĐÚNG kỳ đó. Biên lai DEV chỉ có độ phân giải giây còn exp ở đây có cả mili,
+        // nên đây cũng là phép thử cho việc khoá sổ cái chốt theo giây.
+        assertTrue(billing.onSubscriptionUpdated(Store.DEV, "o1", exp));
+        assertEquals(1, spinGrants().size(), "webhook lặp lại của cùng kỳ không cấp thêm lượt");
+
+        // Gia hạn thật: hạn mới → kỳ mới → thêm một lượt.
+        assertTrue(billing.onSubscriptionUpdated(Store.DEV, "o1", exp.plus(Duration.ofDays(30))));
+        assertEquals(2, spinGrants().size(), "mỗi kỳ gia hạn là một lượt");
+
+        // Số dư ví KHÔNG đổi: lượt quay do user-service giữ, billing chỉ ghi sổ cái.
+        assertTrue(balances.findByPublicId(ALICE).isEmpty(), "AVATAR_SPIN không được cộng vào ví của billing");
+        assertEquals(2, ledger.findByPublicIdOrderByIdDesc(ALICE).size());
+        var payload = EventJson.read(spinGrants().get(0).getPayload()).payloadAs(Events.ConsumableGranted.class);
+        assertEquals("AVATAR_SPIN", payload.item());
+        assertEquals(1, payload.quantity());
+        assertEquals(ALICE, payload.publicId());
+    }
+
+    @Test
+    void expiredSubscriptionGrantsNoAvatarSpin() throws Exception {
+        mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE)
+                        .content(verifyBody("DEV", MONTH, devSub("t-old", "o-old", Instant.now().minusSeconds(60)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.plan").value("FREE"));
+        assertTrue(spinGrants().isEmpty(), "kỳ đã hết hạn lúc xác thực thì không tặng lượt quay");
+    }
+
+    @Test
+    void consumableAndPackPurchasesGrantNoAvatarSpin() throws Exception {
+        mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE).content(verifyBody("DEV", BOOST5, "dev:tx-b")))
+                .andExpect(status().isOk());
+        mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE)
+                .content(verifyBody("DEV", "animallocket.pack.safari", "dev:tx-p"))).andExpect(status().isOk());
+        assertTrue(spinGrants().isEmpty(), "lượt quay chỉ đi kèm thuê bao");
+    }
+
+    /** Các event CONSUMABLE_GRANTED mang vật phẩm AVATAR_SPIN. */
+    private List<OutboxEvent> spinGrants() {
+        return events(EventTypes.CONSUMABLE_GRANTED).stream()
+                .filter(e -> "AVATAR_SPIN".equals(
+                        EventJson.read(e.getPayload()).payloadAs(Events.ConsumableGranted.class).item()))
+                .toList();
+    }
+
     @Test
     void packPurchaseEmitsAnimalPackGrant() throws Exception {
         mvc.perform(as(post("/api/v1/billing/purchases/verify"), ALICE)

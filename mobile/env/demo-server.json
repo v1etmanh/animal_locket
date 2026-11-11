@@ -1,0 +1,7 @@
+{
+  "API_BASE_URL": "https://api.188-166-218-200.nip.io",
+  "WS_URL": "wss://api.188-166-218-200.nip.io/ws/chat",
+  "KEYCLOAK_ISSUER": "https://auth.188-166-218-200.nip.io/realms/animal-locket",
+  "KEYCLOAK_CLIENT_ID": "mobile",
+  "OAUTH_REDIRECT_URL": "com.animallocket.app:/oauth2redirect"
+}

@@ -10,6 +10,7 @@ import com.animallocket.user.domain.Entitlement;
 import com.animallocket.user.repo.EntitlementRepository;
 import com.animallocket.user.repo.UserRepository;
 import com.animallocket.user.service.AccountService;
+import com.animallocket.user.service.AvatarSpinService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -21,18 +22,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class BillingEventsListener {
     private static final Logger log = LoggerFactory.getLogger(BillingEventsListener.class);
     private static final String PACK_PREFIX = "ANIMAL_PACK:";
+    private static final String AVATAR_SPIN = "AVATAR_SPIN";
 
     private final IdempotencyService idempotency;
     private final EntitlementRepository entitlements;
     private final UserRepository users;
     private final AccountService accounts;
+    private final AvatarSpinService spins;
 
     public BillingEventsListener(IdempotencyService idempotency, EntitlementRepository entitlements,
-                                 UserRepository users, AccountService accounts) {
+                                 UserRepository users, AccountService accounts, AvatarSpinService spins) {
         this.idempotency = idempotency;
         this.entitlements = entitlements;
         this.users = users;
         this.accounts = accounts;
+        this.spins = spins;
     }
 
     @KafkaListener(topics = Topics.BILLING, groupId = "user-service")
@@ -60,8 +64,14 @@ public class BillingEventsListener {
             }
             case EventTypes.CONSUMABLE_GRANTED -> {
                 var p = e.payloadAs(Events.ConsumableGranted.class);
-                if (p.item() != null && p.item().startsWith(PACK_PREFIX)) {
+                if (p.item() == null) {
+                    return;
+                }
+                if (p.item().startsWith(PACK_PREFIX)) {
                     accounts.grantPack(p.publicId(), p.item().substring(PACK_PREFIX.length()));
+                } else if (AVATAR_SPIN.equals(p.item())) {
+                    // Chống trùng đã làm ở firstTime(eventId) phía trên: event phát lại không cộng thêm lượt.
+                    spins.grant(p.publicId(), p.quantity());
                 }
             }
             default -> log.debug("Bỏ qua event {}", e.type());

@@ -7,11 +7,13 @@ import com.animallocket.common.event.Events;
 import com.animallocket.common.web.ApiException;
 import com.animallocket.outbox.OutboxService;
 import com.animallocket.user.domain.Animal;
+import com.animallocket.user.domain.AvatarSpinCredit;
 import com.animallocket.user.domain.UserAccount;
 import com.animallocket.user.domain.UserAnimal;
 import com.animallocket.user.domain.UserAvatar;
 import com.animallocket.user.dto.Dtos;
 import com.animallocket.user.repo.AnimalRepository;
+import com.animallocket.user.repo.AvatarSpinCreditRepository;
 import com.animallocket.user.repo.BlockRepository;
 import com.animallocket.user.repo.DeviceTokenRepository;
 import com.animallocket.user.repo.EntitlementRepository;
@@ -52,6 +54,7 @@ public class AccountService {
     private final DevBuddy devBuddy;
     private final AvatarAllocator avatarAllocator;
     private final AvatarLibrary avatarLibrary;
+    private final AvatarSpinCreditRepository spinCredits;
 
     public AccountService(UserRepository users, AnimalRepository animals, UserAnimalRepository userAnimals,
                           SpinLogRepository spinLogs, FriendshipRepository friendships,
@@ -59,7 +62,8 @@ public class AccountService {
                           DeviceTokenRepository devices, EntitlementRepository entitlementRepo,
                           AnimalCatalog catalog, EntitlementService entitlements, OutboxService outbox,
                           IdentityProviderClient identityProvider, DevBuddy devBuddy,
-                          AvatarAllocator avatarAllocator, AvatarLibrary avatarLibrary) {
+                          AvatarAllocator avatarAllocator, AvatarLibrary avatarLibrary,
+                          AvatarSpinCreditRepository spinCredits) {
         this.users = users;
         this.animals = animals;
         this.userAnimals = userAnimals;
@@ -76,6 +80,7 @@ public class AccountService {
         this.devBuddy = devBuddy;
         this.avatarAllocator = avatarAllocator;
         this.avatarLibrary = avatarLibrary;
+        this.spinCredits = spinCredits;
     }
 
     /** Đăng ký lần đầu sau khi đăng nhập Keycloak. Idempotent theo sub. */
@@ -211,6 +216,7 @@ public class AccountService {
         devices.deleteAllOf(publicId);
         userAnimals.deleteAllOf(publicId);
         spinLogs.deleteAllOf(publicId);
+        spinCredits.deleteAllOf(publicId);
         entitlementRepo.deleteById(publicId);
         u.setStatus(UserAccount.Status.DELETED);
         u.setKeycloakSub("deleted:" + publicId);
@@ -227,8 +233,9 @@ public class AccountService {
     }
 
     private Dtos.MeProfile toMe(UserAccount u) {
+        int spins = spinCredits.findById(u.getPublicId()).map(AvatarSpinCredit::remaining).orElse(0);
         return new Dtos.MeProfile(u.getPublicId(), u.getAlias(), u.getLeadAnimal(), u.avatarCode(),
                 u.getAgeGroup().name(),
-                u.isDiscoverable(), entitlements.plan(u.getPublicId()), u.getCreatedAt());
+                u.isDiscoverable(), entitlements.plan(u.getPublicId()), spins, u.getCreatedAt());
     }
 }

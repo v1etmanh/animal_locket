@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:animal_locket/features/chat/domain/glyph.dart';
 import 'package:animal_locket/features/chat/domain/glyph_point_codec.dart';
 import 'package:animal_locket/features/chat/domain/glyph_recognizer.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 List<GlyphDefinition> buildSystemGlyphs({DateTime? now}) {
   final recognizer = const GlyphRecognizer();
@@ -11,7 +12,7 @@ List<GlyphDefinition> buildSystemGlyphs({DateTime? now}) {
   final raw = <(String, String, int, List<GlyphPoint>)>[
     (
       'sys-ok',
-      'Đồng ý',
+      tr.glyphSysAgree,
       0xFF34D399,
       const [
         GlyphPoint(20, 25),
@@ -23,7 +24,7 @@ List<GlyphDefinition> buildSystemGlyphs({DateTime? now}) {
     ),
     (
       'sys-urgent',
-      'Gấp nhé',
+      tr.glyphSysHurry,
       0xFFFBBF24,
       const [
         GlyphPoint(65, 15),
@@ -34,7 +35,7 @@ List<GlyphDefinition> buildSystemGlyphs({DateTime? now}) {
     ),
     (
       'sys-busy',
-      'Đang bận',
+      tr.glyphSysBusy,
       0xFF818CF8,
       const [
         GlyphPoint(50, 15),
@@ -43,9 +44,9 @@ List<GlyphDefinition> buildSystemGlyphs({DateTime? now}) {
         GlyphPoint(50, 15),
       ],
     ),
-    ('sys-coffee', 'Đi cà phê không?', 0xFFF472B6, _spiral()),
-    ('sys-hungry', 'Đói bụng', 0xFFFB923C, _circle()),
-    ('sys-coming', 'Đang tới', 0xFF38BDF8, _wave()),
+    ('sys-coffee', tr.glyphSysCoffee, 0xFFF472B6, _spiral()),
+    ('sys-hungry', tr.glyphSysHungry, 0xFFFB923C, _circle()),
+    ('sys-coming', tr.glyphSysComing, 0xFF38BDF8, _wave()),
   ];
   return raw
       .map((item) {
@@ -92,4 +93,19 @@ List<GlyphPoint> _wave() {
     );
   }
   return points;
+}
+
+/// Ý nghĩa ký hiệu hệ thống theo ngôn ngữ đang chọn. Bảng lưu trên máy chỉ giữ
+/// hình nét; nghĩa luôn được dịch lại khi đọc.
+GlyphDefinition localizeSystemGlyph(GlyphDefinition glyph) {
+  final meaning = switch (glyph.id) {
+    'sys-ok' => tr.glyphSysAgree,
+    'sys-urgent' => tr.glyphSysHurry,
+    'sys-busy' => tr.glyphSysBusy,
+    'sys-coffee' => tr.glyphSysCoffee,
+    'sys-hungry' => tr.glyphSysHungry,
+    'sys-coming' => tr.glyphSysComing,
+    _ => null,
+  };
+  return meaning == null ? glyph : glyph.copyWith(meaning: meaning);
 }

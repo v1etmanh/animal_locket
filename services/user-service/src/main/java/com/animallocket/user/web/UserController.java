@@ -5,6 +5,7 @@ import com.animallocket.user.dto.Dtos;
 import com.animallocket.user.service.AccountService;
 import com.animallocket.user.service.AvatarLibrary;
 import com.animallocket.user.service.AvatarService;
+import com.animallocket.user.service.AvatarSpinService;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,11 +32,14 @@ import java.util.List;
 public class UserController {
     private final AccountService accounts;
     private final AvatarService avatars;
+    private final AvatarSpinService avatarSpins;
     private final AvatarLibrary avatarLibrary;
 
-    public UserController(AccountService accounts, AvatarService avatars, AvatarLibrary avatarLibrary) {
+    public UserController(AccountService accounts, AvatarService avatars, AvatarSpinService avatarSpins,
+                          AvatarLibrary avatarLibrary) {
         this.accounts = accounts;
         this.avatars = avatars;
+        this.avatarSpins = avatarSpins;
         this.avatarLibrary = avatarLibrary;
     }
 
@@ -95,6 +99,22 @@ public class UserController {
     public List<Dtos.AvatarView> myAvatars(@RequestHeader(Headers.PUBLIC_ID) String me) {
         accounts.requireActive(me);
         return avatars.collection(me);
+    }
+
+    /**
+     * Quay một avatar mới bằng một lượt đã mua (docs/19 §8). Avatar vào bộ sưu tập, avatar đang dùng KHÔNG đổi;
+     * muốn đổi thì gọi {@code PUT /users/me/avatar}. Hết lượt: {@code 409 NO_AVATAR_SPIN}.
+     */
+    @PostMapping("/users/me/avatar/spin")
+    public Dtos.AvatarSpinResult spinAvatar(@RequestHeader(Headers.PUBLIC_ID) String me) {
+        return avatarSpins.spin(me);
+    }
+
+    /** Đổi avatar đang dùng sang một avatar trong bộ sưu tập. Không sở hữu: {@code 400 AVATAR_NOT_OWNED}. */
+    @PutMapping("/users/me/avatar")
+    public Dtos.MeProfile setAvatar(@RequestHeader(Headers.PUBLIC_ID) String me,
+                                    @Valid @RequestBody Dtos.SetAvatarRequest req) {
+        return avatars.switchTo(me, req.avatar());
     }
 
     /** Thư viện avatar theo phiên bản; bất biến nên cache dài. App đã đóng gói sẵn v1. */

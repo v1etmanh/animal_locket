@@ -16,7 +16,7 @@ CI/CD backend, secret GitHub và rollback được hướng dẫn ở [bước 1
 | `deploy/docker/Dockerfile.java` | Dockerfile dùng chung cho mọi service Java (`MODULE_PATH`, `APP_PORT`) |
 | `deploy/traefik/` | Cấu hình tĩnh + middleware + TLS của Traefik |
 | `deploy/keycloak/animal-locket-realm.json` | Realm `animal-locket` (import khi Keycloak khởi động lần đầu) |
-| `deploy/mysql/init.sql`, `deploy/postgres/init.sql` | Tạo schema/database |
+| `deploy/mysql/init.sql`, `deploy/supabase/init.sql` | Tạo schema/role trên DB ngoài (chạy tay một lần). `deploy/postgres/init.sql` dành cho PostgreSQL tự chạy, Compose hiện không dùng |
 | `deploy/observability/` | Prometheus (+ luật cảnh báo), Loki, Tempo, Alloy, Grafana (datasource + 2 dashboard) |
 | `deploy/secrets/` | Nơi đặt khoá FCM, `.p8` của Apple, service account Google. **Không commit** (đã nằm trong `.gitignore`) |
 
@@ -24,7 +24,7 @@ CI/CD backend, secret GitHub và rollback được hướng dẫn ở [bước 1
 
 | Profile | Gồm | Ghi chú |
 |---|---|---|
-| `core` | MySQL, PostgreSQL, MongoDB, Redis, Kafka (+`kafka-init`), Keycloak, Traefik | Luôn cần |
+| `core` | Redis, Kafka (+`kafka-init`), Keycloak, Traefik | Luôn cần. MySQL (Aiven), PostgreSQL (Supabase), MongoDB (Atlas) là **dịch vụ ngoài**, nối qua `.env` |
 | `app` | eureka, config-server, api-gateway, user/media/post/notification/discovery/chat/billing | Cần `core` |
 | `obs` | Prometheus, Loki, Tempo, Alloy, Grafana, kafka-exporter | Tuỳ chọn |
 
@@ -64,22 +64,21 @@ chữ ký gắn với host nội bộ.
 Cần các biến trong `.env`: `R2_ENDPOINT` (`https://<account-id>.r2.cloudflarestorage.com`), `R2_ACCESS_KEY`, `R2_SECRET_KEY`,
 `R2_BUCKET`. Token R2 chỉ cần quyền *Object Read & Write* trên đúng bucket đó. Chưa kiểm chứng với R2 thật.
 
-## 5. Face-worker: CPU và GPU
+## 5. Face-worker (đã gỡ)
 
-* face-worker đã bị gỡ: media-service tự chuyển ảnh sang bucket `public` khi client báo upload xong.
-* Worker lỗi/hết retry ⇒ ảnh **bị từ chối, không đăng** (fail closed); message vào topic `media.events.dlq` và có cảnh báo `DeadLetterTopicGrowing`.
+face-worker đã bị gỡ khỏi repo. Khi client báo upload xong (`complete`), media-service kiểm tra cỡ và `Content-Type` của object trên R2 rồi đánh dấu `READY` và phát `PHOTO_READY`; không sao chép object, không che mặt. Xem ADR-014 trong [docs/15-adr.md](../docs/15-adr.md).
 
 ## 6. Quan sát
 
 Grafana (`grafana.localhost`, tài khoản trong `.env`) có sẵn thư mục **Animal Locket** với 2 dashboard:
-*Tổng quan service (RED)* và *Pipeline ẩn mặt*. Trace → log: từ một span nhảy sang log của đúng service lọc theo `traceId`
+*Tổng quan service (RED)* và *Pipeline ẩn mặt* (dựa trên metric `facework_*` của face-worker đã gỡ nên sẽ trống). Trace → log: từ một span nhảy sang log của đúng service lọc theo `traceId`
 (dựa trên mẫu log `[tên-service,traceId,spanId]` trong `infra/config-repo/application.yml`).
 
 Khi **không** bật profile `obs`, các service vẫn cố gửi trace tới `tempo:4318` và ghi cảnh báo lỗi kết nối; đặt `TRACE_SAMPLING=0` để yên log.
 
-Cảnh báo (`deploy/observability/prometheus/alerts.yml`): service down, 5xx cao, p95 chậm, circuit breaker mở, lag Kafka, DLQ tăng,
-heap JVM. **Chưa có** cảnh báo "backlog outbox" vì service
-chưa xuất metric đó (cần thêm một gauge đếm hàng `outbox_events` chưa gửi trong `libs/outbox-jpa`). Prometheus chưa gắn Alertmanager:
+Cảnh báo (`deploy/observability/prometheus/alerts.yml`): service down, 5xx cao, p95 chậm, circuit breaker mở, lag Kafka,
+heap JVM, outbox kẹt (`OutboxStuck`) và tồn đọng (`OutboxBacklogHigh`) dựa trên metric `outbox_*` của `libs/outbox-jpa`.
+`prometheus.yml` còn job `minio` (di sản, target sẽ down). Prometheus chưa gắn Alertmanager:
 luật chỉ hiện ở UI Prometheus/Grafana; nối kênh thông báo (Slack/email) là bước riêng.
 
 ## 7. Checklist trước khi lên production
@@ -87,12 +86,13 @@ luật chỉ hiện ở UI Prometheus/Grafana; nối kênh thông báo (Slack/em
 - [ ] Đổi **mọi** giá trị `CHANGE_ME_*` trong `.env`; sinh ngẫu nhiên ≥ 32 ký tự cho `INTERNAL_TOKEN`, `DISCOVERY_SECRET`. Lưu bí mật trong Vault/secret manager, không để file `.env` trên đĩa dùng chung.
 - [ ] `DISCOVERY_SECRET` giữ cố định (đổi sẽ dịch chuyển toàn bộ vị trí đã lưu) và bí mật tuyệt đối: lộ khoá là phá được lớp làm nhiễu vị trí.
 - [ ] `BILLING_DEV_STORE=false` (bắt buộc). Cấu hình khoá Apple/Google trong `deploy/secrets/` và kiểm thử webhook với môi trường sandbox.
-- [ ] TLS thật: bật `certificatesResolvers` (Let's Encrypt) trong `traefik.yml`, chuyển entrypoint `web` sang redirect HTTPS, thêm `tls.certresolver` vào router. MinIO public URL và Keycloak URL chuyển sang `https://`.
+- [ ] TLS thật: bật `certificatesResolvers` (Let's Encrypt) trong `traefik.yml`, chuyển entrypoint `web` sang redirect HTTPS, thêm `tls.certresolver` vào router. Keycloak URL chuyển sang `https://`.
 - [ ] Keycloak: bật `verifyEmail` + cấu hình SMTP, đổi `sslRequired` theo môi trường, bỏ tài khoản admin bootstrap sau khi tạo admin thật, đặt `KC_HOSTNAME` HTTPS; chạy ở chế độ `start --optimized` với image đã build sẵn.
 - [ ] Hạn chế `admin-only` (hiện cho phép mọi dải IP riêng tư) xuống VPN/IP cố định của đội vận hành; bỏ publish dashboard Traefik hoặc đặt sau xác thực.
 - [ ] Không mount trực tiếp Docker socket vào Traefik/Alloy: dùng `docker-socket-proxy` chỉ đọc (hoặc chuyển sang Kubernetes).
 - [ ] Tách tài khoản DB: mỗi service một user chỉ có quyền trên schema của mình; tách Keycloak sang instance PostgreSQL riêng; bật replication/backup + thử khôi phục.
-- [ ] **Không** sao lưu bucket `raw` (cam kết ảnh gốc xoá trong 1 giờ). Bucket `public` thì có thể backup. Bật mã hoá ở nơi lưu (SSE/đĩa mã hoá).
+- [ ] R2: token chỉ có quyền trên đúng bucket; bucket không bật public access; cân nhắc lifecycle/backup theo chính sách lưu ảnh.
+- [ ] `DEV_BUDDY_PUBLIC_ID` để trống (tài khoản dev tự là bạn của mọi người).
 - [ ] Kafka: ≥ 3 broker, `replication.factor=3`, `min.insync.replicas=2`; thêm xác thực/ACL.
 - [ ] Redis: đặt persistence phù hợp; vì chứa hạn mức/vị trí nên cân nhắc replica/Sentinel.
 - [ ] Ghim phiên bản image bằng digest/tag cố định (đặc biệt `TRAEFIK_IMAGE=traefik:v3`, hiện là tag trôi).
@@ -116,7 +116,7 @@ Những điểm dưới đây được viết theo tài liệu/kinh nghiệm nh�
 1. Toàn bộ `docker compose up` (chưa có lần chạy nào, kể cả `docker compose config`). Thứ tự khởi động, healthcheck, thời gian `start_period`.
 2. Tag image: `apache/kafka:3.8.0`, `traefik:v3`, `quay.io/keycloak/keycloak:26.0`, `grafana/alloy:v1.4.3`, `danielqsj/kafka-exporter:v1.8.0` — hãy `docker compose pull` để xác nhận.
 3. Keycloak: thay `${KEYCLOAK_ADMIN_CLIENT_SECRET}` trong file realm lúc import; healthcheck cổng quản lý 9000; claim `sub` có trong token với scope mặc định; service account có đủ quyền `manage-users` để xoá user.
-4. Traefik: một router gắn cả `web` và `websecure` (TLS bật ở entrypoint) hoạt động đúng; WebSocket qua gateway; cặp router `files`/`files-block` và `auth`/`auth-admin` ưu tiên đúng.
+4. Traefik: một router gắn cả `web` và `websecure` (TLS bật ở entrypoint) hoạt động đúng; WebSocket qua gateway; cặp router `auth`/`auth-admin` ưu tiên đúng.
 5. R2: upload `PUT` bằng URL ký sẵn, `statObject`, Content-Type lưu đúng.
 6. Biến `MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILESHISTOGRAM_HTTP_SERVER_REQUESTS` có bật được histogram hay không (nếu không, chỉ panel/alert p95 của API rỗng; phần còn lại vẫn chạy).
 7. Metric `resilience4j_circuitbreaker_state` có được xuất hay không (nếu không, cảnh báo `CircuitBreakerOpen` im lặng).

@@ -1,8 +1,8 @@
 # 19. Cơ chế avatar con vật
 
-> Trạng thái: **đã triển khai phần cơ chế avatar** (2026-11-08): thư viện v1, kho + cấp phát duy nhất, cấp cho tài khoản cũ, hiển thị trên mobile. Nạp tiền & hạn mức (§8) chưa làm. Chưa chạy thử với MySQL thật (test dùng H2).
+> Trạng thái: **đã triển khai phần cơ chế avatar** (2026-11-08): thư viện v1, kho + cấp phát duy nhất, cấp cho tài khoản cũ, hiển thị trên mobile. 2026-11-09: thư viện **v2 origami** (vẽ lại cùng bộ khoá, ADR-015), app vẽ mọi avatar bằng v2. Nạp tiền & hạn mức (§8) chưa làm. Chưa chạy thử với MySQL thật (test dùng H2).
 >
-> Mã nguồn chính: `libs/avatar-lib/build-lib.mjs` (sinh thư viện), user-service `AvatarLibrary`, `AvatarPoolSeeder`, `AvatarAllocator`, `AvatarBackfill`, `AvatarService`; mobile `lib/core/avatar/`, `AnimalAvatar`.
+> Mã nguồn chính: `libs/avatar-lib/build-lib.mjs` (sinh thư viện từ `lib-v1.mjs`, `lib-v2.mjs`; tự kiểm bằng `check.mjs`), user-service `AvatarLibrary`, `AvatarPoolSeeder`, `AvatarAllocator`, `AvatarBackfill`, `AvatarService`; mobile `lib/core/avatar/`, `AnimalAvatar`.
 
 ## 0. Quyết định đã chốt (2026-11-08)
 
@@ -11,8 +11,8 @@
 | 1 | Phụ kiện tính cả lựa chọn "không phụ kiện": **50 con vật × 10 màu × 6 phụ kiện = 3.000 avatar** (thư viện v1). |
 | 2 | **Không có hai người trùng avatar.** Mỗi avatar thuộc về **tối đa một người** trên toàn hệ thống, server kiểm tra và cơ sở dữ liệu chặn cứng. |
 | 3 | Khi đăng ký: **quay đúng 1 lần**, không quay lại. |
-| 4 | Avatar quay được (sau này, khi nạp tiền) **nằm trong bộ sưu tập** của người đó và vẫn là của riêng họ, không ai khác nhận được. |
-| 5 | **Nạp tiền** (quay thêm, tăng cấp) và **bảng hạn mức** (ảnh/ngày, bạn tối đa): **làm sau**, tài liệu chỉ để chỗ (§8). |
+| 4 | Avatar quay thêm bằng lượt mua được **nằm trong bộ sưu tập** của người đó và vẫn là của riêng họ, không ai khác nhận được. |
+| 5 | **Lượt quay mua được**: một lượt cho mỗi kỳ thuê bao Pro; quay chỉ thêm vào bộ sưu tập, đổi avatar đang dùng là bước riêng (§8). **Bảng hạn mức** (ảnh/ngày, bạn tối đa): làm sau (§8b). |
 | 6 | Mở rộng kho (thêm con vật/màu/chiều mới): **làm sau**, khi kho chạm ngưỡng cảnh báo. |
 | 7 | Xoá tài khoản: **avatar không bao giờ được thu hồi**, vẫn gắn vĩnh viễn với tài khoản đã xoá. |
 | 8 | Tài khoản cũ (đang có `lead_animal` trùng nhau): **giữ lại**, mỗi tài khoản được **cấp ngẫu nhiên một avatar mới duy nhất** từ kho (§5), giống người đăng ký mới. |
@@ -53,20 +53,21 @@ Chuỗi truyền giữa các service: `1:fox:0:none` (`v:avatar_key`).
 
 ### 3.2. Thư viện (`avatar-lib`)
 
-JSON chứa 50 mẫu SVG (placeholder `{{fur}}`, `{{belly}}`, `{{accent}}`), 10 bảng màu, 6 phụ kiện, đúng như `lib` trong file HTML mẫu.
+JSON chứa 50 mẫu SVG có chỗ trống màu `{{tên}}`, 10 bảng màu, 6 phụ kiện. v1 dùng `{{fur}}`, `{{belly}}`, `{{accent}}` (đúng như `lib` trong file HTML mẫu); v2 origami thêm sắc độ tính sẵn `furD`, `furL`, `bellyD`, `accentD`, `accentL` vào mỗi bảng màu, giữ nguyên 4 màu gốc.
 
 Quy tắc bất biến:
 
-1. Một phiên bản đã phát hành thì **không bao giờ đổi nghĩa**: `fox:0:none` phải luôn vẽ ra cùng một hình.
-2. Phiên bản mới chỉ được **thêm** khoá (con vật, màu, phụ kiện, hoặc một chiều mới) và không xoá khoá đang có chủ. Nhờ vậy `avatar_key` cũ vẫn hợp lệ, và tính duy nhất vẫn đúng qua các phiên bản.
-3. Hàm vẽ là hàm thuần `build(avatar, lib) → svg`, lấy theo hàm `build()` trong file mẫu: nền `bg` → thân (đã thay màu) → phụ kiện.
+1. File của một phiên bản đã phát hành **không bao giờ đổi**: sinh lại phải trùng từng byte (`check.mjs` so với bản trong git). Server và app cũ vẫn vẽ theo nó.
+2. **Bộ khoá không bao giờ mất và không đổi ý nghĩa**: `fox:0:none` luôn là con cáo, bảng màu 0, không phụ kiện. Phiên bản mới phải chứa mọi khoá cũ và chỉ được **thêm** khoá (con vật, màu, phụ kiện, hoặc một chiều mới). Nhờ vậy `avatar_key` cũ vẫn hợp lệ, và tính duy nhất vẫn đúng qua các phiên bản.
+3. Phiên bản mới **được vẽ lại** hình của khoá cũ (đổi phong cách, ví dụ v2 origami), nhưng hai khoá khác nhau phải vẫn phân biệt được bằng mắt. App vẽ mỗi mã bằng **thư viện mới nhất có khoá đó**, không theo số phiên bản trong mã (ADR-015).
+4. Hàm vẽ là hàm thuần `render(lib, key) → svg`: nền `bg` → thân → phụ kiện, mọi chỗ trống `{{tên}}` lấy màu cùng tên trong bảng màu. JS (`build-lib.mjs`) và Dart phải ra cùng chuỗi (mẫu đối chiếu `mobile/test/fixtures/avatar-lib.vN.samples.json`).
 
 | Bản | Vị trí | Mục đích |
 | --- | --- | --- |
-| Nguồn gốc | `libs/avatar-lib/avatar-lib.v1.json` | Một nguồn duy nhất cho server và mobile. |
+| Nguồn gốc | `libs/avatar-lib/avatar-lib.v1.json`, `avatar-lib.v2.json` | Một nguồn duy nhất cho server và mobile. Mỗi khoá thuộc phiên bản đầu tiên có nó (hiện tại đều là v1). |
 | Server | user-service đọc từ classpath | Sinh kho avatar, kiểm tra mã hợp lệ. |
-| Mobile | `mobile/assets/avatar/avatar-lib.v1.json` | Vẽ được ngay, không cần mạng. |
-| Bản mới | `GET /api/v1/animals/avatar-lib/{v}` (cần đăng nhập, `Cache-Control: immutable`, có `ETag`) | App cũ gặp avatar `v2` thì tải một lần, lưu file trong thư mục support của app. |
+| Mobile | `mobile/assets/avatar/avatar-lib.v2.json` (chỉ bản mới nhất) | Vẽ được ngay, không cần mạng; mã `1:…` cũng vẽ bằng v2. |
+| Bản mới | `GET /api/v1/animals/avatar-lib/{v}` (cần đăng nhập, `Cache-Control: immutable`, có `ETag`) | App gặp mã có khoá mà không thư viện nào trên máy có thì tải đúng phiên bản trong mã một lần, lưu file trong thư mục support của app. |
 
 ### 3.3. Cơ chế render: từ bộ mã ra hình
 
@@ -88,7 +89,7 @@ avatar {animal:"fox", palette:0, accessory:"glasses"}
         </svg>
 ```
 
-Khung con vật (bước 1) cũng là đồ ghép, nhưng **được ghép sẵn một lần khi tạo thư viện**, không phải lúc render. Mỗi con vật là một dòng mô tả trong file mẫu, ví dụ `fox|Cáo|tri|wide|w|dot|n|`: tai `tri`, đầu `wide`, mõm `w`, mũi `dot`, mắt `n`, cùng các chi tiết thêm (`X`) như sọc, bờm, vòi. Mỗi chi tiết thêm có lớp `B` (vẽ sau đầu), `M` (trên đầu) hoặc `F` (trên cùng). Script tạo thư viện ghép các mảnh theo thứ tự `B → tai → đầu → M → mõm → mắt → mũi → F` thành chuỗi `animals[k].svg`. File `avatar-lib.v1.json` chỉ chứa kết quả đã ghép, nên client không cần biết các mảnh tai/đầu/mõm.
+Khung con vật (bước 1) cũng là đồ ghép, nhưng **được ghép sẵn một lần khi tạo thư viện**, không phải lúc render. Mỗi con vật là một dòng mô tả trong file mẫu, ví dụ `fox|Cáo|tri|wide|w|dot|n|`: tai `tri`, đầu `wide`, mõm `w`, mũi `dot`, mắt `n`, cùng các chi tiết thêm (`X`) như sọc, bờm, vòi. Mỗi chi tiết thêm có lớp `B` (vẽ sau đầu), `M` (trên đầu) hoặc `F` (trên cùng). Script tạo thư viện ghép các mảnh theo thứ tự `B → tai → đầu → M → mõm → mắt → mũi → F` thành chuỗi `animals[k].svg`. File `avatar-lib.vN.json` chỉ chứa kết quả đã ghép (v2 dùng cùng bảng mô tả, vẽ lại từng mảnh theo kiểu origami), nên client không cần biết các mảnh tai/đầu/mõm.
 
 Ai render:
 
@@ -144,8 +145,8 @@ Sau khi giữ chỗ thành công (cùng transaction):
 ### 4.3. Bộ sưu tập
 
 - Mỗi avatar trong `user_avatars` vẫn có chủ trong `avatar_pool`, nên **không ai khác quay ra được**, kể cả khi người đó không còn dùng nó làm avatar chính.
-- Hệ quả: mỗi lượt quay thêm (sau này, khi nạp tiền) **tiêu tốn một avatar của kho chung**. Phần thiết kế nạp tiền phải tính đến điều này (§4.4).
-- Đổi avatar đang dùng sang một avatar khác trong bộ sưu tập: để đến phần nạp tiền mới quyết định.
+- Hệ quả: mỗi lượt quay thêm **tiêu tốn một avatar của kho chung** (§4.4, §8.4).
+- Đổi avatar đang dùng sang một avatar khác trong bộ sưu tập: `PUT /users/me/avatar` (§8.3).
 
 ### 4.4. Sức chứa: rủi ro lớn nhất
 
@@ -230,7 +231,7 @@ Máy **chỉ là bộ đệm**, server là nguồn sự thật:
 | Avatar người khác | Không lưu riêng | Đi kèm trong thẻ discovery, bài đăng, danh sách bạn (chuỗi mã) và được vẽ tại chỗ. |
 | SVG đã dựng | Cache bộ nhớ theo `avatar_key` | Tránh dựng lại SVG khi cuộn danh sách. |
 
-Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (`SvgPicture.string`). Nếu không có thư viện cho phiên bản `v` thì hiện emoji cũ làm dự phòng. `reveal_screen` hiện avatar thật, với hiệu ứng quay chạy trên kết quả server đã trả.
+Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (`SvgPicture.string`), dùng thư viện mới nhất trên máy có khoá của mã. Nếu không thư viện nào có khoá đó thì tải phiên bản `v` trong nền và hiện emoji cũ làm dự phòng. `reveal_screen` hiện avatar thật, với hiệu ứng quay chạy trên kết quả server đã trả.
 
 ## 7. API & event
 
@@ -240,18 +241,58 @@ Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (
 | `GET /users/me` | Thêm `avatar`: **chuỗi** `"1:fox:0:glasses"` (client tự tách). |
 | `GET /users/me/avatars` | Bộ sưu tập: `[{avatar, source, acquiredAt}]`. |
 | `GET /animals/avatar-lib/{v}` | Thư viện; `404` nếu không có phiên bản đó. |
-| `POST /users/me/spin`, `PUT /users/me/lead-animal` | Đã ngừng: `410 FEATURE_RETIRED`. |
+| `POST /users/me/spin`, `PUT /users/me/lead-animal` | Đã ngừng: `410 FEATURE_RETIRED`. Thay bằng `POST /users/me/avatar/spin` và `PUT /users/me/avatar` (§8). |
+| `POST /users/me/avatar/spin` | Quay bằng một lượt đã mua; trả `{avatar, remaining}`. `409 NO_AVATAR_SPIN` khi hết lượt (§8.2). |
+| `PUT /users/me/avatar` | Đổi avatar đang dùng sang một avatar trong bộ sưu tập. `400 AVATAR_NOT_OWNED` (§8.3). |
+| `GET /users/me` | Thêm `avatarSpins`: số lượt quay còn lại. |
 | `PublicProfile`, discovery `Card`, post `Author`, internal user | Thêm `avatar` bên cạnh `leadAnimal`. |
 
 Event (topic `USER`): `USER_REGISTERED` thêm `avatar`; mới có `AVATAR_CHANGED {publicId, avatar}` (dùng khi cấp avatar cho tài khoản cũ và sau này khi đổi avatar trong bộ sưu tập). `LEAD_ANIMAL_CHANGED` vẫn phát song song (media-service còn đọc). discovery/post không cần nghe event: chúng lấy hồ sơ qua API nội bộ (post cache 5 phút), nên avatar mới hiện sau tối đa vài phút. Consumer gọi `idempotency.firstTime(eventId)`.
 
-## 8. Nạp tiền & hạn mức (làm sau)
+## 8. Lượt quay mua được (đã làm)
 
-Đã ghi nhận hướng đi, chưa thiết kế chi tiết:
+**Một lượt quay cho mỗi kỳ thuê bao Pro.** Mua gói tháng (`animallocket.pro.month`) được một lượt; mỗi lần gia hạn được thêm một lượt.
 
-- Nạp tiền → nhận lượt quay (`AVATAR_SPIN` qua `CONSUMABLE_GRANTED`), quay bằng `POST /users/me/avatar/spin` (có `Idempotency-Key`), avatar mới lấy từ cùng kho §4 và vào bộ sưu tập.
+### 8.1. Cấp lượt (billing-service)
+
+`BillingService.grantSpinForPeriod(sub)` được gọi từ `grantSubscription()` (mua mới) và `onSubscriptionUpdated()` (gia hạn từ webhook), rồi phát `CONSUMABLE_GRANTED {item: "AVATAR_SPIN", quantity: 1}`.
+
+**Không được gắn vào `SUBSCRIPTION_ACTIVATED`.** Event đó mang nghĩa "đặt trạng thái Pro hiện tại" và được phát lại mỗi lần có thay đổi (xem docs/07), nên nghe nó để cộng lượt sẽ cấp nhiều lượt cho một lần trả tiền.
+
+Khoá chống trùng là **một dòng sổ cái** `(reason = SUB_PERIOD, ref = sub:<id>:<giây hết hạn>, item = AVATAR_SPIN)`, nhờ `UNIQUE (reason, ref, item)` của `ledger`. Ba lớp chặn cùng lúc: biên lai gửi lại bị `purchases` chặn, webhook gửi lại bị `webhook_events` chặn, và cùng một kỳ bị dòng sổ cái này chặn.
+
+Hạn hết chốt theo **giây**, không theo mili: biên lai store có độ phân giải giây còn webhook có mili, nếu chốt theo mili thì cùng một kỳ sẽ bị tính thành hai.
+
+Dùng `WalletService.recordOnce()` (ghi sổ cái, **không** đổi số dư ví) vì số dư lượt quay nằm ở user-service; cộng vào ví billing nữa thì ví chỉ tăng không giảm và sẽ lệch dần.
+
+### 8.2. Giữ và tiêu lượt (user-service)
+
+Số dư nằm ở bảng `avatar_spin_credit` của **user-service**, không ở ví của billing. Lý do: `AvatarSpinService.spin()` trừ lượt và gọi `AvatarAllocator` trong **cùng một transaction**, nên
+
+- kho cạn → `AvatarAllocator` ném 503 → transaction rollback → **lượt quay trở lại**, người đã trả tiền không mất gì;
+- không có cửa sổ nào mà lượt đã trừ nhưng avatar chưa cấp (hoặc ngược lại).
+
+Nếu để số dư ở ví billing thì việc tiêu lượt phải gọi chéo hai service trong hai transaction, và một bên lỗi là mất lượt hoặc quay vô hạn. Đánh đổi đã chấp nhận: `GET /billing/me` không thấy `AVATAR_SPIN`, và hoàn tiền **không** thu hồi lượt chưa dùng.
+
+`CONSUMABLE_GRANTED` được `BillingEventsListener` khử trùng bằng `idempotency.firstTime(eventId)` như mọi event khác. Trừ lượt bằng `UPDATE ... SET used = used + 1 WHERE public_id = ? AND used < granted`, nên hai yêu cầu quay cùng lúc với số dư 1 thì chỉ một bên đi tiếp.
+
+### 8.3. Quay rồi đổi là hai bước
+
+`POST /users/me/avatar/spin` chỉ **thêm** avatar vào bộ sưu tập (nguồn `PURCHASE`); avatar đang dùng không đổi. Đổi là bước riêng do người dùng chọn: `PUT /users/me/avatar` với một avatar trong bộ sưu tập (`400 AVATAR_NOT_OWNED` nếu không sở hữu), phát `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED`. Vì post/discovery cache hồ sơ 5 phút, avatar mới hiện với người khác sau tối đa vài phút.
+
+Avatar cũ **vẫn thuộc người đó** trong `avatar_pool` (§4.3), nên đổi qua lại bao nhiêu lần cũng được và không ai khác quay ra được nó.
+
+### 8.4. Còn thiếu / rủi ro đã biết
+
+- **Chưa có `Idempotency-Key`** (`Headers.IDEMPOTENCY_KEY` đã khai báo nhưng chưa dùng ở đâu). Mạng đứt sau khi server đã quay thì lượt đã tiêu; mobile xử lý bằng cách tải lại bộ sưu tập khi gặp lỗi để người dùng thấy avatar mới, nhưng vẫn có một khoảnh khắc khó hiểu.
+- **Chưa có chặn mềm theo ngưỡng kho.** Khi kho gần cạn, người trả tiền nhận `503 AVATAR_POOL_EXHAUSTED` thô (lượt không mất, xem §8.2). Luật cảnh báo Prometheus cho `avatar_pool_free` vẫn chưa có.
+- **Hoàn tiền không thu hồi lượt chưa dùng.** Avatar đã quay thì theo §Quy tắc 7 không bao giờ thu hồi; mức thiệt hại là một chỗ trong kho 3.000 cho mỗi giao dịch bị hoàn.
+- **Sức chứa kho (§4.4)**: mỗi lượt quay bán ra làm giảm một chỗ đăng ký. Với 3.000 avatar, 100 người mua gói tháng và quay hết là mất 100 chỗ.
+- Chưa chạy thử với store/payOS thật.
+
+## 8b. Hạn mức theo gói (làm sau)
+
 - Nạp tiền → tăng ảnh/ngày (post-service `QuotaService`) và số bạn tối đa (**chưa có** giới hạn bạn bè trong `FriendService`, là logic mới).
-- Cần tính chung với sức chứa kho (§4.4): mỗi lượt quay bán ra làm giảm một chỗ trong kho.
 
 ## 9. Kế hoạch triển khai (phần đã chốt)
 
@@ -276,5 +317,5 @@ Tất cả các bước trên **đã làm**. Còn thiếu: luật cảnh báo Pr
 
 Phần cơ chế avatar đã chốt hết. Còn lại thuộc giai đoạn sau:
 
-1. Nạp tiền & bảng hạn mức (§8).
+1. Bảng hạn mức theo gói (§8b); phần lượt quay đã làm (§8).
 2. Nội dung thư viện v2 (con vật/màu/chiều mới) khi kho chạm ngưỡng cảnh báo.

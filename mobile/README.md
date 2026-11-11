@@ -12,6 +12,12 @@ D:\fluttersdk\flutter\bin\flutter.bat run `
   --dart-define=KEYCLOAK_CLIENT_ID=animal-locket-mobile
 ```
 
+Shortcut for the shared demo server (real data, values in `env/demo-server.json`; extra `flutter run` arguments pass through):
+
+```powershell
+.\run-demo.cmd            # or: .\run-demo.cmd -d chrome
+```
+
 No secrets belong in the repository. The demo route can be opened from the sign-in screen without a backend.
 
 ## Implemented foundation

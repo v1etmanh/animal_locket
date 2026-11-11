@@ -9,6 +9,7 @@ Thư mục này chứa collection, environment và hướng dẫn kiểm tra pub
 - [Environment](Animal-Locket-Demo.postman_environment.json)
 - [Service Tests environment](Animal-Locket-Service-Tests.postman_environment.json)
 - [User, Post & Notification run summary](Animal-Locket-User-Post-Notification.test-run-summary.json)
+- [Service tests: billing, chat, discovery, media](Animal-Locket-Service-Tests.postman_collection.json)
 
 ## Hướng dẫn theo thứ tự
 
@@ -16,6 +17,7 @@ Thư mục này chứa collection, environment và hướng dẫn kiểm tra pub
 2. [Lấy JWT bằng Keycloak Authorization Code + PKCE](docs/02-keycloak-oauth-pkce.md)
 3. [Chạy smoke tests](docs/03-run-smoke-tests.md)
 4. [Đọc kết quả và xử lý lỗi](docs/04-troubleshooting.md)
+5. [Kiểm thử chức năng billing, chat, discovery, media](docs/05-service-tests.md)
 
 ## Phạm vi kiểm tra
 

@@ -1,3 +1,5 @@
+import 'package:animal_locket/core/l10n/tr.dart';
+
 enum AgeGroup { minor, adult }
 
 enum AccountPlan { free, pro }
@@ -14,7 +16,7 @@ class Animal {
 
   factory Animal.fromJson(Map<String, dynamic> json) => Animal(
     code: json['code'] as String? ?? 'unknown',
-    name: json['name'] as String? ?? 'Con vật',
+    name: json['name'] as String? ?? tr.unknownAnimal,
     rarity: switch (json['rarity']) {
       'COMMON' => AnimalRarity.common,
       'RARE' => AnimalRarity.rare,
@@ -30,10 +32,10 @@ class Animal {
   final String? packCode;
 
   String get rarityLabel => switch (rarity) {
-    AnimalRarity.common => 'Phổ thông',
-    AnimalRarity.rare => 'Hiếm',
-    AnimalRarity.epic => 'Sử thi',
-    AnimalRarity.unknown => 'Chưa rõ',
+    AnimalRarity.common => tr.rarityCommon,
+    AnimalRarity.rare => tr.rarityRare,
+    AnimalRarity.epic => tr.rarityEpic,
+    AnimalRarity.unknown => tr.rarityUnknown,
   };
 }
 
@@ -60,7 +62,7 @@ class PublicProfile {
   final String? avatar;
 
   String get displayAlias =>
-      alias?.trim().isNotEmpty == true ? alias! : 'Người bạn ẩn danh';
+      alias?.trim().isNotEmpty == true ? alias! : tr.anonymousFriend;
 }
 
 class MeProfile extends PublicProfile {
@@ -73,6 +75,7 @@ class MeProfile extends PublicProfile {
     required this.discoverable,
     required this.plan,
     required this.createdAt,
+    this.avatarSpins = 0,
   });
 
   factory MeProfile.fromJson(Map<String, dynamic> json) => MeProfile(
@@ -86,12 +89,30 @@ class MeProfile extends PublicProfile {
     createdAt:
         DateTime.tryParse(json['createdAt'] as String? ?? '')?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    avatarSpins: (json['avatarSpins'] as num?)?.toInt() ?? 0,
   );
 
   final AgeGroup ageGroup;
   final bool discoverable;
   final AccountPlan plan;
   final DateTime createdAt;
+
+  /// Số lượt quay avatar còn lại (tặng kèm mỗi kỳ thuê bao Pro, docs/19 §8).
+  final int avatarSpins;
+}
+
+/// Kết quả POST /users/me/avatar/spin: avatar vừa quay được và số lượt còn lại.
+class AvatarSpinResult {
+  const AvatarSpinResult({required this.avatar, required this.remaining});
+
+  factory AvatarSpinResult.fromJson(Map<String, dynamic> json) =>
+      AvatarSpinResult(
+        avatar: json['avatar'] as String? ?? '',
+        remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      );
+
+  final String avatar;
+  final int remaining;
 }
 
 /// Một avatar trong bộ sưu tập (GET /users/me/avatars).

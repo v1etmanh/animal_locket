@@ -22,6 +22,26 @@ void main() {
       expect(profile.alias, isNull);
       expect(profile.createdAt.isUtc, isTrue);
       expect(profile.createdAt.hour, 20);
+      // Server cũ chưa trả avatarSpins: coi như không còn lượt, không được crash.
+      expect(profile.avatarSpins, 0);
+    });
+
+    test('reads the avatar spin balance and spin result', () {
+      expect(
+        MeProfile.fromJson({
+          'publicId': 'abc',
+          'ageGroup': 'ADULT',
+          'plan': 'PRO',
+          'avatarSpins': 2,
+        }).avatarSpins,
+        2,
+      );
+      final spin = AvatarSpinResult.fromJson({
+        'avatar': '1:panda:3:bow',
+        'remaining': 1,
+      });
+      expect(spin.avatar, '1:panda:3:bow');
+      expect(spin.remaining, 1);
     });
 
     test('maps unknown enum values without crashing', () {

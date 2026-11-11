@@ -284,6 +284,10 @@ class UserFlowIntegrationTest {
                 .andExpect(jsonPath("$.palettes.length()").value(10))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
                         .string("Cache-Control", org.hamcrest.Matchers.containsString("immutable")));
+        mvc.perform(get("/api/v1/animals/avatar-lib/2").with(jwt()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(2))
+                .andExpect(jsonPath("$.palettes[0].furD").exists());
         mvc.perform(get("/api/v1/animals/avatar-lib/99").with(jwt())).andExpect(status().isNotFound());
     }
 

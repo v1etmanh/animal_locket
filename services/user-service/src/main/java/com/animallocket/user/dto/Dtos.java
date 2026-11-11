@@ -26,9 +26,12 @@ public final class Dtos {
     public record LeadAnimalRequest(@NotBlank String animalCode) {
     }
 
-    /** {@code avatar} = "v:animal:palette:accessory", duy nhất toàn hệ thống (docs/19-avatar-mechanism.md). */
+    /**
+     * {@code avatar} = "v:animal:palette:accessory", duy nhất toàn hệ thống (docs/19-avatar-mechanism.md).
+     * {@code avatarSpins} = số lượt quay avatar còn lại (§8).
+     */
     public record MeProfile(String publicId, String alias, String leadAnimal, String avatar, String ageGroup,
-                            boolean discoverable, String plan, Instant createdAt) {
+                            boolean discoverable, String plan, int avatarSpins, Instant createdAt) {
     }
 
     public record PublicProfile(String publicId, String alias, String leadAnimal, String avatar) {
@@ -47,6 +50,14 @@ public final class Dtos {
     }
 
     public record SpinResult(AnimalView animal, Instant nextSpinAt) {
+    }
+
+    /** Kết quả quay avatar: mã avatar mới và số lượt còn lại sau khi quay. */
+    public record AvatarSpinResult(String avatar, int remaining) {
+    }
+
+    /** Đổi avatar đang dùng sang một avatar đã có trong bộ sưu tập. */
+    public record SetAvatarRequest(@NotBlank String avatar) {
     }
 
     public record InviteRequest(@NotBlank String toPublicId) {
