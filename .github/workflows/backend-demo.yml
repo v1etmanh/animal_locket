@@ -78,7 +78,9 @@ jobs:
           sudo apt-get install -y shellcheck
           bash deploy/demo/validate-ci.sh
       - name: Test and package all backend modules
-        run: mvn -B -ntp verify
+        # -fae: chạy hết mọi module rồi mới báo lỗi. Không có nó, một module đỏ làm các module sau
+        # (billing-service nằm cuối reactor) bị SKIPPED và không ai biết chúng xanh hay đỏ.
+        run: mvn -B -ntp -fae verify
       - name: Require real Redis and Mongo integration tests
         run: |
           python3 - <<'PY'
