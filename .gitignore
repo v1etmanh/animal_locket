@@ -31,6 +31,15 @@ fcm*.json
 .idea/
 *.iml
 .vscode/
+# Eclipse/STS: m2e sinh lại mấy file này từ pom.xml, và chúng chứa đường dẫn tuyệt đối của từng máy.
+# Commit chúng khiến mỗi người mở project là một lần ghi đè nhau (xem PR #7: .factorypath mất entry
+# annotation processor của common/outbox-jpa nên Lombok ngừng chạy trong Eclipse, build Maven vẫn bình thường).
+# Dựng lại: Eclipse → chuột phải project → Maven → Update Project (Alt+F5).
+.project
+.classpath
+.factorypath
+.settings/
+.apt_generated/
 .DS_Store
 Thumbs.db
 
