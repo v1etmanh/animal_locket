@@ -244,6 +244,20 @@ class AppLocalizationsVi extends AppLocalizations {
   String get errSpinCooldown => 'Chưa đến lượt quay tiếp theo.';
 
   @override
+  String get errNoAvatarSpin => 'Bạn không còn lượt quay avatar nào.';
+
+  @override
+  String get errAvatarNotOwned =>
+      'Avatar này không có trong bộ sưu tập của bạn.';
+
+  @override
+  String get errAvatarPoolExhausted =>
+      'Tạm thời hết avatar mới để cấp. Lượt quay của bạn vẫn còn, hãy thử lại sau.';
+
+  @override
+  String get errAvatarBusy => 'Hệ thống đang bận cấp avatar. Hãy thử lại.';
+
+  @override
   String get errCollectionComplete => 'Bạn đã hoàn thành bộ sưu tập.';
 
   @override
@@ -847,6 +861,15 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get collectionNote =>
       'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.';
+
+  @override
+  String get collectionNoteMulti =>
+      'Chạm một avatar để dùng nó. Mỗi avatar chỉ thuộc về bạn.';
+
+  @override
+  String spinAvatarButton(int count) {
+    return 'Quay avatar ($count)';
+  }
 
   @override
   String get upgradePro => 'Nâng cấp Pro';

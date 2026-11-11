@@ -163,7 +163,10 @@ public class GlyphService {
                 if (glyphs.existsByConversationIdAndShapeHashAndStatus(conversationId, shapeHash,
                         ConversationGlyph.Status.ACTIVE)) {
                     kv.decrement(quotaKey);
-                    throw GlyphErrors.duplicate();
+                    // Phải kiểm tra lại replay y như nhánh trước khi ghi: giữa byMutation ở trên và câu này, một
+                    // request GIỐNG HỆT đang chạy song song có thể vừa ghi xong và chiếm đúng hình của chính nó.
+                    // Throw thẳng ở đây làm mọi lần gửi lại đồng thời đều hỏng thay vì trả về bản đã ghi.
+                    return replayOr(conversationId, me, mutationId, GlyphErrors.duplicate());
                 }
             }
         }

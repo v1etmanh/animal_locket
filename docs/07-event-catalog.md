@@ -95,9 +95,11 @@ Không chứa nội dung tin nhắn.
 |---|---|---|
 | `SUBSCRIPTION_ACTIVATED` | `{publicId, plan:"PRO", expiresAt}` | user (`entitlements`), post (`pro:`), discovery (`pro:`), notification |
 | `SUBSCRIPTION_EXPIRED` | `{publicId, plan:"FREE", expiresAt:null}` | user, post, discovery |
-| `CONSUMABLE_GRANTED` | `{publicId, item, quantity}`; `item` = `BOOST` \| `PRIORITY_INVITE` \| `ANIMAL_PACK:<mã>` | user (chỉ `ANIMAL_PACK:*` → mở con vật) |
+| `CONSUMABLE_GRANTED` | `{publicId, item, quantity}`; `item` = `BOOST` \| `PRIORITY_INVITE` \| `ANIMAL_PACK:<mã>` \| `AVATAR_SPIN` | user (`ANIMAL_PACK:*` → mở con vật; `AVATAR_SPIN` → cộng lượt quay) |
 
 `SUBSCRIPTION_ACTIVATED/EXPIRED` được phát lại theo **trạng thái Pro hiện tại** của người dùng mỗi khi có thay đổi (một người có thể có thuê bao ở nhiều store), nên consumer phải coi đây là "đặt trạng thái", không phải "cộng dồn".
+
+Hệ quả: **không được cộng dồn thứ gì theo `SUBSCRIPTION_ACTIVATED`.** Lượt quay avatar tặng kèm thuê bao vì thế đi bằng `CONSUMABLE_GRANTED {item: "AVATAR_SPIN"}`, phát **một lần cho mỗi kỳ** từ `BillingService.grantSpinForPeriod` (khoá chống trùng: một dòng sổ cái `(SUB_PERIOD, sub:<id>:<giây hết hạn>, AVATAR_SPIN)`). Số dư lượt quay nằm ở user-service, không ở ví của billing (docs/19 §8).
 
 ## 7.4 Ai nghe topic nào
 

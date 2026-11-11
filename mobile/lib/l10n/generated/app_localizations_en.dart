@@ -246,6 +246,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errSpinCooldown => 'It\'s not time for the next spin yet.';
 
   @override
+  String get errNoAvatarSpin => 'You have no avatar spins left.';
+
+  @override
+  String get errAvatarNotOwned => 'This avatar isn\'t in your collection.';
+
+  @override
+  String get errAvatarPoolExhausted =>
+      'No new avatars are available right now. Your spin is kept, try again later.';
+
+  @override
+  String get errAvatarBusy =>
+      'Avatars are busy being assigned. Please try again.';
+
+  @override
   String get errCollectionComplete => 'You\'ve completed the collection.';
 
   @override
@@ -886,6 +900,15 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get collectionNote =>
       'Each avatar belongs only to you — nobody else can have it.';
+
+  @override
+  String get collectionNoteMulti =>
+      'Tap an avatar to use it. Each avatar belongs only to you.';
+
+  @override
+  String spinAvatarButton(int count) {
+    return 'Spin avatar ($count)';
+  }
 
   @override
   String get upgradePro => 'Upgrade Pro';

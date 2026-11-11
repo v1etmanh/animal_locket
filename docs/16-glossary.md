@@ -8,6 +8,7 @@
 | **Con vật chủ đạo (lead animal)** | Con vật của avatar người dùng (`users.lead_animal`). Không còn đổi được, không còn dùng để thay mặt trên ảnh. |
 | **Bộ sưu tập con vật** | Các con vật người dùng sở hữu qua mua gói (`user_animals`; phần quay thưởng cũ đã ngừng). |
 | **Quay thưởng (spin)** | (Đã ngừng, `410 FEATURE_RETIRED`) Cơ chế nhận con vật mới ngẫu nhiên. Nay avatar chỉ quay một lần lúc đăng ký. |
+| **Lượt quay avatar (`AVATAR_SPIN`)** | Một lượt cho mỗi kỳ thuê bao Pro, dùng ở `POST /users/me/avatar/spin` để lấy thêm một avatar duy nhất vào bộ sưu tập. Số dư ở `avatar_spin_credit` của user-service, không ở ví billing (docs/19 §8). |
 | **Thẻ (card)** | Một gợi ý kết bạn trong bộ thẻ quẹt: alias, con vật, khoảng cách theo mức. |
 | **Quẹt phải / trái** | Phải = gửi lời mời kết bạn (hoặc chấp nhận nếu bên kia đã quẹt phải). Trái = bỏ qua, ẩn thẻ trong một thời gian. |
 | **Match** | Hai người cùng quẹt phải, thành bạn ngay. |

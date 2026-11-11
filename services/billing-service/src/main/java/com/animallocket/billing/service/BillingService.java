@@ -35,6 +35,9 @@ import java.util.UUID;
 public class BillingService {
     private static final Logger log = LoggerFactory.getLogger(BillingService.class);
     static final Set<String> CONSUMABLE_ITEMS = Set.of("BOOST", "PRIORITY_INVITE");
+    /** Lượt quay avatar tặng kèm thuê bao. Số dư do user-service giữ (docs/19 §8), billing chỉ ghi sổ cái. */
+    static final String AVATAR_SPIN = "AVATAR_SPIN";
+    private static final String SPIN_REASON = "SUB_PERIOD";
 
     private final ProductRepository products;
     private final PurchaseRepository purchases;
@@ -121,7 +124,29 @@ public class BillingService {
         sub.setStatus(vp.expiresAt().isAfter(Instant.now()) ? Subscription.Status.ACTIVE : Subscription.Status.EXPIRED);
         sub.setUpdatedAt(Instant.now());
         subscriptions.save(sub);
+        grantSpinForPeriod(sub);
         refreshEntitlement(me);
+    }
+
+    /**
+     * Tặng một lượt quay avatar cho mỗi KỲ thuê bao (mua mới và mỗi lần gia hạn).
+     *
+     * <p>Không thể gắn vào {@code SUBSCRIPTION_ACTIVATED}: event đó mang nghĩa "đặt trạng thái" và được phát lại
+     * mỗi lần có thay đổi, nên sẽ cấp nhiều lượt cho một lần trả tiền. Khoá chống trùng là một dòng sổ cái
+     * {@code (SUB_PERIOD, sub:<id>:<hết hạn>, AVATAR_SPIN)}: store gửi lại webhook của cùng kỳ thì không cấp thêm.
+     * Số dư nằm ở user-service nên ở đây chỉ ghi sổ cái, không cộng vào ví (xem {@link WalletService#recordOnce}).
+     */
+    private void grantSpinForPeriod(Subscription sub) {
+        if (sub.getStatus() != Subscription.Status.ACTIVE || sub.getExpiresAt() == null) {
+            return; // kỳ đã hết hạn lúc tới tay: không tặng lượt
+        }
+        // Chốt theo GIÂY, không theo mili: cùng một kỳ có thể tới với độ phân giải khác nhau (biên lai store dùng
+        // giây, webhook dùng mili), và khác nhau vài mili sẽ bị tính thành hai kỳ.
+        String ref = "sub:" + sub.getId() + ":" + sub.getExpiresAt().getEpochSecond();
+        if (wallet.recordOnce(sub.getPublicId(), AVATAR_SPIN, 1, SPIN_REASON, ref)) {
+            outbox.publish(Topics.BILLING, EventTypes.CONSUMABLE_GRANTED, sub.getPublicId(),
+                    new Events.ConsumableGranted(sub.getPublicId(), AVATAR_SPIN, 1));
+        }
     }
 
     /** Phát event theo trạng thái Pro hiện tại của người dùng (có thể có nhiều thuê bao ở các store khác nhau). */
@@ -169,6 +194,7 @@ public class BillingService {
             sub.setExpiresAt(expiresAt);
             sub.setStatus(expiresAt.isAfter(Instant.now()) ? Subscription.Status.ACTIVE : Subscription.Status.EXPIRED);
             sub.setUpdatedAt(Instant.now());
+            grantSpinForPeriod(sub);
             refreshEntitlement(sub.getPublicId());
             return true;
         }).orElse(false);

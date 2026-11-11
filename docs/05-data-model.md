@@ -24,6 +24,7 @@ Nguồn: các file Flyway `src/main/resources/db/migration/V1__init.sql` và ent
 | `avatar_pool` | `avatar_key` PK ("fox:0:none"), `lib_version`, `owner_public_id` (đã gán thì không về null), `assigned_at` | INDEX `owner_public_id`. Seed lúc khởi động từ avatar-lib (docs/19) |
 | `user_avatars` | `public_id`, `avatar_key`, `lib_version`, `source` (`REGISTER`/`BACKFILL`/`PURCHASE`/`ADMIN`), `source_ref`, `created_at` | UNIQUE `avatar_key` toàn bảng |
 | `spin_log` | `public_id`, `animal_code`, `spun_at` | INDEX `(public_id, spun_at)`. Legacy: quay thưởng đã ngừng, bảng không còn được ghi |
+| `avatar_spin_credit` | `public_id` PK, `granted`, `used`, `updated_at` | Lượt quay avatar đã mua (docs/19 §8). Hai bộ đếm chỉ tăng, còn lại = `granted - used`; CHECK `used <= granted`. Cộng/trừ bằng UPDATE có điều kiện |
 | `device_tokens` | `public_id`, `token` (255), `platform`, `updated_at` | UNIQUE `token` |
 | `entitlements` | `public_id` PK, `plan`, `expires_at` | Bản sao quyền lợi Pro từ event billing |
 

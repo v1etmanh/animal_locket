@@ -22,10 +22,10 @@ Dùng Postman Desktop để callback OAuth hoạt động ổn định.
 Với server hiện tại:
 
 ```text
-public_domain = 134-209-96-89.nip.io
-api_base_url = https://api.134-209-96-89.nip.io
-auth_base_url = https://auth.134-209-96-89.nip.io
-files_base_url = https://files.134-209-96-89.nip.io
+public_domain = 188-166-218-200.nip.io
+api_base_url = https://api.188-166-218-200.nip.io
+auth_base_url = https://auth.188-166-218-200.nip.io
+files_base_url = https://files.188-166-218-200.nip.io
 realm = animal-locket
 client_id = postman
 access_token = <để trống>

@@ -542,6 +542,30 @@ abstract class AppLocalizations {
   /// **'Chưa đến lượt quay tiếp theo.'**
   String get errSpinCooldown;
 
+  /// No description provided for @errNoAvatarSpin.
+  ///
+  /// In vi, this message translates to:
+  /// **'Bạn không còn lượt quay avatar nào.'**
+  String get errNoAvatarSpin;
+
+  /// No description provided for @errAvatarNotOwned.
+  ///
+  /// In vi, this message translates to:
+  /// **'Avatar này không có trong bộ sưu tập của bạn.'**
+  String get errAvatarNotOwned;
+
+  /// No description provided for @errAvatarPoolExhausted.
+  ///
+  /// In vi, this message translates to:
+  /// **'Tạm thời hết avatar mới để cấp. Lượt quay của bạn vẫn còn, hãy thử lại sau.'**
+  String get errAvatarPoolExhausted;
+
+  /// No description provided for @errAvatarBusy.
+  ///
+  /// In vi, this message translates to:
+  /// **'Hệ thống đang bận cấp avatar. Hãy thử lại.'**
+  String get errAvatarBusy;
+
   /// No description provided for @errCollectionComplete.
   ///
   /// In vi, this message translates to:
@@ -1645,6 +1669,18 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.'**
   String get collectionNote;
+
+  /// No description provided for @collectionNoteMulti.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chạm một avatar để dùng nó. Mỗi avatar chỉ thuộc về bạn.'**
+  String get collectionNoteMulti;
+
+  /// No description provided for @spinAvatarButton.
+  ///
+  /// In vi, this message translates to:
+  /// **'Quay avatar ({count})'**
+  String spinAvatarButton(int count);
 
   /// No description provided for @upgradePro.
   ///

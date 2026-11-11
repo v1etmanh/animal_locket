@@ -95,6 +95,10 @@
   "errProRequired": "Tính năng này dành cho thành viên Pro.",
   "errAnimalNotOwned": "Bạn chưa sở hữu con vật này.",
   "errSpinCooldown": "Chưa đến lượt quay tiếp theo.",
+  "errNoAvatarSpin": "Bạn không còn lượt quay avatar nào.",
+  "errAvatarNotOwned": "Avatar này không có trong bộ sưu tập của bạn.",
+  "errAvatarPoolExhausted": "Tạm thời hết avatar mới để cấp. Lượt quay của bạn vẫn còn, hãy thử lại sau.",
+  "errAvatarBusy": "Hệ thống đang bận cấp avatar. Hãy thử lại.",
   "errCollectionComplete": "Bạn đã hoàn thành bộ sưu tập.",
   "errFileTooLarge": "Ảnh vượt quá giới hạn 10 MB.",
   "errUnsupportedMediaType": "Định dạng ảnh chưa được hỗ trợ.",
@@ -418,6 +422,15 @@
   "noMyPhotos": "Bạn chưa đăng ảnh nào.",
   "collection": "Bộ sưu tập",
   "collectionNote": "Mỗi avatar chỉ thuộc về bạn, không ai khác có được.",
+  "collectionNoteMulti": "Chạm một avatar để dùng nó. Mỗi avatar chỉ thuộc về bạn.",
+  "spinAvatarButton": "Quay avatar ({count})",
+  "@spinAvatarButton": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "upgradePro": "Nâng cấp Pro",
   "friendsCount": "Bạn bè ({count})",
   "@friendsCount": {

@@ -1,0 +1,2696 @@
+{
+  "info": {
+    "_postman_id": "9e5590e2-2373-5a29-ad80-659b59b3b3e5",
+    "name": "Animal Locket Service Tests (billing, chat, discovery, media)",
+    "description": "Kiểm thử chức năng qua API Gateway cho billing, chat, discovery, media. Sinh bởi postman/tools/build_service_tests.py. Hướng dẫn: postman/docs/05-service-tests.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "fixture_png_size",
+      "value": "463"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Setup",
+      "description": "Lấy publicId của tài khoản test và một người bạn. Tài khoản test phải có sẵn ít nhất một bạn (xem docs/05-service-tests.md).",
+      "item": [
+        {
+          "name": "Gateway rejects missing JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 401 without bearer token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/billing/me",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Load my profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200 (token still valid?)', () => pm.response.to.have.status(200));",
+                  "const me = pm.response.json();",
+                  "pm.test('Profile has publicId', () => pm.expect(me.publicId).to.match(/^[a-z2-7]{20}$/));",
+                  "pm.collectionVariables.set('my_public_id', me.publicId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "Load a friend for chat/discovery",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const friends = pm.response.json();",
+                  "pm.test('Friends is an array', () => pm.expect(friends).to.be.an('array'));",
+                  "pm.test('At least one friend for chat tests', () => pm.expect(friends.length).to.be.above(0));",
+                  "if (friends.length) pm.collectionVariables.set('friend_public_id', friends[0].publicId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/friends"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - media-service",
+      "description": "Luồng tải ảnh: xin URL ký sẵn → PUT file lên R2 → complete → đọc trạng thái và URL xem.",
+      "item": [
+        {
+          "name": "Upload rejects unsupported content type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'UNSUPPORTED_MEDIA_TYPE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/media/uploads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": \"CHAT\",\n  \"contentType\": \"image/gif\",\n  \"sizeBytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload rejects file over size limit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'FILE_TOO_LARGE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/media/uploads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": \"CHAT\",\n  \"contentType\": \"image/png\",\n  \"sizeBytes\": 20000000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload rejects missing context",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/media/uploads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentType\": \"image/png\",\n  \"sizeBytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload rejects sizeBytes = 0",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/media/uploads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": \"CHAT\",\n  \"contentType\": \"image/png\",\n  \"sizeBytes\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Request upload ticket (PNG)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json();",
+                  "pm.test('Ticket has mediaId (UUID)', () => pm.expect(t.mediaId).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test('Ticket has signed upload URL', () => pm.expect(t.uploadUrl).to.match(/^https?:\\/\\//));",
+                  "pm.test('Ticket requires Content-Type image/png', () => pm.expect(t.headers['Content-Type']).to.eql('image/png'));",
+                  "pm.test('Ticket expires in the future', () => pm.expect(t.expiresInSeconds).to.be.above(0));",
+                  "pm.collectionVariables.set('media_id', t.mediaId);",
+                  "pm.collectionVariables.set('upload_url', t.uploadUrl);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/media/uploads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": \"CHAT\",\n  \"contentType\": \"image/png\",\n  \"sizeBytes\": {{fixture_png_size}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Complete before upload is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(409, 'NOT_UPLOADED');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/{{media_id}}/complete"
+          }
+        },
+        {
+          "name": "PUT image to signed URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Object storage accepts the upload', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "image/png"
+              }
+            ],
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": "fixtures/test-image.png"
+              }
+            },
+            "url": "{{upload_url}}",
+            "description": "Postman app: chọn lại file postman/fixtures/test-image.png ở tab Body nếu báo thiếu file."
+          }
+        },
+        {
+          "name": "Complete upload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('Same mediaId', () => pm.expect(s.mediaId).to.eql(pm.collectionVariables.get('media_id')));",
+                  "pm.test('Image is READY (no face worker, raw→public)', () => pm.expect(s.status).to.eql('READY'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/{{media_id}}/complete"
+          }
+        },
+        {
+          "name": "Get media status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('Status body matches', () => {",
+                  "  pm.expect(s.mediaId).to.eql(pm.collectionVariables.get('media_id'));",
+                  "  pm.expect(s.status).to.eql('READY');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/{{media_id}}"
+          }
+        },
+        {
+          "name": "Get signed view URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const v = pm.response.json();",
+                  "pm.test('View URL is a link', () => pm.expect(v.url).to.match(/^https?:\\/\\//));",
+                  "pm.test('View URL expires in the future', () => pm.expect(v.expiresInSeconds).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/{{media_id}}/url"
+          }
+        },
+        {
+          "name": "Unknown media returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(404, 'NOT_FOUND');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/media/00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "name": "Internal media API is not exposed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Gateway does not route /internal', () => pm.expect(pm.response.code).to.be.oneOf([401, 403, 404]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/internal/media/{{media_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - discovery-service",
+      "description": "Vị trí, online, bộ thẻ, quẹt và Boost. Gateway giới hạn discovery 2 request/giây (burst 10): chạy newman với --delay-request 600.",
+      "item": [
+        {
+          "name": "Turn discovery mode off (user-service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('discoverable = false', () => pm.expect(pm.response.json().discoverable).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/users/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discoverable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Location requires discovery mode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(403, 'FORBIDDEN');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/location",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 16.0544,\n  \"lon\": 108.2022\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Card deck requires discovery mode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(403, 'FORBIDDEN');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/cards?limit=5"
+          }
+        },
+        {
+          "name": "Boost requires discovery mode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(403, 'FORBIDDEN');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/boost"
+          }
+        },
+        {
+          "name": "Turn discovery mode on (user-service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('discoverable = true', () => pm.expect(pm.response.json().discoverable).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/users/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discoverable\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/location",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 16.0544,\n  \"lon\": 108.2022\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Location rejects latitude > 90",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/location",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 95,\n  \"lon\": 108.2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Location rejects missing lon",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/location",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 16.05\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Heartbeat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/heartbeat"
+          }
+        },
+        {
+          "name": "Presence of me and friend",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const online = pm.response.json().online;",
+                  "pm.test('Presence is a map', () => pm.expect(online).to.be.an('object'));",
+                  "pm.test('Friend status is reported', () => pm.expect(online[pm.collectionVariables.get('friend_public_id')]).to.be.a('boolean'));",
+                  "pm.test('Only friends are reported (not myself)', () => pm.expect(online).to.not.have.property(pm.collectionVariables.get('my_public_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/presence?ids={{my_public_id}},{{friend_public_id}}"
+          }
+        },
+        {
+          "name": "Presence requires ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/presence"
+          }
+        },
+        {
+          "name": "Card deck",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('Deck shape', () => {",
+                  "  pm.expect(d.cards).to.be.an('array');",
+                  "  pm.expect(d.degraded).to.be.a('boolean');",
+                  "  pm.expect(d.swipesLeftToday).to.be.a('number');",
+                  "});",
+                  "pm.test('At most 5 cards, never myself', () => {",
+                  "  pm.expect(d.cards.length).to.be.at.most(5);",
+                  "  d.cards.forEach(c => pm.expect(c.publicId).to.not.eql(pm.collectionVariables.get('my_public_id')));",
+                  "});",
+                  "pm.test('Cards expose no coordinates', () => d.cards.forEach(c => {",
+                  "  pm.expect(c).to.not.have.property('lat');",
+                  "  pm.expect(c).to.not.have.property('lon');",
+                  "}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/cards?limit=5"
+          }
+        },
+        {
+          "name": "Swipe on myself is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'SELF_SWIPE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/swipes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetPublicId\": \"{{my_public_id}}\",\n  \"direction\": \"RIGHT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Swipe rejects unknown direction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/swipes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetPublicId\": \"{{friend_public_id}}\",\n  \"direction\": \"UP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Swipe left skips",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Result SKIPPED', () => pm.expect(r.result).to.eql('SKIPPED'));",
+                  "pm.test('swipesLeftToday is a number', () => pm.expect(r.swipesLeftToday).to.be.a('number'));",
+                  "pm.collectionVariables.set('swipes_left', r.swipesLeftToday);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/swipes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetPublicId\": \"{{friend_public_id}}\",\n  \"direction\": \"LEFT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Swipe right on a friend does not cost a swipe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test('Result ALREADY_FRIENDS', () => pm.expect(r.result).to.eql('ALREADY_FRIENDS'));",
+                  "pm.test('Quota unchanged', () => pm.expect(r.swipesLeftToday).to.eql(Number(pm.collectionVariables.get('swipes_left'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/discovery/swipes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetPublicId\": \"{{friend_public_id}}\",\n  \"direction\": \"RIGHT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Boost spends one Boost or reports none left",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.variables.replaceIn('{{api_base_url}}/api/v1/billing/me'),",
+                  "  header: { Authorization: 'Bearer ' + pm.environment.get('access_token') }",
+                  "}, (err, res) => {",
+                  "  const wallet = (!err && res.code === 200) ? (res.json().wallet || {}) : {};",
+                  "  pm.collectionVariables.set('wallet_boost', wallet.BOOST || wallet.boost || 0);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "const boosts = Number(pm.collectionVariables.get('wallet_boost') || 0);",
+                  "if (boosts > 0) {",
+                  "  pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "} else {",
+                  "  expectProblem(402, 'NO_BOOST');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/boost"
+          }
+        },
+        {
+          "name": "Clear location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/discovery/location"
+          }
+        },
+        {
+          "name": "Turn discovery mode off (user-service)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('discoverable = false', () => pm.expect(pm.response.json().discoverable).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/users/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discoverable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - chat-service",
+      "description": "Hội thoại với bạn bè, từ điển ký hiệu (glyph), tin nhắn và đánh dấu đã đọc.",
+      "item": [
+        {
+          "name": "Open conversation with myself is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'SELF_CHAT');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withPublicId\": \"{{my_public_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Open conversation requires withPublicId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'VALIDATION_FAILED');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withPublicId\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Open conversation with a stranger is forbidden",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Not allowed (403/404)', () => pm.expect(pm.response.code).to.be.oneOf([403, 404]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withPublicId\": \"aaaaaaaaaaaaaaaaaaaa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Open conversation with friend",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.test('Conversation has id', () => pm.expect(c.id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('conversation_id', c.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withPublicId\": \"{{friend_public_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Opening again returns the same conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Same id (idempotent)', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('conversation_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withPublicId\": \"{{friend_public_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List my conversations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('Is an array', () => pm.expect(list).to.be.an('array'));",
+                  "pm.test('Contains the opened conversation', () =>",
+                  "  pm.expect(list.map(c => c.id)).to.include(pm.collectionVariables.get('conversation_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations"
+          }
+        },
+        {
+          "name": "Glyph rejects wrong number of points",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'GLYPH_INVALID_POINTS');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{$guid}}\",\n  \"meaning\": \"test\",\n  \"color\": \"#818CF8\",\n  \"points\": [1, 2, 3]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Glyph rejects color outside palette",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'GLYPH_INVALID_COLOR');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{$guid}}\",\n  \"meaning\": \"test\",\n  \"color\": \"#000000\",\n  \"points\": [-1000, -963, -926, -889, -852, -815, -778, -741, -704, -667, -630, -593, -556, -519, -482, -445, -408, -371, -334, -297, -260, -223, -186, -149, -112, -75, -38, -1, 36, 73, 110, 147, 184, 221, 258, 295, 332, 369, 406, 443, 480, 517, 554, 591, 628, 665, 702, 739, 776, 813, 850, 887, 924, 961, 998, -966, -929, -892, -855, -818, -781, -744, -707, -670, -633, -596, -559, -522, -485, -448, -411, -374, -337, -300, -263, -226, -189, -152, -115, -78, -41, -4, 33, 70, 107, 144, 181, 218, 255, 292, 329, 366, 403, 440, 477, 514, 551, 588, 625, 662, 699, 736, 773, 810, 847, 884, 921, 958, 995, -969, -932, -895, -858, -821, -784, -747, -710, -673, -636, -599, -562, -525, -488, -451, -414, -377, -340, -303]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Glyph rejects empty meaning",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'GLYPH_INVALID_MEANING');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{$guid}}\",\n  \"meaning\": \"\",\n  \"color\": \"#818CF8\",\n  \"points\": [-1000, -963, -926, -889, -852, -815, -778, -741, -704, -667, -630, -593, -556, -519, -482, -445, -408, -371, -334, -297, -260, -223, -186, -149, -112, -75, -38, -1, 36, 73, 110, 147, 184, 221, 258, 295, 332, 369, 406, 443, 480, 517, 554, 591, 628, 665, 702, 739, 776, 813, 850, 887, 924, 961, 998, -966, -929, -892, -855, -818, -781, -744, -707, -670, -633, -596, -559, -522, -485, -448, -411, -374, -337, -300, -263, -226, -189, -152, -115, -78, -41, -4, 33, 70, 107, 144, 181, 218, 255, 292, 329, 366, 403, 440, 477, 514, 551, 588, 625, 662, 699, 736, 773, 810, 847, 884, 921, 958, 995, -969, -932, -895, -858, -821, -784, -747, -710, -673, -636, -599, -562, -525, -488, -451, -414, -377, -340, -303]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Glyph rejects non-UUID clientMutationId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'VALIDATION_FAILED');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"not-a-uuid\",\n  \"meaning\": \"test\",\n  \"color\": \"#818CF8\",\n  \"points\": [-1000, -963, -926, -889, -852, -815, -778, -741, -704, -667, -630, -593, -556, -519, -482, -445, -408, -371, -334, -297, -260, -223, -186, -149, -112, -75, -38, -1, 36, 73, 110, 147, 184, 221, 258, 295, 332, 369, 406, 443, 480, 517, 554, 591, 628, 665, 702, 739, 776, 813, 850, 887, 924, 961, 998, -966, -929, -892, -855, -818, -781, -744, -707, -670, -633, -596, -559, -522, -485, -448, -411, -374, -337, -300, -263, -226, -189, -152, -115, -78, -41, -4, 33, 70, 107, 144, 181, 218, 255, 292, 329, 366, 403, 440, 477, 514, 551, 588, 625, 662, 699, 736, 773, 810, 847, 884, 921, 958, 995, -969, -932, -895, -858, -821, -784, -747, -710, -673, -636, -599, -562, -525, -488, -451, -414, -377, -340, -303]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create glyph",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Mỗi lần chạy vẽ một hình mới (64 cặp toạ độ) để không trùng hình đã có trong hội thoại.",
+                  "const pts = [];",
+                  "const a = Math.random() * 5 + 1, b = Math.random() * 5 + 1, phase = Math.random() * Math.PI;",
+                  "for (let i = 0; i < 64; i++) {",
+                  "  const t = (i / 63) * 2 * Math.PI;",
+                  "  pts.push(Math.round(900 * Math.sin(a * t + phase)), Math.round(900 * Math.sin(b * t)));",
+                  "}",
+                  "pm.collectionVariables.set('glyph_points', JSON.stringify(pts));",
+                  "pm.collectionVariables.set('glyph_mutation_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const g = pm.response.json();",
+                  "pm.test('Glyph fields', () => {",
+                  "  pm.expect(g.id).to.be.a('string').and.not.empty;",
+                  "  pm.expect(g.conversationId).to.eql(pm.collectionVariables.get('conversation_id'));",
+                  "  pm.expect(g.creatorPublicId).to.eql(pm.collectionVariables.get('my_public_id'));",
+                  "  pm.expect(g.meaning).to.eql('postman test');",
+                  "  pm.expect(g.color).to.eql('#34D399');",
+                  "  pm.expect(g.points).to.have.lengthOf(128);",
+                  "  pm.expect(g.status).to.eql('ACTIVE');",
+                  "});",
+                  "pm.collectionVariables.set('glyph_id', g.id);",
+                  "pm.collectionVariables.set('glyph_revision', g.revision);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{glyph_mutation_id}}\",\n  \"meaning\": \"postman test\",\n  \"color\": \"#34D399\",\n  \"points\": {{glyph_points}},\n  \"pointCount\": 64\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Replaying the same clientMutationId returns the same glyph",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200 (replay, not created)', () => pm.response.to.have.status(200));",
+                  "pm.test('Same glyph id', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('glyph_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{glyph_mutation_id}}\",\n  \"meaning\": \"postman test\",\n  \"color\": \"#34D399\",\n  \"points\": {{glyph_points}},\n  \"pointCount\": 64\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Same shape with a new mutation id is a duplicate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(409, 'GLYPH_DUPLICATE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientMutationId\": \"{{$guid}}\",\n  \"meaning\": \"copy\",\n  \"color\": \"#34D399\",\n  \"points\": {{glyph_points}},\n  \"pointCount\": 64\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Sync glyph dictionary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json();",
+                  "const all = page.glyphs || page.items || [];",
+                  "pm.test('Page lists glyphs', () => pm.expect(all).to.be.an('array'));",
+                  "pm.test('Contains the new glyph', () => pm.expect(all.map(g => g.id)).to.include(pm.collectionVariables.get('glyph_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs?afterRevision=0&limit=100"
+          }
+        },
+        {
+          "name": "Get glyph by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Same glyph', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('glyph_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs/{{glyph_id}}"
+          }
+        },
+        {
+          "name": "Send glyph message",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('message_client_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const m = pm.response.json();",
+                  "pm.test('Message is GLYPH from me', () => {",
+                  "  pm.expect(m.type).to.eql('GLYPH');",
+                  "  pm.expect(m.senderId).to.eql(pm.collectionVariables.get('my_public_id'));",
+                  "});",
+                  "pm.collectionVariables.set('message_id', m.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"GLYPH\",\n  \"glyphIds\": [\"{{glyph_id}}\"],\n  \"clientId\": \"{{message_client_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Resending same clientId does not duplicate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Accepted', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('Same message id', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('message_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"GLYPH\",\n  \"glyphIds\": [\"{{glyph_id}}\"],\n  \"clientId\": \"{{message_client_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Glyph message with unknown glyph is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Client error', () => pm.expect(pm.response.code).to.be.oneOf([400, 404, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"GLYPH\",\n  \"glyphIds\": [\n    \"does-not-exist\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Text message follows server policy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "// Mặc định CHAT_ALLOWED_TYPES=GLYPH nên TEXT bị tắt; nếu server bật TEXT thì phải tạo được tin.",
+                  "if (pm.response.code === 201) {",
+                  "  pm.test('Text message created', () => pm.expect(pm.response.json().type).to.eql('TEXT'));",
+                  "} else {",
+                  "  expectProblem(403, 'MESSAGE_TYPE_DISABLED');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TEXT\",\n  \"text\": \"hello from postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Message history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('History is an array', () => pm.expect(list).to.be.an('array'));",
+                  "pm.test('Contains the sent message', () => pm.expect(list.map(m => m.id)).to.include(pm.collectionVariables.get('message_id')));",
+                  "pm.test('Respects limit', () => pm.expect(list.length).to.be.at.most(30));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages?limit=30"
+          }
+        },
+        {
+          "name": "Mark conversation read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/read"
+          }
+        },
+        {
+          "name": "Archive glyph",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs/{{glyph_id}}"
+          }
+        },
+        {
+          "name": "Archived glyph cannot be sent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(409, 'GLYPH_NOT_ACTIVE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/messages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"GLYPH\",\n  \"glyphIds\": [\"{{glyph_id}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Unknown glyph returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(404, 'GLYPH_NOT_FOUND');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/{{conversation_id}}/glyphs/does-not-exist"
+          }
+        },
+        {
+          "name": "Unknown conversation returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(404, 'NOT_FOUND');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/chat/conversations/000000000000000000000000/messages"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - billing-service",
+      "description": "Danh mục sản phẩm, ví, xác minh biên lai, thanh toán web và webhook.",
+      "item": [
+        {
+          "name": "Product catalog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const products = pm.response.json();",
+                  "pm.test('Catalog is a non-empty array', () => pm.expect(products).to.be.an('array').that.is.not.empty);",
+                  "pm.test('Every product has sku/type/item/quantity', () => products.forEach(p => {",
+                  "  pm.expect(p.sku).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.type).to.be.a('string');",
+                  "  pm.expect(p.quantity).to.be.a('number');",
+                  "}));",
+                  "pm.test('SKUs are unique', () => pm.expect(new Set(products.map(p => p.sku)).size).to.eql(products.length));",
+                  "const web = products.find(p => p.priceVnd != null || p.priceUsdCents != null);",
+                  "const app = products.find(p => p.priceVnd == null && p.priceUsdCents == null);",
+                  "pm.collectionVariables.set('web_sku', web ? web.sku : '');",
+                  "pm.collectionVariables.set('store_only_sku', app ? app.sku : '');",
+                  "pm.collectionVariables.set('any_sku', products[0].sku);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/billing/products"
+          }
+        },
+        {
+          "name": "My plan and wallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('Has plan', () => pm.expect(b.plan).to.be.a('string'));",
+                  "pm.test('Wallet is a map of non-negative balances', () => {",
+                  "  pm.expect(b.wallet).to.be.an('object');",
+                  "  Object.values(b.wallet).forEach(v => pm.expect(v).to.be.at.least(0));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/api/v1/billing/me"
+          }
+        },
+        {
+          "name": "Verify rejects unknown store",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/purchases/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"store\": \"STEAM\",\n  \"sku\": \"x\",\n  \"token\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify rejects blank token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'VALIDATION_FAILED');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/purchases/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"store\": \"GOOGLE\",\n  \"sku\": \"{{any_sku}}\",\n  \"token\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify rejects unknown product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'UNKNOWN_PRODUCT');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/purchases/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"store\": \"GOOGLE\",\n  \"sku\": \"no.such.sku\",\n  \"token\": \"fake-token\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify fake receipt is not granted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Fake receipt never succeeds', () => pm.expect(pm.response.code).to.not.eql(200));",
+                  "pm.test('Rejected as invalid or store unavailable', () => pm.expect(pm.response.json().code)",
+                  "  .to.be.oneOf(['INVALID_RECEIPT', 'STORE_UNAVAILABLE', 'WEBHOOK_NOT_CONFIGURED', 'SKU_MISMATCH']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/purchases/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"store\": \"GOOGLE\",\n  \"sku\": \"{{any_sku}}\",\n  \"token\": \"fake-token-from-postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Checkout requires sku",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "expectProblem(400, 'VALIDATION_FAILED');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/checkout-sessions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Checkout rejects unknown sku",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Rejected', () => pm.expect(pm.response.code).to.be.oneOf([400, 503]));",
+                  "if (pm.response.code === 400) pm.test('UNKNOWN_PRODUCT', () => pm.expect(pm.response.json().code).to.eql('UNKNOWN_PRODUCT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/checkout-sessions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"no.such.sku\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create web checkout session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "if (pm.response.code === 503) {",
+                  "  expectProblem(503, 'PAYMENT_UNAVAILABLE');",
+                  "} else {",
+                  "  pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "  const s = pm.response.json();",
+                  "  pm.test('Has one-time checkout URL', () => pm.expect(s.url).to.match(/\\/pay\\/[^/]+$/));",
+                  "  pm.test('Expires in the future', () => pm.expect(new Date(s.expiresAt).getTime()).to.be.above(Date.now()));",
+                  "  pm.collectionVariables.set('checkout_token', s.url.split('/pay/')[1]);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/api/v1/billing/checkout-sessions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{web_sku}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Checkout page opens without JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns an HTML page', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/pay/{{checkout_token}}",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Unknown checkout token returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/pay/not-a-real-token",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "PayPal webhook without signature is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Rejected (401 signature / 503 not configured)', () => pm.expect(pm.response.code).to.be.oneOf([401, 503]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/webhooks/paypal",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-POSTMAN\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "payOS webhook with bad signature is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Rejected (401 signature / 503 not configured)', () => pm.expect(pm.response.code).to.be.oneOf([401, 503]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api_base_url}}/webhooks/payos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"00\",\n  \"data\": {\n    \"orderCode\": 1\n  },\n  \"signature\": \"bad\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Internal wallet API is not exposed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function expectProblem(status, code) {",
+                  "  pm.test(`Status ${status}`, () => pm.response.to.have.status(status));",
+                  "  if (code) {",
+                  "    pm.test(`Problem code ${code}`, () => pm.expect(pm.response.json().code).to.eql(code));",
+                  "  }",
+                  "}",
+                  "pm.test('Gateway does not route /internal', () => pm.expect(pm.response.code).to.be.oneOf([401, 403, 404]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{api_base_url}}/internal/wallet/{{my_public_id}}"
+          }
+        }
+      ]
+    }
+  ]
+}
