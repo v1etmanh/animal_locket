@@ -73,6 +73,7 @@ class MeProfile extends PublicProfile {
     required this.discoverable,
     required this.plan,
     required this.createdAt,
+    this.avatarSpins = 0,
   });
 
   factory MeProfile.fromJson(Map<String, dynamic> json) => MeProfile(
@@ -86,12 +87,30 @@ class MeProfile extends PublicProfile {
     createdAt:
         DateTime.tryParse(json['createdAt'] as String? ?? '')?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    avatarSpins: (json['avatarSpins'] as num?)?.toInt() ?? 0,
   );
 
   final AgeGroup ageGroup;
   final bool discoverable;
   final AccountPlan plan;
   final DateTime createdAt;
+
+  /// Số lượt quay avatar còn lại (tặng kèm mỗi kỳ thuê bao Pro, docs/19 §8).
+  final int avatarSpins;
+}
+
+/// Kết quả POST /users/me/avatar/spin: avatar vừa quay được và số lượt còn lại.
+class AvatarSpinResult {
+  const AvatarSpinResult({required this.avatar, required this.remaining});
+
+  factory AvatarSpinResult.fromJson(Map<String, dynamic> json) =>
+      AvatarSpinResult(
+        avatar: json['avatar'] as String? ?? '',
+        remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      );
+
+  final String avatar;
+  final int remaining;
 }
 
 /// Một avatar trong bộ sưu tập (GET /users/me/avatars).

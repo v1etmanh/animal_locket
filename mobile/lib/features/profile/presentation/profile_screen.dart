@@ -136,29 +136,34 @@ class _ProfileContent extends ConsumerWidget {
           emptyText: 'Bạn chưa đăng ảnh nào.',
         ),
         const SizedBox(height: 24),
-        Text('Bộ sưu tập', style: heading),
+        Row(
+          children: [
+            Expanded(child: Text('Bộ sưu tập', style: heading)),
+            if (data.profile.avatarSpins > 0)
+              PaperButton.tape(
+                label: 'Quay avatar (${data.profile.avatarSpins})',
+                onPressed: () => context.push('/avatar-spin'),
+              ),
+          ],
+        ),
         const SizedBox(height: 6),
         Text(
-          'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.',
+          data.avatars.length > 1
+              ? 'Chạm một avatar để dùng nó. Mỗi avatar chỉ thuộc về bạn.'
+              : 'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.',
           style: TextStyle(color: p.muted, fontSize: 12),
         ),
         const SizedBox(height: 18),
-        // Album sticker: mỗi avatar là một polaroid nhỏ có tên con vật.
+        // Album sticker: mỗi avatar là một polaroid nhỏ có tên con vật; avatar đang dùng được đánh dấu.
         Wrap(
           spacing: 14,
           runSpacing: 18,
           children: [
             for (final (i, owned) in data.avatars.indexed)
-              Polaroid(
-                width: 92,
-                tiltDegrees: i.isEven ? -2.5 : 2,
-                caption:
-                    AvatarLibraries.instance.animalName(owned.avatar) ?? '',
-                child: AnimalAvatar(
-                  avatar: owned.avatar,
-                  size: 92,
-                  square: true,
-                ),
+              _CollectionAvatar(
+                owned: owned,
+                index: i,
+                inUse: owned.avatar == data.profile.avatar,
               ),
           ],
         ),
@@ -192,6 +197,65 @@ class _ProfileContent extends ConsumerWidget {
     }
     try {
       await ref.read(profileControllerProvider.notifier).updateAlias(alias);
+    } on ApiProblem catch (problem) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              messageForApiCode(problem.code, status: problem.status),
+            ),
+          ),
+        );
+      }
+    }
+  }
+}
+
+/// Một avatar trong bộ sưu tập. Chạm để dùng nó làm avatar chính; cái đang dùng thì không chạm được.
+class _CollectionAvatar extends ConsumerWidget {
+  const _CollectionAvatar({
+    required this.owned,
+    required this.index,
+    required this.inUse,
+  });
+
+  final OwnedAvatar owned;
+  final int index;
+  final bool inUse;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = AvatarLibraries.instance.animalName(owned.avatar) ?? '';
+    final card = Opacity(
+      opacity: inUse ? 1 : 0.9,
+      child: Polaroid(
+        width: 92,
+        tiltDegrees: index.isEven ? -2.5 : 2,
+        caption: inUse ? '$name · đang dùng' : name,
+        child: AnimalAvatar(avatar: owned.avatar, size: 92, square: true),
+      ),
+    );
+    if (inUse) {
+      return Semantics(label: '$name, avatar đang dùng', child: card);
+    }
+    return Semantics(
+      button: true,
+      label: 'Dùng avatar $name',
+      excludeSemantics: true,
+      child: InkWell(onTap: () => _use(context, ref), child: card),
+    );
+  }
+
+  Future<void> _use(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(profileControllerProvider.notifier).setAvatar(owned.avatar);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã đổi avatar. Bạn bè sẽ thấy sau vài phút.'),
+          ),
+        );
+      }
     } on ApiProblem catch (problem) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

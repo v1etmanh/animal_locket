@@ -11,8 +11,8 @@
 | 1 | Phụ kiện tính cả lựa chọn "không phụ kiện": **50 con vật × 10 màu × 6 phụ kiện = 3.000 avatar** (thư viện v1). |
 | 2 | **Không có hai người trùng avatar.** Mỗi avatar thuộc về **tối đa một người** trên toàn hệ thống, server kiểm tra và cơ sở dữ liệu chặn cứng. |
 | 3 | Khi đăng ký: **quay đúng 1 lần**, không quay lại. |
-| 4 | Avatar quay được (sau này, khi nạp tiền) **nằm trong bộ sưu tập** của người đó và vẫn là của riêng họ, không ai khác nhận được. |
-| 5 | **Nạp tiền** (quay thêm, tăng cấp) và **bảng hạn mức** (ảnh/ngày, bạn tối đa): **làm sau**, tài liệu chỉ để chỗ (§8). |
+| 4 | Avatar quay thêm bằng lượt mua được **nằm trong bộ sưu tập** của người đó và vẫn là của riêng họ, không ai khác nhận được. |
+| 5 | **Lượt quay mua được**: một lượt cho mỗi kỳ thuê bao Pro; quay chỉ thêm vào bộ sưu tập, đổi avatar đang dùng là bước riêng (§8). **Bảng hạn mức** (ảnh/ngày, bạn tối đa): làm sau (§8b). |
 | 6 | Mở rộng kho (thêm con vật/màu/chiều mới): **làm sau**, khi kho chạm ngưỡng cảnh báo. |
 | 7 | Xoá tài khoản: **avatar không bao giờ được thu hồi**, vẫn gắn vĩnh viễn với tài khoản đã xoá. |
 | 8 | Tài khoản cũ (đang có `lead_animal` trùng nhau): **giữ lại**, mỗi tài khoản được **cấp ngẫu nhiên một avatar mới duy nhất** từ kho (§5), giống người đăng ký mới. |
@@ -145,8 +145,8 @@ Sau khi giữ chỗ thành công (cùng transaction):
 ### 4.3. Bộ sưu tập
 
 - Mỗi avatar trong `user_avatars` vẫn có chủ trong `avatar_pool`, nên **không ai khác quay ra được**, kể cả khi người đó không còn dùng nó làm avatar chính.
-- Hệ quả: mỗi lượt quay thêm (sau này, khi nạp tiền) **tiêu tốn một avatar của kho chung**. Phần thiết kế nạp tiền phải tính đến điều này (§4.4).
-- Đổi avatar đang dùng sang một avatar khác trong bộ sưu tập: để đến phần nạp tiền mới quyết định.
+- Hệ quả: mỗi lượt quay thêm **tiêu tốn một avatar của kho chung** (§4.4, §8.4).
+- Đổi avatar đang dùng sang một avatar khác trong bộ sưu tập: `PUT /users/me/avatar` (§8.3).
 
 ### 4.4. Sức chứa: rủi ro lớn nhất
 
@@ -241,18 +241,58 @@ Mobile: `AnimalAvatar(avatar: …, leadAnimal: …)` vẽ bằng `flutter_svg` (
 | `GET /users/me` | Thêm `avatar`: **chuỗi** `"1:fox:0:glasses"` (client tự tách). |
 | `GET /users/me/avatars` | Bộ sưu tập: `[{avatar, source, acquiredAt}]`. |
 | `GET /animals/avatar-lib/{v}` | Thư viện; `404` nếu không có phiên bản đó. |
-| `POST /users/me/spin`, `PUT /users/me/lead-animal` | Đã ngừng: `410 FEATURE_RETIRED`. |
+| `POST /users/me/spin`, `PUT /users/me/lead-animal` | Đã ngừng: `410 FEATURE_RETIRED`. Thay bằng `POST /users/me/avatar/spin` và `PUT /users/me/avatar` (§8). |
+| `POST /users/me/avatar/spin` | Quay bằng một lượt đã mua; trả `{avatar, remaining}`. `409 NO_AVATAR_SPIN` khi hết lượt (§8.2). |
+| `PUT /users/me/avatar` | Đổi avatar đang dùng sang một avatar trong bộ sưu tập. `400 AVATAR_NOT_OWNED` (§8.3). |
+| `GET /users/me` | Thêm `avatarSpins`: số lượt quay còn lại. |
 | `PublicProfile`, discovery `Card`, post `Author`, internal user | Thêm `avatar` bên cạnh `leadAnimal`. |
 
 Event (topic `USER`): `USER_REGISTERED` thêm `avatar`; mới có `AVATAR_CHANGED {publicId, avatar}` (dùng khi cấp avatar cho tài khoản cũ và sau này khi đổi avatar trong bộ sưu tập). `LEAD_ANIMAL_CHANGED` vẫn phát song song (media-service còn đọc). discovery/post không cần nghe event: chúng lấy hồ sơ qua API nội bộ (post cache 5 phút), nên avatar mới hiện sau tối đa vài phút. Consumer gọi `idempotency.firstTime(eventId)`.
 
-## 8. Nạp tiền & hạn mức (làm sau)
+## 8. Lượt quay mua được (đã làm)
 
-Đã ghi nhận hướng đi, chưa thiết kế chi tiết:
+**Một lượt quay cho mỗi kỳ thuê bao Pro.** Mua gói tháng (`animallocket.pro.month`) được một lượt; mỗi lần gia hạn được thêm một lượt.
 
-- Nạp tiền → nhận lượt quay (`AVATAR_SPIN` qua `CONSUMABLE_GRANTED`), quay bằng `POST /users/me/avatar/spin` (có `Idempotency-Key`), avatar mới lấy từ cùng kho §4 và vào bộ sưu tập.
+### 8.1. Cấp lượt (billing-service)
+
+`BillingService.grantSpinForPeriod(sub)` được gọi từ `grantSubscription()` (mua mới) và `onSubscriptionUpdated()` (gia hạn từ webhook), rồi phát `CONSUMABLE_GRANTED {item: "AVATAR_SPIN", quantity: 1}`.
+
+**Không được gắn vào `SUBSCRIPTION_ACTIVATED`.** Event đó mang nghĩa "đặt trạng thái Pro hiện tại" và được phát lại mỗi lần có thay đổi (xem docs/07), nên nghe nó để cộng lượt sẽ cấp nhiều lượt cho một lần trả tiền.
+
+Khoá chống trùng là **một dòng sổ cái** `(reason = SUB_PERIOD, ref = sub:<id>:<giây hết hạn>, item = AVATAR_SPIN)`, nhờ `UNIQUE (reason, ref, item)` của `ledger`. Ba lớp chặn cùng lúc: biên lai gửi lại bị `purchases` chặn, webhook gửi lại bị `webhook_events` chặn, và cùng một kỳ bị dòng sổ cái này chặn.
+
+Hạn hết chốt theo **giây**, không theo mili: biên lai store có độ phân giải giây còn webhook có mili, nếu chốt theo mili thì cùng một kỳ sẽ bị tính thành hai.
+
+Dùng `WalletService.recordOnce()` (ghi sổ cái, **không** đổi số dư ví) vì số dư lượt quay nằm ở user-service; cộng vào ví billing nữa thì ví chỉ tăng không giảm và sẽ lệch dần.
+
+### 8.2. Giữ và tiêu lượt (user-service)
+
+Số dư nằm ở bảng `avatar_spin_credit` của **user-service**, không ở ví của billing. Lý do: `AvatarSpinService.spin()` trừ lượt và gọi `AvatarAllocator` trong **cùng một transaction**, nên
+
+- kho cạn → `AvatarAllocator` ném 503 → transaction rollback → **lượt quay trở lại**, người đã trả tiền không mất gì;
+- không có cửa sổ nào mà lượt đã trừ nhưng avatar chưa cấp (hoặc ngược lại).
+
+Nếu để số dư ở ví billing thì việc tiêu lượt phải gọi chéo hai service trong hai transaction, và một bên lỗi là mất lượt hoặc quay vô hạn. Đánh đổi đã chấp nhận: `GET /billing/me` không thấy `AVATAR_SPIN`, và hoàn tiền **không** thu hồi lượt chưa dùng.
+
+`CONSUMABLE_GRANTED` được `BillingEventsListener` khử trùng bằng `idempotency.firstTime(eventId)` như mọi event khác. Trừ lượt bằng `UPDATE ... SET used = used + 1 WHERE public_id = ? AND used < granted`, nên hai yêu cầu quay cùng lúc với số dư 1 thì chỉ một bên đi tiếp.
+
+### 8.3. Quay rồi đổi là hai bước
+
+`POST /users/me/avatar/spin` chỉ **thêm** avatar vào bộ sưu tập (nguồn `PURCHASE`); avatar đang dùng không đổi. Đổi là bước riêng do người dùng chọn: `PUT /users/me/avatar` với một avatar trong bộ sưu tập (`400 AVATAR_NOT_OWNED` nếu không sở hữu), phát `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED`. Vì post/discovery cache hồ sơ 5 phút, avatar mới hiện với người khác sau tối đa vài phút.
+
+Avatar cũ **vẫn thuộc người đó** trong `avatar_pool` (§4.3), nên đổi qua lại bao nhiêu lần cũng được và không ai khác quay ra được nó.
+
+### 8.4. Còn thiếu / rủi ro đã biết
+
+- **Chưa có `Idempotency-Key`** (`Headers.IDEMPOTENCY_KEY` đã khai báo nhưng chưa dùng ở đâu). Mạng đứt sau khi server đã quay thì lượt đã tiêu; mobile xử lý bằng cách tải lại bộ sưu tập khi gặp lỗi để người dùng thấy avatar mới, nhưng vẫn có một khoảnh khắc khó hiểu.
+- **Chưa có chặn mềm theo ngưỡng kho.** Khi kho gần cạn, người trả tiền nhận `503 AVATAR_POOL_EXHAUSTED` thô (lượt không mất, xem §8.2). Luật cảnh báo Prometheus cho `avatar_pool_free` vẫn chưa có.
+- **Hoàn tiền không thu hồi lượt chưa dùng.** Avatar đã quay thì theo §Quy tắc 7 không bao giờ thu hồi; mức thiệt hại là một chỗ trong kho 3.000 cho mỗi giao dịch bị hoàn.
+- **Sức chứa kho (§4.4)**: mỗi lượt quay bán ra làm giảm một chỗ đăng ký. Với 3.000 avatar, 100 người mua gói tháng và quay hết là mất 100 chỗ.
+- Chưa chạy thử với store/payOS thật.
+
+## 8b. Hạn mức theo gói (làm sau)
+
 - Nạp tiền → tăng ảnh/ngày (post-service `QuotaService`) và số bạn tối đa (**chưa có** giới hạn bạn bè trong `FriendService`, là logic mới).
-- Cần tính chung với sức chứa kho (§4.4): mỗi lượt quay bán ra làm giảm một chỗ trong kho.
 
 ## 9. Kế hoạch triển khai (phần đã chốt)
 
@@ -277,5 +317,5 @@ Tất cả các bước trên **đã làm**. Còn thiếu: luật cảnh báo Pr
 
 Phần cơ chế avatar đã chốt hết. Còn lại thuộc giai đoạn sau:
 
-1. Nạp tiền & bảng hạn mức (§8).
+1. Bảng hạn mức theo gói (§8b); phần lượt quay đã làm (§8).
 2. Nội dung thư viện v2 (con vật/màu/chiều mới) khi kho chạm ngưỡng cảnh báo.

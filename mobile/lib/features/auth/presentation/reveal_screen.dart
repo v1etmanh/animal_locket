@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:animal_locket/core/avatar/avatar_library.dart';
+import 'package:animal_locket/core/avatar/avatar_spin_reel.dart';
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
@@ -39,34 +39,14 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
   bool _busy = false;
   String? _error;
 
-  /// Mã đang hiện trong lúc chạy hiệu ứng quay; null = đã dừng ở avatar thật.
-  String? _spinning;
-  Timer? _spinTimer;
+  /// Hiệu ứng quay ~1,2 giây rồi dừng ở avatar server đã cấp (kết quả có trước khi hiệu ứng chạy).
+  final AvatarSpinReel _reel = AvatarSpinReel();
 
   @override
   void dispose() {
-    _spinTimer?.cancel();
+    _reel.dispose();
     _alias.dispose();
     super.dispose();
-  }
-
-  /// Hiệu ứng quay ~1,2 giây rồi dừng ở avatar server đã cấp (kết quả có trước khi hiệu ứng chạy).
-  void _playSpin() {
-    final random = Random();
-    var ticks = 0;
-    _spinTimer?.cancel();
-    // Quay ngay từ khung hình đầu để nút "Vào app" không bật trước khi quay xong.
-    _spinning = AvatarLibraries.instance.randomCodeForAnimation(random);
-    _spinTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
-      if (!mounted) return timer.cancel();
-      ticks++;
-      setState(() {
-        _spinning = ticks >= 15
-            ? null
-            : AvatarLibraries.instance.randomCodeForAnimation(random);
-      });
-      if (ticks >= 15) timer.cancel();
-    });
   }
 
   Future<void> _register() async {
@@ -81,7 +61,11 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
       if (mounted) {
         setState(() => _profile = profile);
         // Giảm chuyển động: hiện ngay avatar thật, không quay.
-        if (!MediaQuery.disableAnimationsOf(context)) _playSpin();
+        if (!MediaQuery.disableAnimationsOf(context)) {
+          _reel.play(onFrame: () {
+            if (mounted) setState(() {});
+          });
+        }
       }
     } on ApiProblem catch (problem) {
       if (mounted) {
@@ -98,10 +82,10 @@ class _RevealScreenState extends ConsumerState<RevealScreen> {
   Widget build(BuildContext context) {
     final p = context.album;
     final profile = _profile;
-    final spinning = _spinning != null;
+    final spinning = _reel.spinning;
     final libs = AvatarLibraries.instance;
     final animalName = libs.animalName(profile?.avatar) ?? profile?.leadAnimal;
-    final shown = _spinning ?? profile?.avatar;
+    final shown = _reel.current ?? profile?.avatar;
     const photo = 196.0;
     return AppPage(
       child: Column(

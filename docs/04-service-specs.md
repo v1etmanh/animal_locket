@@ -39,9 +39,9 @@ Mỗi mục gồm: trách nhiệm, dữ liệu sở hữu, API (tóm tắt, chi 
 
 **Trách nhiệm**: danh tính ẩn danh, **avatar con vật duy nhất** ([19-avatar-mechanism.md](19-avatar-mechanism.md)), kết bạn, chặn, báo cáo, gói con vật (bộ sưu tập cũ), thiết bị push, bản sao quyền lợi Pro.
 
-**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `avatar_pool`, `user_avatars`, `spin_log` (legacy), `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
+**Dữ liệu sở hữu**: `users`, `friendships`, `friend_requests`, `blocks`, `reports`, `animals`, `user_animals`, `avatar_pool`, `user_avatars`, `avatar_spin_credit`, `spin_log` (legacy), `device_tokens`, `entitlements`, `outbox_events`, `processed_events` ([05-data-model.md](05-data-model.md)). Bảng `users.keycloak_sub` là nơi duy nhất ánh xạ `sub` ↔ `publicId`.
 
-**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, bộ sưu tập avatar, con vật đã sở hữu, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị. `PUT /users/me/lead-animal` và `POST /users/me/spin` **đã ngừng** (`410 FEATURE_RETIRED`).
+**API công khai**: `register`, `me` (GET/PATCH/DELETE), hồ sơ người khác, bộ sưu tập avatar, con vật đã sở hữu, danh mục con vật, bạn bè, lời mời, chặn, báo cáo, thiết bị. `PUT /users/me/lead-animal` và `POST /users/me/spin` **đã ngừng** (`410 FEATURE_RETIRED`); thay bằng `POST /users/me/avatar/spin` (quay bằng lượt mua được) và `PUT /users/me/avatar` (đổi avatar đang dùng), xem docs/19 §8.
 **API nội bộ**: `identity/{sub}`, `users/{id}`, `users?ids=`, `friends/{id}`, `relationship`, `exclusions/{id}`, `swipes/right`, `devices/{id}`, `DELETE devices/{token}`.
 
 **Event phát** (Outbox): `USER_REGISTERED` (kèm `avatar`), `USER_DELETED`, `USER_BLOCKED`, `DISCOVERY_DISABLED` (khi tắt `discoverable`), `AVATAR_CHANGED` + `LEAD_ANIMAL_CHANGED` (khi cấp avatar cho tài khoản cũ) (topic `user.events`); `FRIEND_REQUEST_RECEIVED`, `FRIEND_ACCEPTED`, `FRIEND_REMOVED` (topic `friend.events`).

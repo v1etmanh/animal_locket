@@ -6,8 +6,10 @@ import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:animal_locket/features/billing/presentation/billing_controller.dart';
+import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class ProScreen extends ConsumerStatefulWidget {
   const ProScreen({super.key});
@@ -19,8 +21,11 @@ class ProScreen extends ConsumerStatefulWidget {
 class _ProScreenState extends ConsumerState<ProScreen> {
   // Thanh toán diễn ra trong trình duyệt; quay lại app (nút "Quay lại app" hoặc tự chuyển) thì tải lại gói/ví.
   late final AppLifecycleListener _lifecycle = AppLifecycleListener(
-    onResume: () =>
-        ref.read(billingControllerProvider.notifier).refreshAfterCheckout(),
+    onResume: () {
+      ref.read(billingControllerProvider.notifier).refreshAfterCheckout();
+      // Lượt quay avatar tới user-service qua Kafka nên có thể trễ vài giây; tải lại để nút quay hiện ra.
+      ref.invalidate(profileControllerProvider);
+    },
   );
 
   @override
@@ -88,6 +93,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
               const SizedBox(height: 22),
               _CurrentPlan(me: data.me!),
             ],
+            const _AvatarSpinsNote(),
             const SizedBox(height: 22),
             if (!data.enabled)
               Text(
@@ -147,6 +153,26 @@ class _ProScreenState extends ConsumerState<ProScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Lượt quay avatar tặng kèm mỗi kỳ thuê bao (docs/19 §8). Hiện ngay sau khi mua, lúc người dùng còn ở đây.
+class _AvatarSpinsNote extends ConsumerWidget {
+  const _AvatarSpinsNote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spins =
+        ref.watch(profileControllerProvider).value?.profile.avatarSpins ?? 0;
+    if (spins == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: PaperButton(
+        label: 'Quay avatar mới ($spins lượt)',
+        icon: AlbumIcons.dice,
+        onPressed: () => context.push('/avatar-spin'),
       ),
     );
   }
