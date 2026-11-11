@@ -12,6 +12,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Xem trước: ảnh in dán băng, lời nhắn viết tay ở lề dưới (spec §7.4).
 class PreviewScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,8 @@ class PreviewScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<PreviewScreen> createState() => _PreviewScreenState();
 }
+
+const _maxCaption = 200;
 
 class _PreviewScreenState extends ConsumerState<PreviewScreen> {
   final _caption = TextEditingController();
@@ -39,9 +42,9 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
         .read(uploadControllerProvider.notifier)
         .publish(input: XFile(path), caption: _caption.text);
     if (!started) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đang gửi ảnh trước, đợi chút nhé.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.previewSendingFirst)));
       return;
     }
     context.pop();
@@ -72,7 +75,7 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             },
           );
     return AppPage(
-      title: 'Xem trước',
+      title: context.l10n.previewTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -81,7 +84,24 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             photo: photo,
             note: TextField(
               controller: _caption,
-              maxLength: 200,
+              maxLength: _maxCaption,
+              // Đạt giới hạn thì bộ đếm chuyển màu đỏ.
+              buildCounter:
+                  (
+                    context, {
+                    required currentLength,
+                    required isFocused,
+                    maxLength,
+                  }) => Text(
+                    '$currentLength/$maxLength',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: currentLength >= _maxCaption
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: currentLength >= _maxCaption ? p.danger : p.muted,
+                    ),
+                  ),
               minLines: 1,
               maxLines: 3,
               // Xuống dòng để hiện hết chữ, nhưng Enter vẫn là "xong" như trước.
@@ -94,8 +114,8 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
                 color: p.ink,
               ),
               decoration: InputDecoration(
-                labelText: 'Lời nhắn',
-                hintText: 'Viết gì đó cho bạn bè…',
+                labelText: context.l10n.messageLabel,
+                hintText: context.l10n.messageHintFriends,
                 hintStyle: TextStyle(
                   fontFamily: AppFonts.hand,
                   fontSize: 21,
@@ -116,21 +136,32 @@ class _PreviewScreenState extends ConsumerState<PreviewScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          PaperButton(
-            label: sending ? 'Đang gửi ảnh trước…' : 'Gửi cho bạn bè',
-            icon: AlbumIcons.send,
-            onPressed: sending ? null : _publish,
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: PaperButton.tape(
-              label: 'Chụp lại',
-              onPressed: () => context.pop(),
-            ),
+          // Chụp lại bên trái, gửi (nút chính) bên phải.
+          Row(
+            children: [
+              // Co lại (chữ xuống dòng) khi chữ to trên máy hẹp.
+              Flexible(
+                child: PaperButton.tape(
+                  label: context.l10n.retake,
+                  icon: AlbumIcons.camera,
+                  onPressed: () => context.pop(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: PaperButton(
+                  label: sending
+                      ? context.l10n.sendingPhoto
+                      : context.l10n.sendToFriends,
+                  icon: AlbumIcons.send,
+                  onPressed: sending ? null : _publish,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Text(
-            'Ảnh được gửi cho toàn bộ bạn bè. Bản đầu chưa hỗ trợ chọn từng người nhận.',
+            context.l10n.previewNote,
             textAlign: TextAlign.center,
             style: TextStyle(color: p.muted, fontSize: 11),
           ),

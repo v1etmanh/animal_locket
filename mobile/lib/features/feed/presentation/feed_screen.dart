@@ -4,6 +4,7 @@ import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
+import 'package:animal_locket/core/widgets/album/double_tap_like.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
@@ -15,6 +16,7 @@ import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class FeedScreen extends ConsumerWidget {
   const FeedScreen({super.key});
@@ -23,13 +25,14 @@ class FeedScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final feed = ref.watch(feedControllerProvider);
     return AppPage(
-      title: 'Khoảnh khắc',
+      title: context.l10n.feedTitle,
+      watermark: '瞬',
       // Danh sách tự cuộn; AppPage cuộn thêm một lớp sẽ nuốt thao tác vuốt.
       scrollable: false,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       actions: [
         IconButton(
-          tooltip: 'Bạn bè',
+          tooltip: context.l10n.friendsLabel,
           onPressed: () => context.push('/friends'),
           icon: const AlbumIcon(AlbumIcons.friends),
         ),
@@ -65,7 +68,7 @@ class FeedScreen extends ConsumerWidget {
                         }
                         return Padding(
                           // Chừa chỗ cho thanh điều hướng nổi ở đáy (extendBody).
-                          padding: const EdgeInsets.only(top: 14, bottom: 110),
+                          padding: const EdgeInsets.only(top: 4, bottom: 88),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -77,9 +80,9 @@ class FeedScreen extends ConsumerWidget {
                                 child: Padding(
                                   // Chừa lề cho góc nghiêng và băng washi.
                                   padding: const EdgeInsets.fromLTRB(
+                                    4,
                                     10,
-                                    12,
-                                    10,
+                                    4,
                                     0,
                                   ),
                                   child: _PostCard(
@@ -107,7 +110,7 @@ class _DayLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6, left: 4),
+    padding: const EdgeInsets.only(bottom: 2, left: 4),
     child: Text(
       text,
       style: TextStyle(
@@ -132,7 +135,7 @@ class _FeedError extends ConsumerWidget {
             (error as ApiProblem).code,
             status: (error as ApiProblem).status,
           )
-        : 'Không thể tải feed. Vui lòng kiểm tra mạng.';
+        : context.l10n.feedLoadFailed;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -143,7 +146,7 @@ class _FeedError extends ConsumerWidget {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: ref.read(feedControllerProvider.notifier).refresh,
-            child: const Text('Thử lại'),
+            child: Text(context.l10n.retry),
           ),
         ],
       ),
@@ -167,10 +170,7 @@ class _EmptyFeed extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 14),
-      const Text(
-        'Chưa có khoảnh khắc nào\nHãy chụp ảnh hoặc kết bạn để bắt đầu.',
-        textAlign: TextAlign.center,
-      ),
+      Text(context.l10n.feedEmpty, textAlign: TextAlign.center),
     ],
   );
 }
@@ -190,10 +190,7 @@ class _DegradedBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: p.fold1),
       ),
-      child: const Text(
-        'Một phần dịch vụ đang chậm. Feed có thể chưa đầy đủ.',
-        textAlign: TextAlign.center,
-      ),
+      child: Text(context.l10n.feedDegraded, textAlign: TextAlign.center),
     );
   }
 }
@@ -215,57 +212,82 @@ class _PostCard extends ConsumerWidget {
     final caption = post.caption?.trim();
     Widget card(double t) => WashiPhotoCard(
       tiltDegrees: tilt * t,
-      photo: image.when(
-        loading: () => placeholder(const CircularProgressIndicator()),
-        error: (_, _) =>
-            placeholder(AlbumIcon(AlbumIcons.imageBroken, color: p.muted)),
-        data: (url) => url == null
-            ? placeholder(AlbumIcon(AlbumIcons.image, color: p.muted))
-            : Image.network(
-                url,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => placeholder(
-                  AlbumIcon(AlbumIcons.imageBroken, color: p.muted),
+      photo: DoubleTapLike(
+        liked: post.likedByMe,
+        onLike: () =>
+            ref.read(feedControllerProvider.notifier).toggleLike(post.id),
+        child: image.when(
+          loading: () => placeholder(const CircularProgressIndicator()),
+          error: (_, _) =>
+              placeholder(AlbumIcon(AlbumIcons.imageBroken, color: p.muted)),
+          data: (url) => url == null
+              ? placeholder(AlbumIcon(AlbumIcons.image, color: p.muted))
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => placeholder(
+                    AlbumIcon(AlbumIcons.imageBroken, color: p.muted),
+                  ),
                 ),
-              ),
+        ),
       ),
-      header: InkWell(
-        onTap: () => context.push('/user/${post.author.publicId}'),
-        borderRadius: BorderRadius.circular(10),
-        // Vùng chạm tối thiểu 48pt (hướng dẫn Android).
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              AnimalAvatar(
-                avatar: post.author.avatar,
-                leadAnimal: post.author.leadAnimal,
-                size: 40,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      // Một hàng: tác giả bên trái, thích/bình luận bên phải (gọn hơn hai hàng).
+      header: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => context.push('/user/${post.author.publicId}'),
+              borderRadius: BorderRadius.circular(10),
+              // Vùng chạm tối thiểu 48pt (hướng dẫn Android).
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
                   children: [
-                    Text(
-                      post.author.displayAlias,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                    AnimalAvatar(
+                      avatar: post.author.avatar,
+                      leadAnimal: post.author.leadAnimal,
+                      size: 36,
                     ),
-                    Text(
-                      _relativeTime(post.createdAt),
-                      style: TextStyle(fontSize: 12, color: p.muted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            post.author.displayAlias,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            _relativeTime(post.createdAt),
+                            style: TextStyle(fontSize: 12, color: p.muted),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          HankoStamp(
+            stamped: post.likedByMe,
+            tooltip: post.likedByMe ? context.l10n.unlike : context.l10n.like,
+            onPressed: () =>
+                ref.read(feedControllerProvider.notifier).toggleLike(post.id),
+          ),
+          Text('${post.likeCount}', style: TextStyle(color: p.muted)),
+          const SizedBox(width: 12),
+          AlbumIcon(AlbumIcons.comment, size: 21, color: p.muted),
+          const SizedBox(width: 4),
+          Text('${post.commentCount}', style: TextStyle(color: p.muted)),
+          const SizedBox(width: 4),
+        ],
       ),
       caption: caption?.isNotEmpty == true
           ? Text(
@@ -278,21 +300,6 @@ class _PostCard extends ConsumerWidget {
               ),
             )
           : null,
-      footer: Row(
-        children: [
-          HankoStamp(
-            stamped: post.likedByMe,
-            tooltip: post.likedByMe ? 'Bỏ thích' : 'Thích',
-            onPressed: () =>
-                ref.read(feedControllerProvider.notifier).toggleLike(post.id),
-          ),
-          Text('${post.likeCount}', style: TextStyle(color: p.muted)),
-          const SizedBox(width: 16),
-          AlbumIcon(AlbumIcons.comment, size: 21, color: p.muted),
-          const SizedBox(width: 6),
-          Text('${post.commentCount}', style: TextStyle(color: p.muted)),
-        ],
-      ),
     );
 
     return _Entrance(postId: post.id, builder: card);
@@ -341,8 +348,8 @@ String _dayLabel(Post post) =>
 
 String _relativeTime(DateTime value) {
   final difference = DateTime.now().toUtc().difference(value.toUtc());
-  if (difference.inMinutes < 1) return 'Vừa xong';
-  if (difference.inHours < 1) return '${difference.inMinutes} phút trước';
-  if (difference.inDays < 1) return '${difference.inHours} giờ trước';
-  return '${difference.inDays} ngày trước';
+  if (difference.inMinutes < 1) return tr.timeJustNow;
+  if (difference.inHours < 1) return tr.timeMinutesAgo(difference.inMinutes);
+  if (difference.inDays < 1) return tr.timeHoursAgo(difference.inHours);
+  return tr.timeDaysAgo(difference.inDays);
 }

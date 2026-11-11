@@ -11,14 +11,14 @@ class WashiPhotoCard extends StatelessWidget {
     required this.photo,
     required this.header,
     this.caption,
-    required this.footer,
+    this.footer,
     this.tiltDegrees = -1.4,
   });
 
   final Widget photo;
   final Widget header;
   final Widget? caption;
-  final Widget footer;
+  final Widget? footer;
   final double tiltDegrees;
 
   /// Nghiêng xen kẽ để cả trang trông như ảnh dán tay.
@@ -48,7 +48,7 @@ class WashiPhotoCard extends StatelessWidget {
             child: Material(
               type: MaterialType.transparency,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
@@ -61,14 +61,16 @@ class WashiPhotoCard extends StatelessWidget {
                         child: AspectRatio(aspectRatio: 4 / 5, child: photo),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     header,
                     if (caption != null) ...[
-                      const SizedBox(height: 6),
-                      caption!,
+                      const SizedBox(height: 2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: caption!,
+                      ),
                     ],
-                    const SizedBox(height: 8),
-                    footer,
+                    if (footer != null) ...[const SizedBox(height: 6), footer!],
                   ],
                 ),
               ),

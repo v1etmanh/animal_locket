@@ -1,4 +1,5 @@
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 class BillingProduct {
   const BillingProduct({
@@ -34,10 +35,13 @@ class BillingProduct {
   }
 
   String get label => switch (item) {
-    'PRO' => periodDays == null ? 'Gói Pro' : 'Gói Pro $periodDays ngày',
-    'BOOST' => 'Boost khám phá × $quantity',
-    'PRIORITY_INVITE' => 'Lời mời ưu tiên × $quantity',
-    _ => type == 'PACK' ? 'Gói con vật $item' : '$item × $quantity',
+    'PRO' =>
+      periodDays == null
+          ? tr.billingProPlan
+          : tr.billingProPlanDays(periodDays!),
+    'BOOST' => tr.billingBoost(quantity),
+    'PRIORITY_INVITE' => tr.billingPriorityInvite(quantity),
+    _ => type == 'PACK' ? tr.billingAnimalPack(item) : '$item × $quantity',
   };
 
   /// Giá hiển thị: ưu tiên VND (payOS), không có thì USD (PayPal).

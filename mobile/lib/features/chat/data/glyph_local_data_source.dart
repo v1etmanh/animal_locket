@@ -85,7 +85,10 @@ class GlyphLocalDataSource {
       where: "kind = 'SYSTEM' AND is_active = 1",
       orderBy: 'local_id ASC',
     );
-    return rows.map(_libraryFromRow).toList(growable: false);
+    return rows
+        .map(_libraryFromRow)
+        .map(localizeSystemGlyph)
+        .toList(growable: false);
   }
 
   Future<List<GlyphDefinition>> personalGlyphs(String accountPublicId) async {

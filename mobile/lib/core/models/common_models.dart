@@ -1,3 +1,5 @@
+import 'package:animal_locket/core/l10n/tr.dart';
+
 enum AgeGroup { minor, adult }
 
 enum AccountPlan { free, pro }
@@ -14,7 +16,7 @@ class Animal {
 
   factory Animal.fromJson(Map<String, dynamic> json) => Animal(
     code: json['code'] as String? ?? 'unknown',
-    name: json['name'] as String? ?? 'Con vật',
+    name: json['name'] as String? ?? tr.unknownAnimal,
     rarity: switch (json['rarity']) {
       'COMMON' => AnimalRarity.common,
       'RARE' => AnimalRarity.rare,
@@ -30,10 +32,10 @@ class Animal {
   final String? packCode;
 
   String get rarityLabel => switch (rarity) {
-    AnimalRarity.common => 'Phổ thông',
-    AnimalRarity.rare => 'Hiếm',
-    AnimalRarity.epic => 'Sử thi',
-    AnimalRarity.unknown => 'Chưa rõ',
+    AnimalRarity.common => tr.rarityCommon,
+    AnimalRarity.rare => tr.rarityRare,
+    AnimalRarity.epic => tr.rarityEpic,
+    AnimalRarity.unknown => tr.rarityUnknown,
   };
 }
 
@@ -60,7 +62,7 @@ class PublicProfile {
   final String? avatar;
 
   String get displayAlias =>
-      alias?.trim().isNotEmpty == true ? alias! : 'Người bạn ẩn danh';
+      alias?.trim().isNotEmpty == true ? alias! : tr.anonymousFriend;
 }
 
 class MeProfile extends PublicProfile {

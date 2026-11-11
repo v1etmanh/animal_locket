@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/widgets/album/watercolor_wash.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:flutter/material.dart';
 
@@ -26,11 +27,10 @@ class WashiNavBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   static const _height = 68.0;
+  static const _washWidth = 72.0;
   static const _radius = BorderRadius.only(
     topLeft: Radius.circular(4),
     topRight: Radius.circular(4),
-    bottomLeft: Radius.circular(18),
-    bottomRight: Radius.circular(18),
   );
 
   @override
@@ -40,7 +40,8 @@ class WashiNavBar extends StatelessWidget {
         ? Duration.zero
         : const Duration(milliseconds: 200);
     return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      // Trải hết chiều ngang màn hình, chỉ chừa vùng an toàn phía dưới.
+      minimum: EdgeInsets.zero,
       child: DecoratedBox(
         decoration: const BoxDecoration(
           borderRadius: _radius,
@@ -73,21 +74,27 @@ class WashiNavBar extends StatelessWidget {
                         painter: _TornEdgePainter(p.fold1),
                       ),
                     ),
-                    // Mẩu washi trượt tới tab đang chọn.
+                    // Vệt cọ trượt tới tab đang chọn, loe ra khi tới nơi.
                     AnimatedPositioned(
                       duration: slide,
                       curve: Curves.easeOutCubic,
-                      left: slot * currentIndex + (slot - 52) / 2,
-                      top: 6,
-                      child: Transform.rotate(
-                        angle: -4 * math.pi / 180,
-                        child: Opacity(
-                          opacity: .7,
-                          child: Container(
-                            width: 52,
-                            height: 30,
-                            color: p.tape1,
+                      left: slot * currentIndex + (slot - _washWidth) / 2,
+                      top: 8,
+                      child: TweenAnimationBuilder<double>(
+                        key: ValueKey(currentIndex),
+                        tween: Tween(begin: 0, end: 1),
+                        duration: slide * 1.5,
+                        curve: Curves.easeOutCubic,
+                        builder: (_, t, child) => Opacity(
+                          opacity: t,
+                          child: Transform.scale(
+                            scale: .78 + .22 * t,
+                            child: child,
                           ),
+                        ),
+                        child: WatercolorWash(
+                          size: const Size(_washWidth, 38),
+                          seed: currentIndex,
                         ),
                       ),
                     ),
@@ -99,6 +106,7 @@ class WashiNavBar extends StatelessWidget {
                               item: items[i],
                               selected: i == currentIndex,
                               polaroid: items[i].icon == AlbumIcons.photos,
+                              pop: slide,
                               onTap: () => onSelected(i),
                             ),
                           ),
@@ -120,12 +128,16 @@ class _NavButton extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.polaroid,
+    required this.pop,
     required this.onTap,
   });
 
   final WashiNavItem item;
   final bool selected;
   final bool polaroid;
+
+  /// Thời lượng nảy nhẹ của icon khi tab được chọn (0 khi giảm chuyển động).
+  final Duration pop;
   final VoidCallback onTap;
 
   @override
@@ -147,12 +159,17 @@ class _NavButton extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    height: 30,
-                    width: 48,
-                    child: polaroid
-                        ? const _Polaroid()
-                        : Center(child: AlbumIcon(item.icon, color: color)),
+                  AnimatedScale(
+                    scale: selected ? 1.1 : 1,
+                    duration: pop,
+                    curve: Curves.easeOutBack,
+                    child: SizedBox(
+                      height: 30,
+                      width: 48,
+                      child: polaroid
+                          ? const _Polaroid()
+                          : Center(child: AlbumIcon(item.icon, color: color)),
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(

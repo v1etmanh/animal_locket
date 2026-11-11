@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:animal_locket/core/theme/album_palette.dart';
-import 'package:animal_locket/core/widgets/album/washi_photo_card.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:flutter/material.dart';
 
@@ -110,22 +109,7 @@ class PaperButton extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             paper,
-            if (_tape)
-              Positioned(
-                left: -6,
-                top: -8,
-                child: Transform.rotate(
-                  angle: -14 * math.pi / 180,
-                  child: Opacity(
-                    opacity: .85,
-                    child: CustomPaint(
-                      size: const Size(46, 16),
-                      painter: WashiTapePainter(p.tape1, p.tape2),
-                    ),
-                  ),
-                ),
-              )
-            else
+            if (!_tape)
               Positioned(
                 right: 0,
                 top: 0,
@@ -143,41 +127,47 @@ class PaperButton extends StatelessWidget {
   }
 }
 
-/// Mép trên và dưới răng cưa như giấy xé; [corner] > 0 thì cắt chéo góc phải trên
-/// (chỗ để mảnh gấp mép).
+/// Mép trên và dưới xé tay: ít răng, bước và độ sâu không đều như giấy bị xé;
+/// [corner] > 0 thì cắt chéo góc phải trên (chỗ để mảnh gấp mép).
+/// Hình dạng cố định theo kích thước nên không nhấp nháy khi vẽ lại.
 class TornPaperClipper extends CustomClipper<Path> {
   const TornPaperClipper({this.corner = 0});
   final double corner;
 
-  static const _step = 7.0;
-  static const _depth = 2.4;
+  static const _minStep = 11.0;
+  static const _maxStep = 26.0;
+  static const _depth = 3.6;
 
   @override
   Path getClip(Size size) {
     final w = size.width, h = size.height;
-    final path = Path()..moveTo(0, _depth);
-    // Mép trên: răng cưa từ trái sang phải, dừng trước góc gấp.
-    var x = 0.0;
-    var up = true;
-    while (x + _step < w - corner) {
-      x += _step;
-      path.lineTo(x, up ? 0 : _depth);
-      up = !up;
+    final rnd = math.Random(w.round() * 31 + h.round());
+    // Một mép: các điểm gãy cách nhau không đều, độ lệch ngẫu nhiên 0.._depth.
+    List<Offset> edge(double from, double to, double y, double dir) {
+      final pts = <Offset>[];
+      var x = from;
+      final sign = to > from ? 1 : -1;
+      while (true) {
+        x += sign * (_minStep + rnd.nextDouble() * (_maxStep - _minStep));
+        if ((x - to) * sign >= -_minStep * .6) break;
+        pts.add(Offset(x, y + dir * rnd.nextDouble() * _depth));
+      }
+      return pts;
+    }
+
+    final path = Path()..moveTo(0, _depth * .5);
+    for (final o in edge(0, w - corner, 0, 1)) {
+      path.lineTo(o.dx, o.dy);
     }
     path
       ..lineTo(w - corner, 0)
       ..lineTo(w, corner)
-      ..lineTo(w, h - _depth);
-    // Mép dưới: răng cưa từ phải sang trái.
-    x = w;
-    up = true;
-    while (x - _step > 0) {
-      x -= _step;
-      path.lineTo(x, up ? h : h - _depth);
-      up = !up;
+      ..lineTo(w, h - _depth * .5);
+    for (final o in edge(w, 0, h, -1)) {
+      path.lineTo(o.dx, o.dy);
     }
     return path
-      ..lineTo(0, h - _depth)
+      ..lineTo(0, h - _depth * .5)
       ..close();
   }
 

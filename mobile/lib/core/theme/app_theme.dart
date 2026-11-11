@@ -7,6 +7,12 @@ abstract final class AppFonts {
 
   /// Chỉ cho chữ "viết tay" (caption ảnh, ghi chú); không dùng cho chữ chức năng.
   static const hand = 'Patrick Hand';
+
+  /// Chữ Nhật trang trí. Font là bản subset chỉ có "朱柚桜空瞬思い出をそっと";
+  /// thêm chữ thì subset lại `ShipporiMincho-Medium.ttf` bằng `pyftsubset` với
+  /// `--text` là toàn bộ chữ và `--layout-features='*'`, rồi sửa
+  /// `test/no_japanese_text_test.dart`.
+  static const jp = 'Shippori Mincho';
 }
 
 abstract final class AppTheme {

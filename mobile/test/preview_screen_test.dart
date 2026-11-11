@@ -96,6 +96,22 @@ void main() {
     expect(field.style?.fontFamily, AppFonts.hand);
   });
 
+  testWidgets('the counter turns red at the 200-character limit', (
+    tester,
+  ) async {
+    await _pump(tester);
+    Color? counterColor(String text) =>
+        tester.widget<Text>(find.text(text)).style?.color;
+    await tester.enterText(find.byType(TextField), 'a' * 199);
+    await tester.pump();
+    final normal = counterColor('199/200');
+    await tester.enterText(find.byType(TextField), 'a' * 200);
+    await tester.pump();
+    final full = counterColor('200/200');
+    expect(full, isNot(normal));
+    expect(full, AlbumPalette.of(AlbumThemeId.shu).danger);
+  });
+
   testWidgets('enter closes the keyboard instead of adding a line', (
     tester,
   ) async {
@@ -112,6 +128,22 @@ void main() {
     );
     expect(send.icon, AlbumIcons.send);
     expect(send.onPressed, isNotNull);
+    // Chụp lại (có icon) bên trái, gửi bên phải trên cùng một hàng.
+    final retake = find.widgetWithText(PaperButton, 'Chụp lại');
+    expect(tester.widget<PaperButton>(retake).icon, AlbumIcons.camera);
+    expect(
+      tester.getCenter(retake).dy,
+      closeTo(
+        tester.getCenter(find.widgetWithText(PaperButton, 'Gửi cho bạn bè')).dy,
+        1,
+      ),
+    );
+    expect(
+      tester.getCenter(retake).dx,
+      lessThan(
+        tester.getCenter(find.widgetWithText(PaperButton, 'Gửi cho bạn bè')).dx,
+      ),
+    );
     expect(
       find.text(
         'Ảnh được gửi cho toàn bộ bạn bè. Bản đầu chưa hỗ trợ chọn từng người nhận.',

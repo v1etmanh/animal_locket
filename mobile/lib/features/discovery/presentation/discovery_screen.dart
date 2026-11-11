@@ -16,6 +16,7 @@ import 'package:animal_locket/features/discovery/presentation/discovery_controll
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Khám phá: thẻ polaroid lớn, nút giấy và con dấu (spec §7.5).
 class DiscoveryScreen extends ConsumerStatefulWidget {
@@ -76,21 +77,21 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      'Khám phá',
+                      context.l10n.discoverTab,
                       style: Theme.of(context).textTheme.headlineLarge,
                     ),
                   ),
                   TextButton.icon(
                     onPressed: () => context.push('/friends'),
                     icon: AlbumIcon(AlbumIcons.friends, color: p.accent),
-                    label: const Text('Bạn bè'),
+                    label: Text(context.l10n.friendsLabel),
                   ),
                 ],
               ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Còn ${data.swipesLeftToday} lượt quẹt phải hôm nay',
+                  context.l10n.swipesLeft(data.swipesLeftToday),
                   style: TextStyle(color: p.muted),
                 ),
               ),
@@ -107,13 +108,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Bật vị trí để tìm người ở gần. Hiện chỉ thấy người đang online.',
+                          context.l10n.enableLocationHint,
                           style: TextStyle(color: p.accentDeep),
                         ),
                       ),
                       TextButton(
                         onPressed: controller.requestLocation,
-                        child: const Text('Bật vị trí'),
+                        child: Text(context.l10n.enableLocation),
                       ),
                     ],
                   ),
@@ -122,7 +123,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(
-                    'Dịch vụ đang chậm, bộ thẻ có thể chưa đầy đủ.',
+                    context.l10n.discoverSlow,
                     style: TextStyle(color: p.accentDeep),
                   ),
                 ),
@@ -136,7 +137,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                 children: [
                   PaperTileButton(
                     icon: AlbumIcons.close,
-                    label: 'Bỏ qua',
+                    label: context.l10n.skip,
                     size: 60,
                     onPressed: card == null || data.busy
                         ? null
@@ -145,7 +146,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                   const SizedBox(width: 20),
                   PaperTileButton(
                     icon: AlbumIcons.bolt,
-                    label: 'Dùng Boost',
+                    label: context.l10n.useBoost,
                     size: 50,
                     onPressed: data.busy ? null : _boost,
                   ),
@@ -153,7 +154,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
                   HankoStamp(
                     stamped: true,
                     toggle: false,
-                    tooltip: 'Kết bạn',
+                    tooltip: context.l10n.addFriend,
                     size: 68,
                     onPressed: card == null || data.busy
                         ? null
@@ -175,11 +176,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
           .swipe(right);
       if (!mounted) return;
       if (result == 'MATCHED') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã thành bạn! Bạn có thể bắt đầu trò chuyện.'),
-          ),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(context.l10n.friendsMade)));
       }
     } on ApiProblem catch (problem) {
       if (!mounted) return;
@@ -192,7 +190,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen>
       await ref.read(discoveryControllerProvider.notifier).boost();
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Đã dùng 1 Boost.')));
+            .showSnackBar(SnackBar(content: Text(context.l10n.boostUsed)));
       }
     } on ApiProblem catch (problem) {
       if (mounted && problem.code == 'NO_BOOST') context.push('/pro');
@@ -239,10 +237,10 @@ class _CardPolaroid extends StatelessWidget {
           runSpacing: 8,
           children: [
             if (card.online)
-              const _PaperChip(label: 'Đang online', dot: onlineGreen),
+              _PaperChip(label: context.l10n.online, dot: onlineGreen),
             if (card.distanceLabel != null)
               _PaperChip(label: card.distanceLabel!),
-            const _PaperChip(label: 'Con vật ẩn danh'),
+            _PaperChip(label: context.l10n.anonymousAnimal),
           ],
         ),
       ],
@@ -312,12 +310,12 @@ class _NoCards extends StatelessWidget {
           AlbumIcon(AlbumIcons.discover, size: 64, color: p.muted),
           const SizedBox(height: 16),
           Text(
-            'Hết thẻ mới rồi',
+            context.l10n.deckEmpty,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 16),
-          PaperButton.tape(label: 'Tải lại', onPressed: onReload),
+          PaperButton.tape(label: context.l10n.reload, onPressed: onReload),
         ],
       ),
     );
@@ -359,18 +357,15 @@ class _EnableDiscovery extends ConsumerWidget {
           AlbumIcon(AlbumIcons.discover, size: 64, color: context.album.accent),
           const SizedBox(height: 16),
           Text(
-            'Tìm người bạn mới',
+            context.l10n.findNewFriends,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Vị trí chỉ được xin khi bạn bật khám phá. Nếu từ chối, bạn vẫn có thể dùng chế độ online.',
-            textAlign: TextAlign.center,
-          ),
+          Text(context.l10n.locationConsent, textAlign: TextAlign.center),
           const SizedBox(height: 20),
           PaperButton(
-            label: 'Bật khám phá',
+            label: context.l10n.enableDiscovery,
             onPressed: ref.read(discoveryControllerProvider.notifier).enable,
           ),
         ],
@@ -389,13 +384,15 @@ class _DiscoveryError extends ConsumerWidget {
       children: [
         Text(
           error is ApiProblem
-              ? 'Không thể tải khám phá (${(error as ApiProblem).code ?? (error as ApiProblem).status}).'
-              : 'Không thể tải khám phá.',
+              ? context.l10n.discoverLoadFailedCode(
+                  '${(error as ApiProblem).code ?? (error as ApiProblem).status}',
+                )
+              : context.l10n.discoverLoadFailed,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
         PaperButton.tape(
-          label: 'Thử lại',
+          label: context.l10n.retry,
           onPressed: ref.read(discoveryControllerProvider.notifier).refresh,
         ),
       ],

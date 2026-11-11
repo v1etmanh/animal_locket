@@ -5,7 +5,6 @@ import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
 import 'package:animal_locket/core/widgets/album/paper_list.dart';
-import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
@@ -14,9 +13,11 @@ import 'package:animal_locket/core/widgets/text_input_dialog.dart';
 import 'package:animal_locket/features/feed/presentation/posts_grid.dart';
 import 'package:animal_locket/features/friends/presentation/friends_controller.dart';
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
+import 'package:animal_locket/features/profile/presentation/upgrade_pro_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Hồ sơ của tôi như một trang album (spec §7.7).
 class ProfileScreen extends ConsumerWidget {
@@ -29,7 +30,7 @@ class ProfileScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
           child: PaperButton(
-            label: 'Không tải được · Thử lại',
+            label: context.l10n.loadFailedRetry,
             onPressed: ref.read(profileControllerProvider.notifier).refresh,
           ),
         ),
@@ -51,11 +52,10 @@ class _ProfileContent extends ConsumerWidget {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: PaperTileButton(
-            icon: AlbumIcons.settings,
-            label: 'Cài đặt',
-            size: 48,
+          child: IconButton(
+            tooltip: context.l10n.settings,
             onPressed: () => context.push('/settings'),
+            icon: AlbumIcon(AlbumIcons.settings, color: context.album.ink),
           ),
         ),
         const SizedBox(height: 8),
@@ -85,18 +85,23 @@ class _ProfileContent extends ConsumerWidget {
                           style: Theme.of(context).textTheme.headlineLarge,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      PaperTileButton(
-                        icon: AlbumIcons.edit,
-                        label: 'Đổi biệt danh',
-                        size: 48,
+                      IconButton(
+                        tooltip: context.l10n.changeNickname,
+                        visualDensity: VisualDensity.compact,
                         onPressed: () => _editAlias(context, ref),
+                        icon: AlbumIcon(
+                          AlbumIcons.edit,
+                          size: 20,
+                          color: p.muted,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Thành viên ${data.profile.plan == AccountPlan.pro ? 'Pro' : 'Free'}',
+                    data.profile.plan == AccountPlan.pro
+                        ? context.l10n.memberPro
+                        : context.l10n.memberFree,
                     style: TextStyle(color: p.muted),
                   ),
                   const SizedBox(height: 16),
@@ -113,7 +118,7 @@ class _ProfileContent extends ConsumerWidget {
                             ),
                           ),
                           TextSpan(
-                            text: '  Avatar sở hữu',
+                            text: '  ${context.l10n.ownedAvatars}',
                             style: TextStyle(color: p.muted, fontSize: 12),
                           ),
                         ],
@@ -128,20 +133,20 @@ class _ProfileContent extends ConsumerWidget {
         const SizedBox(height: 28),
         const _FriendsStrip(),
         const SizedBox(height: 24),
-        Text('Ảnh của tôi', style: heading),
+        Text(context.l10n.myPhotos, style: heading),
         const SizedBox(height: 12),
         PostsGrid(
           publicId: data.profile.publicId,
           mine: true,
-          emptyText: 'Bạn chưa đăng ảnh nào.',
+          emptyText: context.l10n.noMyPhotos,
         ),
         const SizedBox(height: 24),
         Row(
           children: [
-            Expanded(child: Text('Bộ sưu tập', style: heading)),
+            Expanded(child: Text(context.l10n.collection, style: heading)),
             if (data.profile.avatarSpins > 0)
               PaperButton.tape(
-                label: 'Quay avatar (${data.profile.avatarSpins})',
+                label: context.l10n.spinAvatarButton(data.profile.avatarSpins),
                 onPressed: () => context.push('/avatar-spin'),
               ),
           ],
@@ -149,8 +154,8 @@ class _ProfileContent extends ConsumerWidget {
         const SizedBox(height: 6),
         Text(
           data.avatars.length > 1
-              ? 'Chạm một avatar để dùng nó. Mỗi avatar chỉ thuộc về bạn.'
-              : 'Mỗi avatar chỉ thuộc về bạn, không ai khác có được.',
+              ? context.l10n.collectionNoteMulti
+              : context.l10n.collectionNote,
           style: TextStyle(color: p.muted, fontSize: 12),
         ),
         const SizedBox(height: 18),
@@ -170,9 +175,8 @@ class _ProfileContent extends ConsumerWidget {
         const SizedBox(height: 24),
         if (data.profile.ageGroup == AgeGroup.adult &&
             data.profile.plan != AccountPlan.pro)
-          PaperButton(
-            label: 'Khám phá Animal Locket Pro',
-            icon: AlbumIcons.bolt,
+          UpgradeProButton(
+            label: context.l10n.upgradePro,
             onPressed: () => context.push('/pro'),
           ),
       ],
@@ -183,9 +187,9 @@ class _ProfileContent extends ConsumerWidget {
     final alias = await showDialog<String>(
       context: context,
       builder: (_) => TextInputDialog(
-        title: 'Đổi biệt danh',
-        label: 'Biệt danh',
-        confirmLabel: 'Lưu',
+        title: context.l10n.changeNickname,
+        label: context.l10n.nicknameLabel,
+        confirmLabel: context.l10n.save,
         initialText: data.profile.alias ?? '',
         maxLength: 20, // server: 3–20 ký tự
       ),
@@ -286,12 +290,14 @@ class _FriendsStrip extends ConsumerWidget {
           children: [
             Expanded(
               child: Text(
-                count == null ? 'Bạn bè' : 'Bạn bè ($count)',
+                count == null
+                    ? context.l10n.friendsLabel
+                    : context.l10n.friendsCount(count),
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
             ),
             PaperButton.tape(
-              label: 'Xem tất cả',
+              label: context.l10n.seeAll,
               onPressed: () => context.push('/friends'),
             ),
           ],
@@ -303,7 +309,7 @@ class _FriendsStrip extends ConsumerWidget {
             child: Center(child: CircularProgressIndicator()),
           ),
           error: (_, _) => PaperButton.tape(
-            label: 'Không tải được bạn bè · Thử lại',
+            label: context.l10n.friendsLoadFailed,
             onPressed: () => ref.invalidate(friendsControllerProvider),
           ),
           data: (data) => data.friends.isEmpty
@@ -311,12 +317,12 @@ class _FriendsStrip extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Chưa có bạn bè nào.',
+                        context.l10n.noFriendsYet,
                         style: TextStyle(color: p.muted),
                       ),
                     ),
                     PaperButton.tape(
-                      label: 'Tìm bạn',
+                      label: context.l10n.findFriends,
                       onPressed: () => context.go('/discover'),
                     ),
                   ],
@@ -332,7 +338,7 @@ class _FriendsStrip extends ConsumerWidget {
                       final person = data.friends[index];
                       return Semantics(
                         button: true,
-                        label: 'Mở trang của ${person.displayAlias}',
+                        label: context.l10n.openProfileOf(person.displayAlias),
                         excludeSemantics: true,
                         child: InkWell(
                           onTap: () => context.push('/user/${person.publicId}'),

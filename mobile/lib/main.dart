@@ -1,5 +1,6 @@
 import 'package:animal_locket/app.dart';
 import 'package:animal_locket/core/avatar/avatar_library.dart';
+import 'package:animal_locket/core/l10n/locale_controller.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,9 +16,16 @@ Future<void> main() async {
   try {
     theme = await const SecureThemeStore(FlutterSecureStorage()).read();
   } catch (_) {}
+  Locale? locale;
+  try {
+    locale = await const SecureLocaleStore(FlutterSecureStorage()).read();
+  } catch (_) {}
   runApp(
     ProviderScope(
-      overrides: [initialAlbumThemeProvider.overrideWithValue(theme)],
+      overrides: [
+        initialAlbumThemeProvider.overrideWithValue(theme),
+        initialLocaleProvider.overrideWithValue(locale),
+      ],
       child: const AnimalLocketApp(),
     ),
   );

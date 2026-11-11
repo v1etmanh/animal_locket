@@ -9,6 +9,7 @@ import 'package:animal_locket/features/camera/presentation/upload_controller.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
 /// Xanh lá sẫm cho "Đã gửi" (đạt AA trên nền giấy).
 const _sentGreen = Color(0xFF2F6B3A);
@@ -32,15 +33,15 @@ class SendStatusPill extends ConsumerWidget {
           height: 16,
           child: CircularProgressIndicator(strokeWidth: 2, color: p.accent),
         ),
-        text: 'Đang gửi…',
+        text: context.l10n.sendSending,
         color: p.accent,
       ),
       UploadStage.sent => _Pill(
         key: const ValueKey('sent'),
         leading: const AlbumIcon(AlbumIcons.check, size: 18, color: _sentGreen),
-        text: 'Đã gửi',
+        text: context.l10n.sendSent,
         color: _sentGreen,
-        actionLabel: 'Xem',
+        actionLabel: context.l10n.view,
         onAction: () {
           notifier.dismiss();
           context.go('/feed');
@@ -49,7 +50,7 @@ class SendStatusPill extends ConsumerWidget {
       UploadStage.rejected => _Pill(
         key: const ValueKey('rejected'),
         leading: AlbumIcon(AlbumIcons.alert, size: 18, color: p.danger),
-        text: 'Ảnh không được chấp nhận',
+        text: context.l10n.sendRejected,
         color: p.danger,
         onClose: notifier.dismiss,
       ),
@@ -58,7 +59,7 @@ class SendStatusPill extends ConsumerWidget {
         leading: AlbumIcon(AlbumIcons.cloudOff, size: 18, color: p.danger),
         text: _failureText(upload.error),
         color: p.danger,
-        actionLabel: 'Thử lại',
+        actionLabel: context.l10n.retry,
         onAction: notifier.retry,
         onClose: notifier.dismiss,
       ),
@@ -73,7 +74,7 @@ class SendStatusPill extends ConsumerWidget {
 
   static String _failureText(Object? error) => error is ApiProblem
       ? messageForApiCode(error.code, status: error.status)
-      : 'Gửi lỗi, kiểm tra mạng';
+      : tr.sendFailed;
 }
 
 class _Pill extends StatelessWidget {
@@ -153,7 +154,7 @@ class _Pill extends StatelessWidget {
                       if (onClose != null)
                         Semantics(
                           container: true,
-                          label: 'Đóng',
+                          label: context.l10n.close,
                           button: true,
                           excludeSemantics: true,
                           onTap: onClose,

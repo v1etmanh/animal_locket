@@ -3,7 +3,6 @@ import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/widgets/album/hanko_stamp.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
-import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album_icon.dart';
 import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/features/friends/domain/friends_repository.dart';
@@ -65,6 +64,8 @@ class _FakeFriends extends FriendsController {
   Future<void> decline(String id) async => calls.add('decline $id');
   @override
   Future<void> cancel(String id) async => calls.add('cancel $id');
+  @override
+  Future<void> remove(String id) async => calls.add('remove $id');
 }
 
 Future<_FakeFriends> _pump(
@@ -115,11 +116,11 @@ void main() {
     expect(find.text('Ngoại tuyến'), findsOneWidget);
     final avatars = tester.widgetList<AnimalAvatar>(find.byType(AnimalAvatar));
     expect(avatars.every((a) => a.square), isTrue);
-    expect(find.bySemanticsLabel('Xem hồ sơ'), findsNWidgets(2));
+    expect(find.byTooltip('Xem hồ sơ'), findsNWidgets(2));
     expect(find.byType(Icon), findsNothing);
   });
 
-  testWidgets('incoming: check-mark stamp accepts, paper × declines', (
+  testWidgets('incoming: check-mark stamp accepts, plain × declines', (
     tester,
   ) async {
     final fake = await _pump(tester, _state());
@@ -135,19 +136,31 @@ void main() {
       isSemantics(isButton: true, label: 'Chấp nhận', hasToggledState: false),
     );
     await tester.tap(find.byType(HankoStamp));
-    final decline = tester.widget<PaperTileButton>(
-      find.byType(PaperTileButton),
-    );
-    expect(decline.label, 'Từ chối');
-    await tester.tap(find.byType(PaperTileButton));
+    await tester.tap(find.byTooltip('Từ chối'));
     expect(fake.calls, ['accept r1', 'decline r1']);
   });
 
-  testWidgets('outgoing: a paper "Huỷ" label cancels', (tester) async {
+  testWidgets('outgoing: a plain "Huỷ" text button cancels', (tester) async {
     final fake = await _pump(tester, _state());
     await _openTab(tester, 'Đã gửi 1');
-    await tester.tap(find.widgetWithText(PaperButton, 'Huỷ'));
+    await tester.tap(find.widgetWithText(TextButton, 'Huỷ'));
     expect(fake.calls, ['cancel r2']);
+  });
+
+  testWidgets('friend menu offers message, profile and a confirmed unfriend', (
+    tester,
+  ) async {
+    final fake = await _pump(tester, _state());
+    await tester.tap(find.byTooltip('Xem hồ sơ').first);
+    await tester.pumpAndSettle();
+    for (final label in ['Nhắn tin', 'Xem hồ sơ', 'Huỷ kết bạn']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    await tester.tap(find.text('Huỷ kết bạn'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Huỷ kết bạn'));
+    await tester.pumpAndSettle();
+    expect(fake.calls.where((c) => c.startsWith('remove ')), hasLength(1));
   });
 
   testWidgets('a busy request shows progress instead of buttons', (

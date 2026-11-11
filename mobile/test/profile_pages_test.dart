@@ -4,7 +4,6 @@ import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/core/widgets/album/gold_badge.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
-import 'package:animal_locket/core/widgets/album/paper_tile_button.dart';
 import 'package:animal_locket/core/widgets/album/polaroid.dart';
 import 'package:animal_locket/features/billing/domain/billing_repository.dart';
 import 'package:animal_locket/features/billing/presentation/billing_controller.dart';
@@ -16,6 +15,8 @@ import 'package:animal_locket/features/friends/presentation/friends_controller.d
 import 'package:animal_locket/features/profile/presentation/profile_controller.dart';
 import 'package:animal_locket/features/profile/presentation/profile_screen.dart';
 import 'package:animal_locket/features/profile/presentation/settings_screen.dart';
+import 'package:animal_locket/features/profile/presentation/upgrade_pro_button.dart';
+import 'package:animal_locket/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,9 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         theme: AppTheme.forPalette(AlbumPalette.of(AlbumThemeId.shu)),
+        locale: const Locale('vi'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(textScale)),
@@ -135,25 +139,20 @@ void main() {
     await _pump(tester, const ProfileScreen());
     expect(find.byType(Icon), findsNothing);
     for (final label in ['Cài đặt', 'Đổi biệt danh']) {
-      expect(
-        tester
-            .widgetList<PaperTileButton>(find.byType(PaperTileButton))
-            .any((t) => t.label == label),
-        isTrue,
-      );
+      expect(find.byTooltip(label), findsOneWidget);
     }
     // Avatar của tôi + 2 avatar trong bộ sưu tập.
     expect(find.byType(Polaroid), findsNWidgets(3));
     expect(find.bySemanticsLabel('Mở trang của Cáo Lém Lỉnh'), findsOneWidget);
     expect(
-      find.widgetWithText(PaperButton, 'Khám phá Animal Locket Pro'),
+      find.widgetWithText(UpgradeProButton, 'Nâng cấp Pro'),
       findsOneWidget,
     );
   });
 
   testWidgets('pro members do not see the Pro upsell', (tester) async {
     await _pump(tester, const ProfileScreen(), plan: AccountPlan.pro);
-    expect(find.text('Khám phá Animal Locket Pro'), findsNothing);
+    expect(find.byType(UpgradeProButton), findsNothing);
   });
 
   testWidgets('settings keeps logout, delete and unblock', (tester) async {

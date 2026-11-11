@@ -303,7 +303,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(
       tester.getRect(find.byType(WashiPhotoCard)).bottom,
-      lessThanOrEqualTo(640 - 100),
+      lessThanOrEqualTo(640 - 80), // thanh tab 68pt sát đáy
     );
   });
 

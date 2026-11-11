@@ -108,7 +108,9 @@ void main() {
       );
     });
 
-    testWidgets('tape variant carries a washi strip', (tester) async {
+    testWidgets('tape variant is a plain paper label without washi', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _app(PaperButton.tape(label: 'Mở tài khoản demo', onPressed: () {})),
       );
@@ -119,7 +121,7 @@ void main() {
             (w) => w is CustomPaint && w.painter is WashiTapePainter,
           ),
         ),
-        findsOneWidget,
+        findsNothing,
       );
     });
 

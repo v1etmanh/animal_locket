@@ -1,16 +1,26 @@
 import 'dart:math' as math;
 
 import 'package:animal_locket/core/theme/album_palette.dart';
+import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
 import 'package:animal_locket/core/widgets/app_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animal_locket/core/l10n/tr.dart';
 
-const _themeNames = {
-  AlbumThemeId.shu: 'Shu · Son đỏ',
-  AlbumThemeId.yuzu: 'Yuzu · Vàng thanh yên',
-  AlbumThemeId.sakura: 'Sakura · Hồng anh đào',
-  AlbumThemeId.sora: 'Sora · Trời xanh',
+String _themeName(BuildContext context, AlbumThemeId id) => switch (id) {
+  AlbumThemeId.shu => context.l10n.themeShu,
+  AlbumThemeId.yuzu => context.l10n.themeYuzu,
+  AlbumThemeId.sakura => context.l10n.themeSakura,
+  AlbumThemeId.sora => context.l10n.themeSora,
+};
+
+/// Chữ Hán gốc của tên theme, chỉ để trang trí.
+const _themeKanji = {
+  AlbumThemeId.shu: '朱',
+  AlbumThemeId.yuzu: '柚',
+  AlbumThemeId.sakura: '桜',
+  AlbumThemeId.sora: '空',
 };
 
 /// Chọn một trong bốn bảng màu; bấm là áp dụng ngay và lưu trên máy.
@@ -37,7 +47,7 @@ class ThemePicker extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SectionLabel('Màu giao diện'),
+        SectionLabel(context.l10n.themeSection),
         const SizedBox(height: 10),
         row(AlbumThemeId.shu, AlbumThemeId.yuzu),
         const SizedBox(height: 12),
@@ -108,11 +118,34 @@ class _ThemeTile extends StatelessWidget {
                                 border: Border.all(color: active.fold1),
                               ),
                             ),
+                          const Spacer(),
+                          ExcludeSemantics(
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: own.accent,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: own.accentDeep),
+                              ),
+                              child: Text(
+                                _themeKanji[id]!,
+                                textScaler: TextScaler.noScaling,
+                                style: const TextStyle(
+                                  fontFamily: AppFonts.jp,
+                                  fontSize: 15,
+                                  height: 1,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        _themeNames[id]!,
+                        _themeName(context, id),
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
