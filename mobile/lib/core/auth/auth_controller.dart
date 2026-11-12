@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:animal_locket/core/auth/session_epoch.dart';
 import 'package:animal_locket/core/auth/session_manager.dart';
+import 'package:animal_locket/core/avatar/my_avatar_store.dart';
 import 'package:animal_locket/core/cache/cache_database.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/models/common_models.dart';
@@ -89,11 +91,28 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
-    await ref.read(pushServiceProvider)?.unregister();
+    try {
+      await ref.read(pushServiceProvider)?.unregister();
+    } catch (error) {
+      // Không có mạng thì vẫn phải đăng xuất được.
+      debugPrint('Hủy đăng ký push thất bại: $error');
+    }
+    await _endSession();
+  }
+
+  /// Xóa mọi dấu vết của phiên hiện tại trên máy (token, cache, avatar đệm) rồi dựng lại toàn bộ
+  /// provider để tài khoản kế tiếp không thấy dữ liệu của tài khoản này.
+  Future<void> _endSession() async {
     await ref.read(sessionManagerProvider).signOut();
-    await (await ref.read(cacheDatabaseProvider.future)).clear();
+    try {
+      await (await ref.read(cacheDatabaseProvider.future)).clear();
+    } catch (error) {
+      debugPrint('Xóa cache thất bại: $error');
+    }
+    await const MyAvatarStore().clear();
     ref.read(backendModeProvider.notifier).useLive();
     state = const AuthState.unauthenticated();
+    resetAppSession();
   }
 
   Future<void> _resolveProfile() async {
@@ -103,8 +122,7 @@ class AuthController extends Notifier<AuthState> {
       if (problem.code == 'PROFILE_REQUIRED' || problem.status == 404) {
         state = const AuthState.needsProfile();
       } else if (problem.status == 401) {
-        await ref.read(sessionManagerProvider).signOut();
-        state = const AuthState.unauthenticated();
+        await _endSession();
       } else {
         state = AuthState.unauthenticated(error: problem);
       }

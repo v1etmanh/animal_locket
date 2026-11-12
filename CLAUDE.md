@@ -43,3 +43,5 @@ Monorepo microservice (Java 17 / Spring Boot 3.3 / Spring Cloud 2023.0) + một 
 ## Chưa kiểm chứng
 
 `ddl-auto=validate`, Redis GEO, profile `obs`, Apple/Google thật. Đừng khẳng định chúng "chạy được" nếu chưa chạy.
+
+Mobile (phiên đăng nhập, chưa chạy trên máy thật): đăng nhập dùng `prompt=login` để Keycloak không tự vào lại tài khoản cũ; đăng xuất xóa token, cache, avatar đệm rồi dựng lại `ProviderScope` (`core/auth/session_epoch.dart`, `main.dart`); bài của mình trong feed lấy avatar từ `currentAvatarProvider`. `flutter test` và `flutter analyze` chưa chạy cho thay đổi này.

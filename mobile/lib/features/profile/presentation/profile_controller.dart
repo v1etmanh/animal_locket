@@ -1,3 +1,4 @@
+import 'package:animal_locket/core/avatar/current_avatar.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/features/profile/data/user_repository_impl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,8 +33,14 @@ class ProfileController extends AsyncNotifier<ProfileData> {
     final profile = await ref
         .read(userRepositoryProvider)
         .update(alias: alias.trim());
+    _publish(profile);
+  }
+
+  /// Ghi hồ sơ mới vào state của màn hồ sơ và vào [currentAvatarProvider] để feed hiện ngay avatar mới.
+  void _publish(MeProfile profile) {
     final current = state.value;
     if (current != null) state = AsyncData(current.copyWith(profile: profile));
+    ref.read(currentAvatarProvider.notifier).set(profile);
   }
 
   /// Dùng một lượt quay. Trả về avatar mới để màn hình chạy hiệu ứng, rồi đồng bộ lại hồ sơ và bộ sưu tập.
@@ -52,13 +59,13 @@ class ProfileController extends AsyncNotifier<ProfileData> {
     final profile = await repository.me();
     final avatars = await repository.myAvatars();
     state = AsyncData(ProfileData(profile: profile, avatars: avatars));
+    ref.read(currentAvatarProvider.notifier).set(profile);
   }
 
   /// Đổi avatar đang dùng sang một avatar trong bộ sưu tập.
   Future<void> setAvatar(String avatar) async {
     final profile = await ref.read(userRepositoryProvider).setAvatar(avatar);
-    final current = state.value;
-    if (current != null) state = AsyncData(current.copyWith(profile: profile));
+    _publish(profile);
   }
 }
 

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:animal_locket/core/avatar/current_avatar.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/core/widgets/animal_avatar.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
@@ -37,6 +39,12 @@ Post _post(
   caption: caption,
 );
 
+class _FakeCurrentAvatar extends CurrentAvatarController {
+  @override
+  CurrentAvatar? build() =>
+      const CurrentAvatar(publicId: 'u1', avatar: '1:cat:0:bow');
+}
+
 class _FakeFeed extends FeedController {
   _FakeFeed(this.initial);
   final FeedState initial;
@@ -62,6 +70,7 @@ Future<_FakeFeed> _pump(
   FeedState state, {
   double width = 400,
   double height = 2400,
+  List<Override> overrides = const [],
 }) async {
   // Tall enough that the lazy ListView builds every card.
   tester.view.physicalSize = Size(width, height);
@@ -71,6 +80,7 @@ Future<_FakeFeed> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...overrides,
         themeStoreProvider.overrideWithValue(MemoryThemeStore()),
         feedControllerProvider.overrideWith(() => fake),
         mediaUrlProvider.overrideWith((ref, mediaId) {
@@ -124,6 +134,20 @@ void main() {
       _post('3', at: yesterday),
     ],
   );
+
+  testWidgets('own posts use the current avatar, not the one in the feed', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      FeedState(items: [_post('1'), _post('2')]),
+      overrides: [currentAvatarProvider.overrideWith(_FakeCurrentAvatar.new)],
+    );
+    final avatars = tester
+        .widgetList<AnimalAvatar>(find.byType(AnimalAvatar))
+        .toList();
+    expect(avatars.where((a) => a.avatar == '1:cat:0:bow'), hasLength(1));
+  });
 
   testWidgets('keeps the existing copy and day labels', (tester) async {
     await _pump(tester, three);

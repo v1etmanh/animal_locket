@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:animal_locket/core/avatar/current_avatar.dart';
 import 'package:animal_locket/core/network/api_problem.dart';
 import 'package:animal_locket/core/network/error_messages.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
@@ -204,6 +205,12 @@ class _PostCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.album;
     final image = ref.watch(mediaUrlProvider(post.mediaId));
+    // Bài của chính mình lấy avatar hiện tại, vì feed (server cache vài phút, hoặc bản đệm trên máy)
+    // còn giữ avatar cũ sau khi đổi.
+    final mine = ref.watch(currentAvatarProvider);
+    final isMine = mine != null && mine.publicId == post.author.publicId;
+    final authorAvatar = isMine ? mine.avatar : post.author.avatar;
+    final authorAnimal = isMine ? mine.leadAnimal : post.author.leadAnimal;
     final tilt = WashiPhotoCard.tiltFor(index);
     Widget placeholder(Widget child) => ColoredBox(
       color: p.fold2,
@@ -244,8 +251,8 @@ class _PostCard extends ConsumerWidget {
                 child: Row(
                   children: [
                     AnimalAvatar(
-                      avatar: post.author.avatar,
-                      leadAnimal: post.author.leadAnimal,
+                      avatar: authorAvatar,
+                      leadAnimal: authorAnimal,
                       size: 36,
                     ),
                     const SizedBox(width: 8),

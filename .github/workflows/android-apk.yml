@@ -43,7 +43,7 @@ jobs:
 
       - name: Build debug APK with demo server config
         working-directory: mobile
-        run: flutter build apk --debug --dart-define-from-file=env/demo-server.json
+        run: flutter build apk --debug --android-skip-build-dependency-validation --dart-define-from-file=env/demo-server.json
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
