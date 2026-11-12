@@ -1,4 +1,5 @@
 import 'package:animal_locket/core/auth/auth_controller.dart';
+import 'package:animal_locket/features/devices/presentation/push_status_tile.dart';
 import 'package:animal_locket/core/models/common_models.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/widgets/album/paper_button.dart';
@@ -43,6 +44,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const ThemePicker(),
           const SizedBox(height: 24),
           const LanguagePicker(),
+          const SizedBox(height: 24),
+          const PaperSheet(child: PushStatusTile()),
           const SizedBox(height: 24),
           PaperSheet(
             child: SwitchListTile(

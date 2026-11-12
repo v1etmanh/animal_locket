@@ -1065,4 +1065,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String unfriendQ(String name) {
     return 'Unfriend $name?';
   }
+
+  @override
+  String get pushTitle => 'Notifications';
+
+  @override
+  String get pushDisabled => 'Notifications are not enabled in this app build.';
+
+  @override
+  String get pushLoading => 'Registering for notifications…';
+
+  @override
+  String get pushDenied =>
+      'Notification permission was denied. Enable it in your phone settings.';
+
+  @override
+  String get pushError =>
+      'Notifications could not be registered. Please try again.';
+
+  @override
+  String get pushRegistered => 'This device is registered for notifications.';
+
+  @override
+  String get pushRetry => 'Retry';
+
+  @override
+  String get pushIncoming => 'You have a new notification.';
 }

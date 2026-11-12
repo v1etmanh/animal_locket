@@ -93,9 +93,8 @@ class AuthController extends Notifier<AuthState> {
   Future<void> signOut() async {
     try {
       await ref.read(pushServiceProvider)?.unregister();
-    } catch (error) {
-      // Không có mạng thì vẫn phải đăng xuất được.
-      debugPrint('Hủy đăng ký push thất bại: $error');
+    } catch (_) {
+      // FCM or device-directory outages must not prevent local sign-out.
     }
     await _endSession();
   }

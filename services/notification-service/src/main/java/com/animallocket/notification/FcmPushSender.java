@@ -37,12 +37,18 @@ public class FcmPushSender implements PushSender {
                     .putAllData(data).build());
             return Result.OK;
         } catch (FirebaseMessagingException e) {
-            MessagingErrorCode code = e.getMessagingErrorCode();
-            if (code == MessagingErrorCode.UNREGISTERED || code == MessagingErrorCode.INVALID_ARGUMENT
-                    || code == MessagingErrorCode.SENDER_ID_MISMATCH) {
-                return Result.INVALID_TOKEN;
-            }
+            return classify(e.getMessagingErrorCode());
+        }
+    }
+
+    static Result classify(MessagingErrorCode code) {
+        // Only UNREGISTERED proves a dead token. Wrong project/credentials or
+        // an invalid payload must never delete a device's valid registration.
+        if (code == MessagingErrorCode.UNREGISTERED) return Result.INVALID_TOKEN;
+        if (code == null || code == MessagingErrorCode.INTERNAL
+                || code == MessagingErrorCode.UNAVAILABLE || code == MessagingErrorCode.QUOTA_EXCEEDED) {
             return Result.TRANSIENT_ERROR;
         }
+        return Result.PERMANENT_ERROR;
     }
 }

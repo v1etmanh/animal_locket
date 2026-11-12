@@ -75,6 +75,11 @@ public class NotificationDispatcher {
                     }
                     return;
                 }
+                case PERMANENT_ERROR -> {
+                    metrics.counter("push.dropped", "type", n.type()).increment();
+                    log.warn("FCM rejected push; check Firebase project, credentials and payload configuration");
+                    return;
+                }
                 case TRANSIENT_ERROR -> {
                     if (attempt < maxAttempts) {
                         sleeper.accept(backoffMs * attempt);

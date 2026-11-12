@@ -4,6 +4,7 @@ import com.animallocket.common.EventTypes;
 import com.animallocket.common.event.EventEnvelope;
 import com.animallocket.common.event.EventJson;
 import com.animallocket.common.event.Events;
+import com.google.firebase.messaging.MessagingErrorCode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -139,6 +140,29 @@ class NotificationTest {
         dispatcher(dir, sender, new ArrayList<>()).dispatch(new Notification("u", "T", "t", "b", Map.of()));
         assertEquals(List.of("dead"), dir.removed);
         assertEquals(List.of("dead", "alive"), sender.sentTo);
+    }
+
+    @Test
+    void configurationAndPayloadErrorsNeverInvalidateDeviceTokens() {
+        assertEquals(PushSender.Result.INVALID_TOKEN, FcmPushSender.classify(MessagingErrorCode.UNREGISTERED));
+        for (var code : List.of(MessagingErrorCode.SENDER_ID_MISMATCH,
+                MessagingErrorCode.INVALID_ARGUMENT, MessagingErrorCode.THIRD_PARTY_AUTH_ERROR)) {
+            assertEquals(PushSender.Result.PERMANENT_ERROR, FcmPushSender.classify(code));
+        }
+        assertEquals(PushSender.Result.TRANSIENT_ERROR, FcmPushSender.classify(MessagingErrorCode.UNAVAILABLE));
+        assertEquals(PushSender.Result.TRANSIENT_ERROR, FcmPushSender.classify(MessagingErrorCode.INTERNAL));
+        assertEquals(PushSender.Result.TRANSIENT_ERROR, FcmPushSender.classify(MessagingErrorCode.QUOTA_EXCEEDED));
+    }
+
+    @Test
+    void permanentErrorsDoNotRetryOrDeleteTokens() {
+        var dir = new FakeDirectory(Map.of("u", List.of("valid")), Map.of());
+        var sender = new ScriptedSender(PushSender.Result.PERMANENT_ERROR);
+        List<Long> sleeps = new ArrayList<>();
+        dispatcher(dir, sender, sleeps).dispatch(new Notification("u", "T", "t", "b", Map.of()));
+        assertEquals(1, sender.calls);
+        assertTrue(dir.removed.isEmpty());
+        assertTrue(sleeps.isEmpty());
     }
 
     @Test
