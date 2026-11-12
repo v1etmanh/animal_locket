@@ -31,6 +31,9 @@ class SessionManager {
         _config.oauthRedirectUrl,
         issuer: _config.keycloakIssuer,
         scopes: const ['openid', 'profile', 'email', 'offline_access'],
+        // Đăng xuất chỉ xóa token trên máy, phiên Keycloak trong trình duyệt vẫn còn. Không ép
+        // nhập lại thì Keycloak tự đăng nhập lại đúng tài khoản cũ, không cho chọn tài khoản khác.
+        promptValues: const ['login'],
         allowInsecureConnections: _config.keycloakIssuer.startsWith('http://'),
       ),
     );

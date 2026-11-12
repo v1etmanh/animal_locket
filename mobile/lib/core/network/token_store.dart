@@ -59,6 +59,11 @@ class SecureTokenStore implements TokenStore {
     );
   }
 
+  /// Chỉ xóa khóa token. Không dùng `deleteAll` vì cùng kho này còn lưu theme và ngôn ngữ đã chọn.
   @override
-  Future<void> clear() => _storage.deleteAll();
+  Future<void> clear() async {
+    for (final key in const [_accessKey, _refreshKey, _idKey, _expiryKey]) {
+      await _storage.delete(key: key);
+    }
+  }
 }
