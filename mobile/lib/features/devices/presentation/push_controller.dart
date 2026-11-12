@@ -36,9 +36,14 @@ final pushBootstrapProvider = FutureProvider<void>(
       },
     );
     ref.onDispose(lifecycle.dispose);
-    await ref.watch(firebaseAppProvider.future);
-    if (!ref.mounted) return;
-    await ref.watch(pushServiceProvider)?.initialize();
+    try {
+      await ref.watch(firebaseAppProvider.future);
+      if (!ref.mounted) return;
+      await ref.watch(pushServiceProvider)?.initialize();
+    } catch (error, stack) {
+      debugPrint('Push registration failed: $error\n$stack');
+      rethrow;
+    }
   },
   // Permission/configuration errors need to remain visible until explicit retry.
   retry: (_, _) => null,

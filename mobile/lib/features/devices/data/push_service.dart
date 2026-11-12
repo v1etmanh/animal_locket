@@ -21,6 +21,7 @@ class PushService {
     final generation = ++_generation;
     await _registrationEvents?.cancel();
     final permission = await _messaging.requestPermission();
+    debugPrint('Push: permission ${permission.authorizationStatus}');
     if (generation != _generation) return;
     if (permission.authorizationStatus == AuthorizationStatus.denied) {
       throw const PushPermissionDenied();
@@ -36,6 +37,7 @@ class PushService {
     final firstRegistration = Completer<void>();
     _registrationEvents = _messaging.onRegistered.listen(
       (token) async {
+        debugPrint('Push: FCM token received');
         if (generation != _generation) return;
         try {
           await _register(token, generation);
@@ -76,6 +78,7 @@ class PushService {
             : 'ANDROID',
       );
       currentToken = token;
+      debugPrint('Push: device registered with backend');
     });
     _pendingRegistration = operation.catchError((Object _) {});
     return operation;

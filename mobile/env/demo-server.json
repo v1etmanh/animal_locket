@@ -3,5 +3,10 @@
   "WS_URL": "wss://api.188-166-218-200.nip.io/ws/chat",
   "KEYCLOAK_ISSUER": "https://auth.188-166-218-200.nip.io/realms/animal-locket",
   "KEYCLOAK_CLIENT_ID": "mobile",
-  "OAUTH_REDIRECT_URL": "com.animallocket.app:/oauth2redirect"
+  "OAUTH_REDIRECT_URL": "com.animallocket.app:/oauth2redirect",
+  "ENABLE_PUSH": "true",
+  "FIREBASE_API_KEY": "AIzaSyBr6wpN9Fflg9G5wFK7fKa6bxv17be8QnQ",
+  "FIREBASE_PROJECT_ID": "animal-locket",
+  "FIREBASE_MESSAGING_SENDER_ID": "339269195895",
+  "FIREBASE_ANDROID_APP_ID": "1:339269195895:android:6a06ad087c09b845e68e72"
 }
