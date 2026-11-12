@@ -1969,6 +1969,54 @@ abstract class AppLocalizations {
   /// In vi, this message translates to:
   /// **'Huỷ kết bạn với {name}?'**
   String unfriendQ(String name);
+
+  /// No description provided for @pushTitle.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thông báo'**
+  String get pushTitle;
+
+  /// No description provided for @pushDisabled.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thông báo chưa được bật trong bản ứng dụng này.'**
+  String get pushDisabled;
+
+  /// No description provided for @pushLoading.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đang đăng ký nhận thông báo…'**
+  String get pushLoading;
+
+  /// No description provided for @pushDenied.
+  ///
+  /// In vi, this message translates to:
+  /// **'Quyền thông báo đã bị từ chối. Hãy bật lại trong cài đặt điện thoại.'**
+  String get pushDenied;
+
+  /// No description provided for @pushError.
+  ///
+  /// In vi, this message translates to:
+  /// **'Chưa đăng ký được thông báo. Vui lòng thử lại.'**
+  String get pushError;
+
+  /// No description provided for @pushRegistered.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thiết bị đã đăng ký nhận thông báo.'**
+  String get pushRegistered;
+
+  /// No description provided for @pushRetry.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thử lại'**
+  String get pushRetry;
+
+  /// No description provided for @pushIncoming.
+  ///
+  /// In vi, this message translates to:
+  /// **'Bạn có thông báo mới.'**
+  String get pushIncoming;
 }
 
 class _AppLocalizationsDelegate

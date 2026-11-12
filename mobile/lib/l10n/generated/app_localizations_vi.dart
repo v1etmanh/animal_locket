@@ -1027,4 +1027,29 @@ class AppLocalizationsVi extends AppLocalizations {
   String unfriendQ(String name) {
     return 'Huỷ kết bạn với $name?';
   }
+
+  @override
+  String get pushTitle => 'Thông báo';
+
+  @override
+  String get pushDisabled => 'Thông báo chưa được bật trong bản ứng dụng này.';
+
+  @override
+  String get pushLoading => 'Đang đăng ký nhận thông báo…';
+
+  @override
+  String get pushDenied =>
+      'Quyền thông báo đã bị từ chối. Hãy bật lại trong cài đặt điện thoại.';
+
+  @override
+  String get pushError => 'Chưa đăng ký được thông báo. Vui lòng thử lại.';
+
+  @override
+  String get pushRegistered => 'Thiết bị đã đăng ký nhận thông báo.';
+
+  @override
+  String get pushRetry => 'Thử lại';
+
+  @override
+  String get pushIncoming => 'Bạn có thông báo mới.';
 }

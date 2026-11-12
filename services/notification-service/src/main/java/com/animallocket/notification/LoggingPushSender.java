@@ -13,10 +13,13 @@ import java.util.Map;
 public class LoggingPushSender implements PushSender {
     private static final Logger log = LoggerFactory.getLogger(LoggingPushSender.class);
 
+    public LoggingPushSender() {
+        log.warn("FCM is not configured: notifications are simulated, no push will be delivered. Set FCM_CREDENTIALS_FILE.");
+    }
+
     @Override
     public Result send(String deviceToken, String title, String body, Map<String, String> data) {
-        log.info("[PUSH giả lập] token=…{} title='{}' body='{}' data={}",
-                deviceToken.substring(Math.max(0, deviceToken.length() - 6)), title, body, data);
+        log.debug("[PUSH giả lập] No notification delivered (FCM not configured)");
         return Result.OK;
     }
 }

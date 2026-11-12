@@ -513,5 +513,13 @@
         "type": "String"
       }
     }
-  }
+  },
+  "pushTitle": "Thông báo",
+  "pushDisabled": "Thông báo chưa được bật trong bản ứng dụng này.",
+  "pushLoading": "Đang đăng ký nhận thông báo…",
+  "pushDenied": "Quyền thông báo đã bị từ chối. Hãy bật lại trong cài đặt điện thoại.",
+  "pushError": "Chưa đăng ký được thông báo. Vui lòng thử lại.",
+  "pushRegistered": "Thiết bị đã đăng ký nhận thông báo.",
+  "pushRetry": "Thử lại",
+  "pushIncoming": "Bạn có thông báo mới."
 }

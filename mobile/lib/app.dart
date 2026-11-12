@@ -6,10 +6,12 @@ import 'package:animal_locket/core/router/app_router.dart';
 import 'package:animal_locket/core/theme/album_palette.dart';
 import 'package:animal_locket/core/theme/app_theme.dart';
 import 'package:animal_locket/core/theme/theme_controller.dart';
-import 'package:animal_locket/features/devices/data/push_service.dart';
+import 'package:animal_locket/features/devices/presentation/push_controller.dart';
 import 'package:animal_locket/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final _pushMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 class AnimalLocketApp extends ConsumerWidget {
   const AnimalLocketApp({super.key});
@@ -17,8 +19,23 @@ class AnimalLocketApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(pushBootstrapProvider);
+    ref.listen(openedPushProvider, (_, next) {
+      final message = next.value;
+      if (message == null) return;
+      final destination = pushDestination(message.data);
+      if (destination != null) ref.read(appRouterProvider).go(destination);
+    });
+    ref.listen(foregroundPushProvider, (_, next) {
+      if (next.value == null) return;
+      final messenger = _pushMessengerKey.currentState;
+      if (messenger == null) return;
+      final text = AppLocalizations.of(messenger.context)!;
+      // Use generic text even if a provider accidentally includes private content.
+      messenger.showSnackBar(SnackBar(content: Text(text.pushIncoming)));
+    });
     ref.watch(avatarRemoteBootstrapProvider);
     return MaterialApp.router(
+      scaffoldMessengerKey: _pushMessengerKey,
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
       theme: AppTheme.forPalette(

@@ -70,7 +70,7 @@ Future<_FakeFeed> _pump(
   FeedState state, {
   double width = 400,
   double height = 2400,
-  List<Override> overrides = const [],
+  bool overrideCurrentAvatar = false,
 }) async {
   // Tall enough that the lazy ListView builds every card.
   tester.view.physicalSize = Size(width, height);
@@ -80,7 +80,8 @@ Future<_FakeFeed> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        ...overrides,
+        if (overrideCurrentAvatar)
+          currentAvatarProvider.overrideWith(_FakeCurrentAvatar.new),
         themeStoreProvider.overrideWithValue(MemoryThemeStore()),
         feedControllerProvider.overrideWith(() => fake),
         mediaUrlProvider.overrideWith((ref, mediaId) {
@@ -141,7 +142,7 @@ void main() {
     await _pump(
       tester,
       FeedState(items: [_post('1'), _post('2')]),
-      overrides: [currentAvatarProvider.overrideWith(_FakeCurrentAvatar.new)],
+      overrideCurrentAvatar: true,
     );
     final avatars = tester
         .widgetList<AnimalAvatar>(find.byType(AnimalAvatar))
