@@ -4,6 +4,7 @@ import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/config/app_config.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
 import 'package:animal_locket/core/models/common_models.dart';
+import 'package:animal_locket/features/devices/data/push_preference.dart';
 import 'package:animal_locket/features/devices/data/push_service.dart';
 import 'package:animal_locket/features/devices/domain/devices_repository.dart';
 import 'package:animal_locket/features/devices/presentation/push_controller.dart';
@@ -157,6 +158,9 @@ void main() {
           return _FirebaseApp();
         }),
         pushServiceProvider.overrideWithValue(push),
+        pushPreferenceStoreProvider.overrideWithValue(
+          MemoryPushPreferenceStore(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -201,6 +205,9 @@ void main() {
         overrides: [
           appConfigProvider.overrideWithValue(_config),
           firebaseAppProvider.overrideWith((_) async => _FirebaseApp()),
+          pushPreferenceStoreProvider.overrideWithValue(
+            MemoryPushPreferenceStore(),
+          ),
           pushBootstrapProvider.overrideWith((_) => registration.future),
         ],
         child: const MaterialApp(
@@ -226,6 +233,9 @@ void main() {
         overrides: [
           appConfigProvider.overrideWithValue(_config),
           firebaseAppProvider.overrideWith((_) async => _FirebaseApp()),
+          pushPreferenceStoreProvider.overrideWithValue(
+            MemoryPushPreferenceStore(),
+          ),
           pushBootstrapProvider.overrideWith((_) async {
             if (++attempts == 1) throw const PushPermissionDenied();
           }),
@@ -245,9 +255,117 @@ void main() {
         'Quyền thông báo đã bị từ chối. Hãy bật lại trong cài đặt điện thoại.',
       ),
     );
-    await tester.tap(find.text('Thử lại'));
+    expect(find.text('Mở cài đặt'), findsOneWidget);
+    expect(find.text('Thử lại'), findsNothing);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(attempts, 2);
     expect(find.text('Thiết bị đã đăng ký nhận thông báo.'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+  });
+
+  testWidgets('success shows switch on without a retry button', (tester) async {
+    await tester.pumpWidget(
+      _tile([pushBootstrapProvider.overrideWith((_) async {})]),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Thiết bị đã đăng ký nhận thông báo.'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(find.text('Thử lại'), findsNothing);
+    expect(find.text('Mở cài đặt'), findsNothing);
+  });
+
+  testWidgets('registration failure shows retry', (tester) async {
+    var attempts = 0;
+    await tester.pumpWidget(
+      _tile([
+        pushBootstrapProvider.overrideWith((_) async {
+          if (++attempts == 1) throw StateError('offline');
+        }),
+      ]),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Chưa đăng ký được thông báo. Vui lòng thử lại.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Thử lại'));
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+  });
+
+  testWidgets('switching off unregisters, persists and stays off', (
+    tester,
+  ) async {
+    final push = _Push();
+    when(() => push.unregister()).thenAnswer((_) async {});
+    final store = MemoryPushPreferenceStore();
+    var bootstraps = 0;
+    await tester.pumpWidget(
+      _tile(
+        [pushServiceProvider.overrideWithValue(push)],
+        store: store,
+        bootstrap: () => bootstraps++,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(bootstraps, 1);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    verify(() => push.unregister()).called(1);
+    expect(await store.read(), isFalse);
+    expect(bootstraps, 1);
+    expect(find.text('Thông báo đang tắt trên thiết bị này.'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(await store.read(), isTrue);
+    expect(bootstraps, 2);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+  });
+
+  testWidgets('denied permission opens app settings', (tester) async {
+    var opened = 0;
+    await tester.pumpWidget(
+      _tile([
+        pushBootstrapProvider.overrideWith(
+          (_) async => throw const PushPermissionDenied(),
+        ),
+        openAppSettingsProvider.overrideWithValue(() async => opened++),
+      ]),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mở cài đặt'));
+    expect(opened, 1);
   });
 }
+
+/// Tile với bootstrap thật gắn sẵn preference; [bootstrap] đếm số lần đăng ký.
+Widget _tile(
+  List overrides, {
+  PushPreferenceStore? store,
+  void Function()? bootstrap,
+}) => ProviderScope(
+  overrides: [
+    appConfigProvider.overrideWithValue(_config),
+    firebaseAppProvider.overrideWith((_) async => _FirebaseApp()),
+    pushPreferenceStoreProvider.overrideWithValue(
+      store ?? MemoryPushPreferenceStore(),
+    ),
+    if (bootstrap != null)
+      pushBootstrapProvider.overrideWith((ref) async {
+        if (!await ref.watch(pushPreferenceProvider.future)) return;
+        bootstrap();
+      }),
+    ...overrides.cast(),
+  ],
+  child: const MaterialApp(
+    locale: Locale('vi'),
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    home: Scaffold(body: PushStatusTile()),
+  ),
+);

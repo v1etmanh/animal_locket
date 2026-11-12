@@ -1048,6 +1048,15 @@ class AppLocalizationsVi extends AppLocalizations {
   String get pushRegistered => 'Thiết bị đã đăng ký nhận thông báo.';
 
   @override
+  String get pushOff => 'Thông báo đang tắt trên thiết bị này.';
+
+  @override
+  String get pushTurningOff => 'Đang tắt thông báo…';
+
+  @override
+  String get pushOpenSettings => 'Mở cài đặt';
+
+  @override
   String get pushRetry => 'Thử lại';
 
   @override

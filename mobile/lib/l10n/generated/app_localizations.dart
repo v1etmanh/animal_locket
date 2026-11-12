@@ -2006,6 +2006,24 @@ abstract class AppLocalizations {
   /// **'Thiết bị đã đăng ký nhận thông báo.'**
   String get pushRegistered;
 
+  /// No description provided for @pushOff.
+  ///
+  /// In vi, this message translates to:
+  /// **'Thông báo đang tắt trên thiết bị này.'**
+  String get pushOff;
+
+  /// No description provided for @pushTurningOff.
+  ///
+  /// In vi, this message translates to:
+  /// **'Đang tắt thông báo…'**
+  String get pushTurningOff;
+
+  /// No description provided for @pushOpenSettings.
+  ///
+  /// In vi, this message translates to:
+  /// **'Mở cài đặt'**
+  String get pushOpenSettings;
+
   /// No description provided for @pushRetry.
   ///
   /// In vi, this message translates to:

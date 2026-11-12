@@ -520,6 +520,9 @@
   "pushDenied": "Quyền thông báo đã bị từ chối. Hãy bật lại trong cài đặt điện thoại.",
   "pushError": "Chưa đăng ký được thông báo. Vui lòng thử lại.",
   "pushRegistered": "Thiết bị đã đăng ký nhận thông báo.",
+  "pushOff": "Thông báo đang tắt trên thiết bị này.",
+  "pushTurningOff": "Đang tắt thông báo…",
+  "pushOpenSettings": "Mở cài đặt",
   "pushRetry": "Thử lại",
   "pushIncoming": "Bạn có thông báo mới."
 }

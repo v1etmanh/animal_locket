@@ -1087,6 +1087,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pushRegistered => 'This device is registered for notifications.';
 
   @override
+  String get pushOff => 'Notifications are turned off on this device.';
+
+  @override
+  String get pushTurningOff => 'Turning off notifications…';
+
+  @override
+  String get pushOpenSettings => 'Open settings';
+
+  @override
   String get pushRetry => 'Retry';
 
   @override

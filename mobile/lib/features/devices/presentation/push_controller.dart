@@ -1,6 +1,7 @@
 import 'package:animal_locket/core/auth/auth_controller.dart';
 import 'package:animal_locket/core/config/app_config.dart';
 import 'package:animal_locket/core/config/backend_mode.dart';
+import 'package:animal_locket/features/devices/data/push_preference.dart';
 import 'package:animal_locket/features/devices/data/push_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
@@ -20,6 +21,10 @@ final pushBootstrapProvider = FutureProvider<void>(
     if (!ref.watch(appConfigProvider).enablePush ||
         ref.watch(backendModeProvider) == BackendMode.demo ||
         status != AuthStatus.ready) {
+      return;
+    }
+    // Người dùng đã tắt công tắc: không xin quyền, không đăng ký lại khi app resume.
+    if (!await ref.watch(pushPreferenceProvider.future) || !ref.mounted) {
       return;
     }
     final lifecycle = AppLifecycleListener(
