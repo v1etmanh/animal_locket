@@ -16,6 +16,8 @@
 	<string>6.0</string>
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>
+	<key>FirebaseMessagingInstallationIdEnabled</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
